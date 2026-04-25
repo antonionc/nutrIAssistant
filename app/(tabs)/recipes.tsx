@@ -49,7 +49,7 @@ export default function RecipesScreen() {
 
   useEffect(() => {
     load(40)
-  }, [])
+  }, [load])
 
   const handleSearch = (text: string) => {
     setQuery(text)

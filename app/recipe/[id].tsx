@@ -22,6 +22,7 @@ import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
 import { Recipe, RecipeIngredient } from '../../src/types/recipes'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
+import { MEAL_LABELS, MEAL_EMOJIS } from '../../src/constants/mealTypes'
 import { NutriScoreBadge } from '../../src/components/charts/NutriScoreBadge'
 import { MacroBar } from '../../src/components/charts/MacroBar'
 import { FamilyCompatibilityRow } from '../../src/components/badges/CompatibilityBadge'
@@ -557,16 +558,6 @@ export default function RecipeDetailScreen() {
   )
 }
 
-const MEAL_LABELS: Record<'breakfast' | 'lunch' | 'dinner', string> = {
-  breakfast: 'Desayuno',
-  lunch: 'Comida',
-  dinner: 'Cena',
-}
-const MEAL_EMOJIS: Record<'breakfast' | 'lunch' | 'dinner', string> = {
-  breakfast: '🌅',
-  lunch: '☀️',
-  dinner: '🌙',
-}
 const DAY_NAMES_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
 function formatDateLabel(dateStr: string, long: boolean): string {

@@ -6,6 +6,7 @@ import { migration004 } from './migrations/004_clear_seed_image_urls'
 import { migration005 } from './migrations/005_grocery_purchased_at'
 import { migration006 } from './migrations/006_grocery_from_meal_plan'
 import { migration007 } from './migrations/007_grocery_recipe_id'
+import { migration008 } from './migrations/008_grocery_rebuild'
 
 let db: SQLite.SQLiteDatabase | null = null
 
@@ -129,6 +130,15 @@ export async function runMigrations(): Promise<void> {
       ['007_grocery_recipe_id', new Date().toISOString()]
     )
     console.log('[DB] Migration 007_grocery_recipe_id completed')
+  }
+
+  if (!ranNames.has('008_grocery_rebuild')) {
+    await migration008(database)
+    await database.runAsync(
+      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
+      ['008_grocery_rebuild', new Date().toISOString()]
+    )
+    console.log('[DB] Migration 008_grocery_rebuild completed')
   }
 }
 

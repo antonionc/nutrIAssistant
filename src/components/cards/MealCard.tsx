@@ -10,15 +10,10 @@ import { Recipe } from '../../types/recipes'
 import { FamilyMember } from '../../types/profiles'
 import { MealType } from '../../types/planner'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
+import { MEAL_LABELS, MEAL_EMOJIS } from '../../constants/mealTypes'
 import { MacroBar } from '../charts/MacroBar'
 import { FamilyCompatibilityRow } from '../badges/CompatibilityBadge'
 import { NutriScoreBadge } from '../charts/NutriScoreBadge'
-
-const MEAL_LABELS: Record<MealType, string> = {
-  breakfast: '🌅 Desayuno',
-  lunch: '☀️ Comida',
-  dinner: '🌙 Cena',
-}
 
 
 interface MealCardProps {
@@ -49,7 +44,7 @@ export function MealCard({
       activeOpacity={0.9}
     >
       <View style={styles.header}>
-        <Text style={styles.mealLabel}>{MEAL_LABELS[mealType]}</Text>
+        <Text style={styles.mealLabel}>{MEAL_EMOJIS[mealType]} {MEAL_LABELS[mealType]}</Text>
         <View style={styles.headerActions}>
           {onLock && (
             <TouchableOpacity onPress={onLock} style={styles.iconBtn}>

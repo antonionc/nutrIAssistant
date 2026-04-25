@@ -17,7 +17,7 @@ import {
 import * as ImagePicker from 'expo-image-picker'
 import * as Haptics from 'expo-haptics'
 import { router } from 'expo-router'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useProfiles } from '../src/modules/profiles/ProfilesContext'
 import { useInventory } from '../src/modules/inventory/useInventory'
 import { getProductByBarcode } from '../src/services/openFoodFacts'
@@ -34,6 +34,7 @@ import { NutritionalInfo } from '../src/types/nutrition'
 type ScanMode = 'barcode' | 'photo'
 
 export default function ScannerScreen() {
+  const insets = useSafeAreaInsets()
   const { profiles } = useProfiles()
   const { addItem } = useInventory()
   const [permission, requestPermission] = useCameraPermissions()
@@ -142,12 +143,19 @@ export default function ScannerScreen() {
         onBarcodeScanned={mode === 'barcode' && !scannedResult ? handleBarcodeScan : undefined}
         barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr'] }}
       >
+        {/* Floating back button — clears status bar on all iOS devices */}
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={[styles.backCircleBtn, { top: insets.top + 12 }]}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={styles.backCircleIcon}>‹</Text>
+        </TouchableOpacity>
+
         {/* Overlay */}
         <SafeAreaView style={styles.overlay} edges={['top']}>
           <View style={styles.topBar}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.overlayBtn}>
-              <Text style={styles.overlayBtnText}>← Atrás</Text>
-            </TouchableOpacity>
+            <View style={{ width: 44 }} />
             <Text style={styles.scanTitle}>Escáner de alimentos</Text>
             <TouchableOpacity onPress={() => setFlashOn(!flashOn)} style={styles.overlayBtn}>
               <Text style={styles.overlayBtnText}>{flashOn ? '⚡' : '○'}</Text>
@@ -274,6 +282,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
   },
   scanTitle: { ...Typography.heading3, color: Colors.white },
+  backCircleBtn: {
+    position: 'absolute',
+    left: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  backCircleIcon: { color: Colors.white, fontSize: 32, lineHeight: 36, marginLeft: -2 },
   overlayBtn: { padding: Spacing.sm, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: BorderRadius.md },
   overlayBtnText: { color: Colors.white, fontSize: 14 },
   modeToggle: {
