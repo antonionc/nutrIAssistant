@@ -1,5 +1,6 @@
 import { FamilyMember } from '../../types/profiles'
 import { InventoryItem } from '../../types/inventory'
+import { getAge } from '../../utils/ageUtils'
 
 export function buildOnDeviceSystemPrompt(
   profiles: FamilyMember[],
@@ -8,7 +9,7 @@ export function buildOnDeviceSystemPrompt(
   const familySummary = profiles.map((m) => ({
     name: m.name,
     role: m.role,
-    age: m.age,
+    age: getAge(m.dateOfBirth),
     allergies: m.allergies,
     conditions: m.conditions,
     dailyCalorieTarget: m.dailyCalorieTarget,

@@ -11,7 +11,7 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
-import { ImageBackground, StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ProfilesProvider } from '../src/modules/profiles/ProfilesContext'
 import { PlannerProvider } from '../src/modules/planner/PlannerContext'
@@ -22,7 +22,6 @@ import { runMigrations } from '../src/db/database'
 import { seedRecipesIfNeeded } from '../src/modules/recipes/seedRecipes'
 import { isSynced, syncRecipes, enrichSeedRecipeImages } from '../src/modules/recipes/syncRecipes'
 import { ensureModelAvailable } from '../src/services/onDeviceLlm'
-import { Colors, Typography } from '../src/theme'
 
 function AppShell() {
   const { isDark } = useTheme()
@@ -58,8 +57,6 @@ function AppShell() {
 
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false)
-  const [llmPhase, setLlmPhase] = useState<'idle' | 'downloading' | 'loading' | 'ready' | 'error'>('idle')
-  const [llmProgress, setLlmProgress] = useState(0)
 
   const [fontsLoaded] = useFonts({
     Poppins_300Light,
@@ -94,14 +91,9 @@ export default function RootLayout() {
       }
 
       try {
-        const loaded = await ensureModelAvailable((phase, progress) => {
-          setLlmPhase(phase)
-          if (progress !== undefined) setLlmProgress(progress)
-        })
-        setLlmPhase(loaded ? 'ready' : 'idle')
+        await ensureModelAvailable()
       } catch (e) {
         console.warn('[Init] LLM init failed, using Claude API fallback:', e)
-        setLlmPhase('idle')
       }
 
       setDbReady(true)
@@ -109,38 +101,7 @@ export default function RootLayout() {
     initApp()
   }, [])
 
-  if (!fontsLoaded || !dbReady) {
-    const statusText =
-      llmPhase === 'downloading'
-        ? `Descargando modelo IA… ${Math.round(llmProgress * 100)}%`
-        : llmPhase === 'loading'
-        ? 'Cargando modelo en memoria…'
-        : 'Iniciando nutrIAssistant…'
-
-    return (
-      <ImageBackground
-        source={require('../assets/images/splash-wallpaper.jpg')}
-        style={styles.splash}
-        resizeMode="cover"
-      >
-        <View style={styles.splashFooter}>
-          <Text style={styles.splashStatus}>{statusText}</Text>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: llmPhase === 'downloading'
-                    ? `${Math.round(llmProgress * 100)}%`
-                    : llmPhase === 'loading' ? '95%' : '10%',
-                },
-              ]}
-            />
-          </View>
-        </View>
-      </ImageBackground>
-    )
-  }
+  if (!fontsLoaded || !dbReady) return null
 
   return (
     <ThemeProvider>
@@ -156,35 +117,5 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  splash: {
-    flex: 1,
-  },
-  splashFooter: {
-    position: 'absolute',
-    bottom: 60,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    gap: 10,
-  },
-  splashStatus: {
-    ...Typography.caption,
-    color: Colors.warmCharcoal,
-    opacity: 0.55,
-  },
-  progressTrack: {
-    width: 180,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: `${Colors.healthGreen}30`,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
-    backgroundColor: Colors.healthGreen,
-  },
+  root: { flex: 1 },
 })

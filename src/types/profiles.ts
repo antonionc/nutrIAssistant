@@ -36,7 +36,7 @@ export interface FamilyMember {
   id: string
   name: string
   role: MemberRole
-  age: number
+  dateOfBirth: string      // ISO YYYY-MM-DD
   weight: number              // kg
   height: number              // cm
   bloodPressure?: string

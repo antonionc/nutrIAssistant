@@ -2,6 +2,7 @@ import { FamilyMember } from '../../types/profiles'
 import { InventoryItem } from '../../types/inventory'
 import { MealPlan } from '../../types/planner'
 import { SchoolMenuEntry } from '../../types/profiles'
+import { getAge } from '../../utils/ageUtils'
 
 export function buildCloudSystemPrompt(
   profiles: FamilyMember[],
@@ -15,7 +16,7 @@ export function buildCloudSystemPrompt(
     id: m.id,
     name: m.name,
     role: m.role,
-    age: m.age,
+    age: getAge(m.dateOfBirth),
     weight: m.weight,
     height: m.height,
     allergies: m.allergies,

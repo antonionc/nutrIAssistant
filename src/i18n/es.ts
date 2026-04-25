@@ -204,6 +204,7 @@ export const ES = {
     healthConnected: 'Conectado',
     healthNotConnected: 'No conectado',
     saveChanges: 'Guardar cambios',
+    familyTitle: (name: string) => `Familia ${name}`,
     memberRoles: {
       father: 'Padre',
       mother: 'Madre',
@@ -214,7 +215,7 @@ export const ES = {
     memberFields: {
       name: 'Nombre',
       role: 'Rol',
-      age: 'Edad',
+      dateOfBirth: 'Fecha de nacimiento',
       weight: 'Peso (kg)',
       height: 'Altura (cm)',
       allergies: 'Alergias',

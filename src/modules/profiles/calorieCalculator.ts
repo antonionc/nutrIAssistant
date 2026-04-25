@@ -1,9 +1,11 @@
 import { FamilyMember } from '../../types/profiles'
+import { getAge } from '../../utils/ageUtils'
 
 // Harris-Benedict Revised (Mifflin-St Jeor, 1990) for BMR
 // Activity factor: sedentary (1.2) as default for family planning
 function computeBMR(member: FamilyMember): number {
-  const { weight, height, age, role } = member
+  const { weight, height, role } = member
+  const age = getAge(member.dateOfBirth)
   const isMale = role === 'father' || role === 'son'
 
   if (isMale) {

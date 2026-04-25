@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { getAge } from '../src/utils/ageUtils'
+import { DateOfBirthInput } from '../src/components/inputs/DateOfBirthInput'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfiles } from '../src/modules/profiles/ProfilesContext'
@@ -96,7 +98,7 @@ function blankDraft(): MemberDraft {
   return {
     name: '',
     role: 'other',
-    age: 0,
+    dateOfBirth: '',
     weight: 0,
     height: 0,
     allergies: [],
@@ -379,7 +381,7 @@ export default function OnboardingScreen() {
       updateDraft(index, { conditions })
     }
 
-    const canAdvance = draft.age > 0 && draft.weight > 0 && draft.height > 0
+    const canAdvance = draft.dateOfBirth.length >= 10 && draft.weight > 0 && draft.height > 0
 
     return (
       <ScrollView
@@ -393,18 +395,15 @@ export default function OnboardingScreen() {
         </Text>
         <Text style={styles.stepTitle}>Datos físicos y salud</Text>
 
+        <View style={styles.dobRow}>
+          <Text style={styles.fieldLabel}>Fecha de nacimiento</Text>
+          <DateOfBirthInput
+            value={draft.dateOfBirth}
+            onChange={(iso) => updateDraft(index, { dateOfBirth: iso })}
+          />
+        </View>
+
         <View style={styles.triRow}>
-          <View style={styles.triField}>
-            <Text style={styles.fieldLabel}>Edad</Text>
-            <TextInput
-              style={styles.triInput}
-              value={draft.age > 0 ? String(draft.age) : ''}
-              onChangeText={(v) => updateDraft(index, { age: parseInt(v) || 0 })}
-              placeholder="años"
-              placeholderTextColor={Colors.light.textMuted}
-              keyboardType="numeric"
-            />
-          </View>
           <View style={styles.triField}>
             <Text style={styles.fieldLabel}>Peso (kg)</Text>
             <TextInput
@@ -533,7 +532,7 @@ export default function OnboardingScreen() {
             <View key={i} style={styles.summaryRow}>
               <Text style={styles.summaryEmoji}>{d.avatarEmoji ?? '👤'}</Text>
               <Text style={styles.summaryName}>{d.name}</Text>
-              <Text style={styles.summaryMeta}>{ROLE_LABELS[d.role]} · {d.age} años</Text>
+              <Text style={styles.summaryMeta}>{ROLE_LABELS[d.role]} · {getAge(d.dateOfBirth)} años</Text>
             </View>
           ))}
         </View>
@@ -817,6 +816,10 @@ const styles = StyleSheet.create({
     fontSize: 26,
   },
   // Three-column row for age/weight/height
+  dobRow: {
+    gap: 6,
+    marginBottom: Spacing.sm,
+  },
   triRow: {
     flexDirection: 'row',
     gap: Spacing.sm,

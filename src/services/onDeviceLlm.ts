@@ -68,7 +68,7 @@ export async function downloadModel(
  * In that case the app falls back to Claude API silently.
  */
 export async function ensureModelAvailable(
-  onPhase: (phase: 'downloading' | 'loading', progress?: number) => void
+  onPhase?: (phase: 'downloading' | 'loading', progress?: number) => void
 ): Promise<boolean> {
   if (!LLMModule) {
     // Native module unavailable — requires `expo run:ios` / `expo run:android`.
@@ -78,10 +78,10 @@ export async function ensureModelAvailable(
 
   const downloaded = await isModelDownloaded()
   if (!downloaded) {
-    await downloadModel((progress) => onPhase('downloading', progress))
+    await downloadModel((progress) => onPhase?.('downloading', progress))
   }
 
-  onPhase('loading')
+  onPhase?.('loading')
   await loadModel()
   return true
 }

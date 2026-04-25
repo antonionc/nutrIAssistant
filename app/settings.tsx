@@ -12,8 +12,12 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfiles } from '../src/modules/profiles/ProfilesContext'
+import { getAge } from '../src/utils/ageUtils'
+import { DateOfBirthInput } from '../src/components/inputs/DateOfBirthInput'
+import { useTranslation } from '../src/i18n'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../src/theme'
 import { useTheme, ThemePreference } from '../src/theme/ThemeContext'
 import { FamilyMember, AllergenType, DietPreference } from '../src/types/profiles'
@@ -55,6 +59,7 @@ const CONDITIONS_LABELS: Record<string, string> = {
 }
 
 export default function SettingsScreen() {
+  const tr = useTranslation()
   const { profiles, familyName, addProfile, updateProfile, deleteProfile, setFamilyName, importFamily } = useProfiles()
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
@@ -191,9 +196,8 @@ export default function SettingsScreen() {
   ]
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.pageTitle}>Ajustes</Text>
 
         {/* ── Apariencia ──────────────────────── */}
         <SectionHeader title="Apariencia" />
@@ -216,31 +220,33 @@ export default function SettingsScreen() {
         </View>
 
         {/* ── Perfiles familiares ─────────────── */}
-        <SectionHeader title="Perfiles familiares" />
         <View style={styles.card}>
-          {/* Family name */}
+          {/* Family name header */}
           <View style={styles.row}>
-            <Text style={styles.label}>Nombre de familia</Text>
             {editingFamilyName ? (
-              <View style={styles.inlineEdit}>
+              <View style={[styles.inlineEdit, { flex: 1 }]}>
                 <TextInput
-                  style={styles.inlineInput}
+                  style={[styles.inlineInput, { flex: 1 }]}
                   value={familyNameInput}
                   onChangeText={setFamilyNameInput}
                   autoFocus
                 />
                 <TouchableOpacity onPress={async () => { await setFamilyName(familyNameInput); setEditingFamilyName(false) }}>
-                  <Text style={styles.saveText}>Guardar</Text>
+                  <Text style={styles.saveText}>{tr.app.save}</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity onPress={() => setEditingFamilyName(true)}>
-                <Text style={styles.value}>{familyName} ✎</Text>
-              </TouchableOpacity>
+              <>
+                <Text style={styles.familyHeading}>{tr.settings.familyTitle(familyName)}</Text>
+                <TouchableOpacity
+                  onPress={() => { setFamilyNameInput(familyName); setEditingFamilyName(true) }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="pencil-outline" size={18} color={Colors.healthGreen} />
+                </TouchableOpacity>
+              </>
             )}
           </View>
-
-          <View style={styles.divider} />
 
           {profiles.map((member) => (
             <MemberProfileRow
@@ -261,7 +267,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.addMemberBtn}
             onPress={() => addProfile({
-              name: 'Nuevo miembro', role: 'other', age: 30, weight: 70, height: 170,
+              name: 'Nuevo miembro', role: 'other', dateOfBirth: `${new Date().getFullYear() - 30}-01-01`, weight: 70, height: 170,
               allergies: [], conditions: [], dietPreference: 'none',
               avatarEmoji: '👤', isSchoolAge: false,
               dailyCalorieTarget: 2000, macroTargets: { protein: 150, carbs: 225, fat: 67 },
@@ -461,6 +467,8 @@ function MemberProfileRow({
   onUpdate: (updates: Partial<FamilyMember>) => void
   onDelete: () => void
 }) {
+  const tr = useTranslation()
+
   async function handleAvatarPress() {
     const newUri = await pickAndSaveAvatar(member.id)
     if (!newUri) return
@@ -482,7 +490,7 @@ function MemberProfileRow({
         <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }} onPress={onToggle}>
           <View style={{ flex: 1 }}>
             <Text style={styles.memberName}>{member.name}</Text>
-            <Text style={styles.memberMeta}>{member.role} · {member.age}a · {member.weight}kg</Text>
+            <Text style={styles.memberMeta}>{tr.settings.memberRoles[member.role]} · {getAge(member.dateOfBirth)}a · {member.weight}kg</Text>
           </View>
           <Text style={styles.expandIcon}>{isExpanded ? '▲' : '▼'}</Text>
         </TouchableOpacity>
@@ -497,12 +505,10 @@ function MemberProfileRow({
               onChangeText={(v) => onUpdate({ name: v })}
             />
           </FormRow>
-          <FormRow label="Edad">
-            <TextInput
-              style={styles.formInput}
-              value={String(member.age)}
-              onChangeText={(v) => onUpdate({ age: parseInt(v) || 0 })}
-              keyboardType="numeric"
+          <FormRow label="Fecha de nacimiento">
+            <DateOfBirthInput
+              value={member.dateOfBirth ?? ''}
+              onChange={(iso) => onUpdate({ dateOfBirth: iso })}
             />
           </FormRow>
           <FormRow label="Peso (kg)">
@@ -598,8 +604,7 @@ function FormRow({ label, children }: { label: string; children: React.ReactNode
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.cream },
-  scroll: { paddingHorizontal: Spacing.md },
-  pageTitle: { ...Typography.heading1, color: Colors.warmCharcoal, paddingVertical: Spacing.md },
+  scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
   sectionHeader: {
     ...Typography.overline, color: Colors.light.textSecondary,
     marginTop: Spacing.md, marginBottom: Spacing.xs, paddingLeft: Spacing.xs,
@@ -624,6 +629,7 @@ const styles = StyleSheet.create({
   themeEmoji: { fontSize: 22 },
   themeLabel: { ...Typography.caption, color: Colors.light.textSecondary },
   themeLabelActive: { color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },
+  familyHeading: { ...Typography.heading3, color: Colors.warmCharcoal },
   // Members
   addMemberBtn: { alignItems: 'center', paddingVertical: Spacing.sm },
   addMemberText: { ...Typography.bodyLarge, color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },

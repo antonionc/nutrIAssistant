@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import { useTranslation } from '../../src/i18n'
+import { getAge } from '../../src/utils/ageUtils'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
 import { useInventory } from '../../src/modules/inventory/useInventory'
@@ -280,7 +281,7 @@ function MemberCardWide({
       <View style={wide.info}>
         <Text style={wide.name}>{member.name}</Text>
         <Text style={wide.meta}>
-          {tr.roles[member.role] ?? member.role} · {tr.home_screen.yearsOld(member.age)}
+          {tr.roles[member.role] ?? member.role} · {tr.home_screen.yearsOld(getAge(member.dateOfBirth))}
         </Text>
         <Text style={wide.calories}>{caloriesConsumed} / {target} kcal</Text>
         {member.allergies.length > 0 && (

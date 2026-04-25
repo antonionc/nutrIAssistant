@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy'
 import * as DocumentPicker from 'expo-document-picker'
 import { FamilyMember } from '../types/profiles'
+import { getAge } from '../utils/ageUtils'
 
 const DIET_LABELS: Record<string, string> = {
   none: 'Sin restricción',
@@ -63,7 +64,7 @@ function memberToMarkdown(m: FamilyMember, index: number): string {
   const role = ROLE_LABELS[m.role] ?? m.role
 
   return [
-    `### ${index + 1}. ${m.name} (${role}, ${m.age} años)`,
+    `### ${index + 1}. ${m.name} (${role}, ${getAge(m.dateOfBirth)} años)`,
     `Peso: ${m.weight} kg · Altura: ${m.height} cm · Dieta: ${diet}`,
     `Alergias: ${allergies}`,
     `Condiciones e intolerancias: ${conditions}`,

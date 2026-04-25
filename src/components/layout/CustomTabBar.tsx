@@ -22,8 +22,8 @@ const TAB_ICONS: Record<string, { default: IoniconsName; active: IoniconsName }>
   groceries:  { default: 'cart-outline',       active: 'cart' },
 }
 
-const ICON_COLOR_DEFAULT = Colors.warmCharcoal
-const ICON_COLOR_ACTIVE  = Colors.forestGreen
+const ICON_COLOR_DEFAULT = 'rgba(255,255,255,0.55)'
+const ICON_COLOR_ACTIVE  = Colors.white
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
@@ -96,7 +96,6 @@ function TabButton({
         name={iconName}
         size={26}
         color={isFocused ? ICON_COLOR_ACTIVE : ICON_COLOR_DEFAULT}
-        style={isFocused ? undefined : styles.iconInactive}
       />
     </TouchableOpacity>
   )
@@ -104,14 +103,12 @@ function TabButton({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.light.tabBar,
-    borderTopWidth: 3,
-    borderTopColor: Colors.healthGreen,
+    backgroundColor: Colors.healthGreen,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.12,
         shadowRadius: 8,
       },
       android: { elevation: 8 },
@@ -127,9 +124,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  iconInactive: {
-    opacity: 0.45,
   },
   centerContainer: {
     width: 80,

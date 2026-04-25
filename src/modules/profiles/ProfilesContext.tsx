@@ -15,6 +15,17 @@ import {
   isAppInitialized,
 } from './profileStorage'
 import { computeDailyCalorieTarget, computeMacroTargets } from './calorieCalculator'
+import { getAge } from '../../utils/ageUtils'
+
+// Converts profiles saved with the old `age: number` field to `dateOfBirth: string`
+function migrateProfile(raw: any): FamilyMember {
+  if (!raw.dateOfBirth && typeof raw.age === 'number' && raw.age > 0) {
+    const year = new Date().getFullYear() - raw.age
+    const { age: _age, ...rest } = raw
+    return { ...rest, dateOfBirth: `${year}-01-01` } as FamilyMember
+  }
+  return raw as FamilyMember
+}
 
 interface ProfilesContextValue {
   profiles: FamilyMember[]
@@ -32,8 +43,8 @@ interface ProfilesContextValue {
   importFamily: (familyNameInput: string, members: FamilyMember[]) => Promise<void>
 }
 
-function applySchoolAgeRule<T extends { age: number; isSchoolAge: boolean }>(member: T): T {
-  return member.age < 18 ? { ...member, isSchoolAge: true } : member
+function applySchoolAgeRule<T extends { dateOfBirth: string; isSchoolAge: boolean }>(member: T): T {
+  return getAge(member.dateOfBirth) < 18 ? { ...member, isSchoolAge: true } : member
 }
 
 const ProfilesContext = createContext<ProfilesContextValue | null>(null)
@@ -50,7 +61,8 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
       if (!initialized) {
         setNeedsOnboarding(true)
       } else {
-        const [p, fn] = await Promise.all([loadProfiles(), loadFamilyName()])
+        const [raw, fn] = await Promise.all([loadProfiles(), loadFamilyName()])
+        const p = (raw as any[]).map(migrateProfile)
         setProfilesState(p)
         setFamilyNameState(fn)
       }
