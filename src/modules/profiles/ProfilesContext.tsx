@@ -32,6 +32,10 @@ interface ProfilesContextValue {
   importFamily: (familyNameInput: string, members: FamilyMember[]) => Promise<void>
 }
 
+function applySchoolAgeRule<T extends { age: number; isSchoolAge: boolean }>(member: T): T {
+  return member.age < 18 ? { ...member, isSchoolAge: true } : member
+}
+
 const ProfilesContext = createContext<ProfilesContextValue | null>(null)
 
 export function ProfilesProvider({ children }: { children: React.ReactNode }) {
@@ -58,12 +62,12 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
   const addProfile = useCallback(
     async (member: Omit<FamilyMember, 'id' | 'createdAt' | 'updatedAt'>) => {
       const now = new Date().toISOString()
-      const newMember: FamilyMember = {
+      const newMember: FamilyMember = applySchoolAgeRule({
         ...member,
         id: `member-${Date.now()}`,
         createdAt: now,
         updatedAt: now,
-      }
+      })
       const updated = [...profiles, newMember]
       await saveProfiles(updated)
       setProfilesState(updated)
@@ -74,7 +78,7 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = useCallback(
     async (id: string, updates: Partial<FamilyMember>) => {
       const updated = profiles.map((p) =>
-        p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
+        p.id === id ? applySchoolAgeRule({ ...p, ...updates, updatedAt: new Date().toISOString() }) : p
       )
       await saveProfiles(updated)
       setProfilesState(updated)
@@ -106,14 +110,14 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
         const partial = m as FamilyMember
         const calories = m.dailyCalorieTarget ?? computeDailyCalorieTarget(partial)
         const macros = m.macroTargets ?? computeMacroTargets(calories, m.conditions)
-        return {
+        return applySchoolAgeRule({
           ...m,
           id: `member-${Date.now()}-${i}`,
           dailyCalorieTarget: calories,
           macroTargets: macros,
           createdAt: now,
           updatedAt: now,
-        }
+        })
       })
       await saveProfiles(seeded)
       await saveFamilyName(familyNameInput)
@@ -127,10 +131,11 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
 
   const importFamily = useCallback(
     async (familyNameInput: string, members: FamilyMember[]) => {
-      await saveProfiles(members)
+      const normalised = members.map(applySchoolAgeRule)
+      await saveProfiles(normalised)
       await saveFamilyName(familyNameInput)
       await markAppInitialized()
-      setProfilesState(members)
+      setProfilesState(normalised)
       setFamilyNameState(familyNameInput)
       setNeedsOnboarding(false)
     },

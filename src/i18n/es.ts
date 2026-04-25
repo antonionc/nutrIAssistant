@@ -278,22 +278,58 @@ export const ES = {
     iron: 'Hierro',
   },
 
-  // Allergens
+  // Allergens (keys match AllergenType in profiles.ts)
   allergens: {
     gluten: 'Gluten',
-    crustaceans: 'Crustáceos',
-    eggs: 'Huevos',
-    fish: 'Pescado',
-    peanuts: 'Cacahuetes',
-    soybeans: 'Soja',
     dairy: 'Lácteos',
-    nuts: 'Frutos secos',
+    eggs: 'Huevos',
+    peanuts: 'Cacahuetes',
+    'tree nuts': 'Frutos secos',
+    soy: 'Soja',
+    fish: 'Pescado',
+    shellfish: 'Mariscos',
+    sesame: 'Sésamo',
     celery: 'Apio',
     mustard: 'Mostaza',
-    sesame: 'Sésamo',
-    sulphites: 'Sulfitos',
     lupin: 'Altramuces',
-    molluscs: 'Moluscos',
+    mollusks: 'Moluscos',
+    sulfites: 'Sulfitos',
+  },
+
+  // Diet preferences
+  diets: {
+    none: 'Sin preferencia',
+    mediterranean: 'Mediterránea',
+    vegetarian: 'Vegetariana',
+    vegan: 'Vegana',
+    pescatarian: 'Pescatariana',
+    keto: 'Keto',
+  },
+
+  // Roles (keys match MemberRole in profiles.ts)
+  roles: {
+    father: 'Padre',
+    mother: 'Madre',
+    son: 'Hijo',
+    daughter: 'Hija',
+    other: 'Familiar',
+  },
+
+  // Home screen specific
+  home_screen: {
+    familyProgress: 'Familia',
+    todayMenu: 'Menú de hoy',
+    recipesForYou: 'Recetas para ti',
+    pantryAlerts: '⚠️ Alertas de despensa',
+    healthNews: 'Noticias de salud',
+    noMealToday: 'Sin plan de comidas para hoy.',
+    generatePlan: 'Generar plan →',
+    viewAll: 'Ver todo →',
+    viewAllRecipes: 'Ver todas →',
+    yearsOld: (n: number) => `${n} años`,
+    buyMore: '+ Compra',
+    expiresOn: (date: string) => `caduca ${date}`,
+    lowStock: 'bajo en stock',
   },
 
   // Empty states

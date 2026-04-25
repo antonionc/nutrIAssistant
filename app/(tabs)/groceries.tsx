@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useGroceries } from '../../src/modules/groceries/useGroceries'
+import { useGroceries } from '../../src/modules/groceries/GroceriesContext'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
 import { EmptyState } from '../../src/components/layout/EmptyState'
 import { GroceryItem } from '../../src/types/groceries'

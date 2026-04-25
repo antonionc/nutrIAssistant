@@ -1,5 +1,5 @@
 import React from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Image, StyleSheet, Text, View } from 'react-native'
 import { CompatibilityResult } from '../../types/recipes'
 import { FamilyMember } from '../../types/profiles'
 import { Colors, Typography, Spacing } from '../../theme'
@@ -24,10 +24,14 @@ export function CompatibilityBadge({ result, member, showName = true }: Compatib
       ? Colors.warningOrange
       : Colors.healthGreen
 
+  const hasAvatar = member?.avatarUrl || member?.avatarEmoji
+
   return (
     <View style={styles.container}>
       <View style={[styles.iconCircle, { backgroundColor: `${iconColor}20` }]}>
-        {member?.avatarEmoji ? (
+        {member?.avatarUrl ? (
+          <Image source={{ uri: member.avatarUrl }} style={styles.avatarImage} />
+        ) : member?.avatarEmoji ? (
           <Text style={styles.emoji}>{member.avatarEmoji}</Text>
         ) : (
           <Text style={[styles.icon, { color: iconColor }]}>{icon}</Text>
@@ -43,7 +47,7 @@ export function CompatibilityBadge({ result, member, showName = true }: Compatib
           ) : null}
         </View>
       )}
-      {member?.avatarEmoji && (
+      {hasAvatar && (
         <Text style={[styles.statusIcon, { color: iconColor }]}>{icon}</Text>
       )}
     </View>
@@ -90,7 +94,11 @@ function CompactCompatibilityDot({
 
   return (
     <View style={[styles.dot, { borderColor }]}>
-      <Text style={styles.dotEmoji}>{member.avatarEmoji ?? '👤'}</Text>
+      {member.avatarUrl ? (
+        <Image source={{ uri: member.avatarUrl }} style={styles.dotImage} />
+      ) : (
+        <Text style={styles.dotEmoji}>{member.avatarEmoji ?? '👤'}</Text>
+      )}
     </View>
   )
 }
@@ -107,6 +115,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   emoji: {
     fontSize: 16,
@@ -144,6 +157,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.softMint,
+  },
+  dotImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
   },
   dotEmoji: {
     fontSize: 14,

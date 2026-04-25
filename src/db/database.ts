@@ -3,6 +3,9 @@ import { migration001 } from './migrations/001_initial'
 import { migration002 } from './migrations/002_grocery_is_purchased'
 import { migration003 } from './migrations/003_grocery_notes'
 import { migration004 } from './migrations/004_clear_seed_image_urls'
+import { migration005 } from './migrations/005_grocery_purchased_at'
+import { migration006 } from './migrations/006_grocery_from_meal_plan'
+import { migration007 } from './migrations/007_grocery_recipe_id'
 
 let db: SQLite.SQLiteDatabase | null = null
 
@@ -87,6 +90,45 @@ export async function runMigrations(): Promise<void> {
       ['004_clear_seed_image_urls', new Date().toISOString()]
     )
     console.log('[DB] Migration 004_clear_seed_image_urls completed')
+  }
+
+  if (!ranNames.has('005_grocery_purchased_at')) {
+    try {
+      await database.execAsync(migration005)
+    } catch {
+      // Column already exists on fresh installs — safe to ignore
+    }
+    await database.runAsync(
+      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
+      ['005_grocery_purchased_at', new Date().toISOString()]
+    )
+    console.log('[DB] Migration 005_grocery_purchased_at completed')
+  }
+
+  if (!ranNames.has('006_grocery_from_meal_plan')) {
+    try {
+      await database.execAsync(migration006)
+    } catch {
+      // Column already exists on fresh installs — safe to ignore
+    }
+    await database.runAsync(
+      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
+      ['006_grocery_from_meal_plan', new Date().toISOString()]
+    )
+    console.log('[DB] Migration 006_grocery_from_meal_plan completed')
+  }
+
+  if (!ranNames.has('007_grocery_recipe_id')) {
+    try {
+      await database.execAsync(migration007)
+    } catch {
+      // Column already exists on fresh installs — safe to ignore
+    }
+    await database.runAsync(
+      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
+      ['007_grocery_recipe_id', new Date().toISOString()]
+    )
+    console.log('[DB] Migration 007_grocery_recipe_id completed')
   }
 }
 

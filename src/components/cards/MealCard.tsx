@@ -20,11 +20,6 @@ const MEAL_LABELS: Record<MealType, string> = {
   dinner: '🌙 Cena',
 }
 
-const MEAL_COLORS: Record<MealType, string> = {
-  breakfast: '#FFF3CD',
-  lunch: '#D4EDDA',
-  dinner: '#D1ECF1',
-}
 
 interface MealCardProps {
   mealType: MealType
@@ -49,7 +44,7 @@ export function MealCard({
 }: MealCardProps) {
   return (
     <TouchableOpacity
-      style={[styles.card, { borderTopColor: MEAL_COLORS[mealType], borderTopWidth: 3 }]}
+      style={styles.card}
       onPress={onPress}
       activeOpacity={0.9}
     >

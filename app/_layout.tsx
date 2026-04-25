@@ -11,10 +11,11 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { ImageBackground, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ProfilesProvider } from '../src/modules/profiles/ProfilesContext'
 import { PlannerProvider } from '../src/modules/planner/PlannerContext'
+import { GroceriesProvider } from '../src/modules/groceries/GroceriesContext'
 import { AIEngineProvider } from '../src/modules/ai-engine/AIContext'
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext'
 import { runMigrations } from '../src/db/database'
@@ -28,6 +29,7 @@ function AppShell() {
 
   return (
     <ProfilesProvider>
+      <GroceriesProvider>
       <PlannerProvider>
       <AIEngineProvider>
         <Stack>
@@ -49,6 +51,7 @@ function AppShell() {
         <StatusBar style={isDark ? 'light' : 'dark'} />
       </AIEngineProvider>
       </PlannerProvider>
+      </GroceriesProvider>
     </ProfilesProvider>
   )
 }
@@ -107,22 +110,35 @@ export default function RootLayout() {
   }, [])
 
   if (!fontsLoaded || !dbReady) {
+    const statusText =
+      llmPhase === 'downloading'
+        ? `Descargando modelo IA… ${Math.round(llmProgress * 100)}%`
+        : llmPhase === 'loading'
+        ? 'Cargando modelo en memoria…'
+        : 'Iniciando nutrIAssistant…'
+
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color={Colors.healthGreen} />
-        <Text style={styles.loadingText}>
-          {llmPhase === 'downloading'
-            ? `Descargando modelo IA… ${Math.round(llmProgress * 100)}%`
-            : llmPhase === 'loading'
-            ? 'Cargando modelo en memoria…'
-            : 'Iniciando nutrIAssistant…'}
-        </Text>
-        {llmPhase === 'downloading' && (
+      <ImageBackground
+        source={require('../assets/images/splash-wallpaper.jpg')}
+        style={styles.splash}
+        resizeMode="cover"
+      >
+        <View style={styles.splashFooter}>
+          <Text style={styles.splashStatus}>{statusText}</Text>
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${Math.round(llmProgress * 100)}%` }]} />
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width: llmPhase === 'downloading'
+                    ? `${Math.round(llmProgress * 100)}%`
+                    : llmPhase === 'loading' ? '95%' : '10%',
+                },
+              ]}
+            />
           </View>
-        )}
-      </View>
+        </View>
+      </ImageBackground>
     )
   }
 
@@ -143,22 +159,25 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  loading: {
+  splash: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.cream,
   },
-  loadingText: {
-    ...Typography.body,
+  splashFooter: {
+    position: 'absolute',
+    bottom: 60,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    gap: 10,
+  },
+  splashStatus: {
+    ...Typography.caption,
     color: Colors.warmCharcoal,
-    marginTop: 12,
-    opacity: 0.6,
+    opacity: 0.55,
   },
   progressTrack: {
-    marginTop: 12,
-    width: 220,
-    height: 4,
+    width: 180,
+    height: 3,
     borderRadius: 2,
     backgroundColor: `${Colors.healthGreen}30`,
     overflow: 'hidden',

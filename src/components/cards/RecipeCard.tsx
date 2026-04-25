@@ -22,7 +22,8 @@ export function RecipeCard({ recipe, onPress, compact = false }: RecipeCardProps
   if (compact) {
     // Small vertical card for horizontal scroll strips
     return (
-      <TouchableOpacity style={styles.compactCard} onPress={onPress} activeOpacity={0.8}>
+      <TouchableOpacity style={styles.compactCardShadow} onPress={onPress} activeOpacity={0.8}>
+        <View style={styles.compactCard}>
         <View style={styles.compactImageWrapper}>
           {recipe.imageUrl ? (
             <Image source={{ uri: recipe.imageUrl }} style={styles.compactImage} />
@@ -41,55 +42,58 @@ export function RecipeCard({ recipe, onPress, compact = false }: RecipeCardProps
           <Text style={styles.compactName} numberOfLines={2}>{recipe.name}</Text>
           <Text style={styles.compactMeta}>⏱ {totalTime}min · 🔥 {recipe.nutritionalInfo.calories} kcal</Text>
         </View>
+        </View>
       </TouchableOpacity>
     )
   }
 
   // Full horizontal card for list view
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
-      <View style={styles.imageWrapper}>
-        {recipe.imageUrl ? (
-          <Image source={{ uri: recipe.imageUrl }} style={styles.image} />
-        ) : (
-          <View style={[styles.image, styles.imagePlaceholder]}>
-            <Text style={styles.placeholderEmoji}>🍽️</Text>
-          </View>
-        )}
-        {recipe.nutriscore && (
-          <View style={styles.nutriscoreOverlay}>
-            <NutriScoreBadge score={recipe.nutriscore} size="sm" />
-          </View>
-        )}
-      </View>
-
-      <View style={styles.content}>
-        {recipe.cuisineFlag ? (
-          <Text style={styles.cuisineTag}>{recipe.cuisineFlag} {recipe.cuisine}</Text>
-        ) : null}
-        <Text style={styles.name} numberOfLines={2}>{recipe.name}</Text>
-
-        <View style={styles.metaRow}>
-          <View style={styles.metaChip}>
-            <Text style={styles.metaChipText}>⏱ {totalTime} min</Text>
-          </View>
-          <View style={styles.metaChip}>
-            <Text style={styles.metaChipText}>🔥 {recipe.nutritionalInfo.calories} kcal</Text>
-          </View>
-          {recipe.nutritionalInfo.protein > 0 && (
-            <View style={[styles.metaChip, styles.metaChipGreen]}>
-              <Text style={[styles.metaChipText, styles.metaChipTextGreen]}>
-                {recipe.nutritionalInfo.protein}g prot.
-              </Text>
+    <TouchableOpacity style={styles.cardShadow} onPress={onPress} activeOpacity={0.85}>
+      <View style={styles.card}>
+        <View style={styles.imageWrapper}>
+          {recipe.imageUrl ? (
+            <Image source={{ uri: recipe.imageUrl }} style={styles.image} />
+          ) : (
+            <View style={[styles.image, styles.imagePlaceholder]}>
+              <Text style={styles.placeholderEmoji}>🍽️</Text>
+            </View>
+          )}
+          {recipe.nutriscore && (
+            <View style={styles.nutriscoreOverlay}>
+              <NutriScoreBadge score={recipe.nutriscore} size="sm" />
             </View>
           )}
         </View>
 
-        {recipe.tags.length > 0 && (
-          <Text style={styles.tags} numberOfLines={1}>
-            {recipe.tags.slice(0, 3).join(' · ')}
-          </Text>
-        )}
+        <View style={styles.content}>
+          {recipe.cuisineFlag ? (
+            <Text style={styles.cuisineTag}>{recipe.cuisineFlag} {recipe.cuisine}</Text>
+          ) : null}
+          <Text style={styles.name} numberOfLines={2}>{recipe.name}</Text>
+
+          <View style={styles.metaRow}>
+            <View style={styles.metaChip}>
+              <Text style={styles.metaChipText}>⏱ {totalTime} min</Text>
+            </View>
+            <View style={styles.metaChip}>
+              <Text style={styles.metaChipText}>🔥 {recipe.nutritionalInfo.calories} kcal</Text>
+            </View>
+            {recipe.nutritionalInfo.protein > 0 && (
+              <View style={[styles.metaChip, styles.metaChipGreen]}>
+                <Text style={[styles.metaChipText, styles.metaChipTextGreen]}>
+                  {recipe.nutritionalInfo.protein}g prot.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {recipe.tags.length > 0 && (
+            <Text style={styles.tags} numberOfLines={1}>
+              {recipe.tags.slice(0, 3).join(' · ')}
+            </Text>
+          )}
+        </View>
       </View>
     </TouchableOpacity>
   )
@@ -97,14 +101,17 @@ export function RecipeCard({ recipe, onPress, compact = false }: RecipeCardProps
 
 const styles = StyleSheet.create({
   // Full horizontal card
+  cardShadow: {
+    borderRadius: BorderRadius.xl,
+    ...Shadows.card,
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+  },
   card: {
     flexDirection: 'row',
     backgroundColor: Colors.light.cardBackground,
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',
-    ...Shadows.card,
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
   },
   imageWrapper: {
     position: 'relative',
@@ -173,12 +180,15 @@ const styles = StyleSheet.create({
   },
 
   // Compact vertical card
-  compactCard: {
+  compactCardShadow: {
     width: 160,
-    backgroundColor: Colors.light.cardBackground,
+    borderRadius: BorderRadius.lg,
+    ...Shadows.card,
+  },
+  compactCard: {
     borderRadius: BorderRadius.lg,
     overflow: 'hidden',
-    ...Shadows.card,
+    backgroundColor: Colors.light.cardBackground,
   },
   compactImageWrapper: {
     position: 'relative',

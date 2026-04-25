@@ -64,7 +64,8 @@
         {
           "photosPermission": "NutrIAssistant needs photo library access to select food images."
         }
-      ]
+      ],
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true,
