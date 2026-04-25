@@ -1,3 +1,6 @@
+import { Ionicons } from '@expo/vector-icons'
+import BottomSheet from '@gorhom/bottom-sheet'
+import { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import React, { useRef } from 'react'
 import {
   Image,
@@ -6,11 +9,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs'
-import BottomSheet from '@gorhom/bottom-sheet'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Ionicons } from '@expo/vector-icons'
-import { Colors, Spacing, Shadows } from '../../theme'
+import { Colors, Shadows, Spacing } from '../../theme'
 import { AIAssistant } from './AIAssistant'
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name']
@@ -105,8 +105,8 @@ function TabButton({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.light.tabBar,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
+    borderTopWidth: 3,
+    borderTopColor: Colors.healthGreen,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -137,21 +137,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   aiButton: {
-    width: 56,
-    height: 56,
+    width: 70,
+    height: 70,
     borderRadius: 28,
     backgroundColor: Colors.cream,
     alignItems: 'center',
     justifyContent: 'center',
     bottom: 12,
-    borderWidth: 1.5,
+    borderWidth: 3,
     borderColor: Colors.healthGreen,
     overflow: 'hidden',
     ...Shadows.elevated,
   },
   aiLogo: {
-    width: 40,
-    height: 40,
+    width: 46,
+    height: 46,
     borderRadius: 20,
   },
 })

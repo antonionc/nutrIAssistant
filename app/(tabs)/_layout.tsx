@@ -1,8 +1,18 @@
 import { Tabs } from 'expo-router'
-import React from 'react'
+import { router } from 'expo-router'
+import React, { useEffect } from 'react'
 import { CustomTabBar } from '../../src/components/layout/CustomTabBar'
+import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
 
 export default function TabLayout() {
+  const { isLoading, needsOnboarding } = useProfiles()
+
+  useEffect(() => {
+    if (!isLoading && needsOnboarding) {
+      router.replace('/onboarding' as never)
+    }
+  }, [isLoading, needsOnboarding])
+
   return (
     <Tabs
       screenOptions={{

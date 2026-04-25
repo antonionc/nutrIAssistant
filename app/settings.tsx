@@ -28,6 +28,8 @@ import {
 import { OnDeviceLLMStatus } from '../src/types/ai'
 import { syncRecipes, isSynced } from '../src/modules/recipes/syncRecipes'
 import { pickAndSaveAvatar, deleteOldAvatar } from '../src/services/avatarService'
+import { exportFamilyToMarkdown, importFamilyFromFile } from '../src/services/familyExport'
+import * as Sharing from 'expo-sharing'
 import { getRecipeCount } from '../src/modules/recipes/recipeDB'
 import Constants from 'expo-constants'
 
@@ -53,7 +55,7 @@ const CONDITIONS_LABELS: Record<string, string> = {
 }
 
 export default function SettingsScreen() {
-  const { profiles, familyName, addProfile, updateProfile, deleteProfile, setFamilyName } = useProfiles()
+  const { profiles, familyName, addProfile, updateProfile, deleteProfile, setFamilyName, importFamily } = useProfiles()
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
   const [llmStatus, setLlmStatus] = useState<OnDeviceLLMStatus>({ isDownloaded: false, isDownloading: false, isLoaded: false, downloadProgress: 0 })
@@ -66,6 +68,8 @@ export default function SettingsScreen() {
   const [syncProgress, setSyncProgress] = useState(0)
   const [syncMessage, setSyncMessage] = useState('')
   const [recipeCount, setRecipeCount] = useState(0)
+  const [isExporting, setIsExporting] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
 
   useEffect(() => {
     getLLMStatus().then(setLlmStatus)
@@ -121,6 +125,60 @@ export default function SettingsScreen() {
       setIsSyncing(false)
       setSyncProgress(0)
       setSyncMessage('')
+    }
+  }
+
+  const handleExportFamily = async () => {
+    if (profiles.length === 0) {
+      Alert.alert('Sin datos', 'No hay perfiles familiares para exportar.')
+      return
+    }
+    setIsExporting(true)
+    try {
+      const fileUri = await exportFamilyToMarkdown(familyName, profiles)
+      const canShare = await Sharing.isAvailableAsync()
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/markdown',
+          dialogTitle: 'Exportar copia de seguridad familiar',
+          UTI: 'public.plain-text',
+        })
+      } else {
+        Alert.alert('Archivo guardado', `Copia guardada en:\n${fileUri}`)
+      }
+    } catch (e) {
+      Alert.alert('Error al exportar', e instanceof Error ? e.message : 'Error desconocido')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handleImportFamily = async () => {
+    setIsImporting(true)
+    try {
+      const data = await importFamilyFromFile()
+      if (!data) {
+        Alert.alert('Archivo no válido', 'No se pudo leer el archivo. Asegúrate de que es una copia de seguridad de NutrIAssistant.')
+        return
+      }
+      Alert.alert(
+        `Importar familia "${data.familyName}"`,
+        `Se importarán ${data.members.length} miembro${data.members.length !== 1 ? 's' : ''}.\n\nEsto reemplazará todos los perfiles actuales.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Importar',
+            onPress: async () => {
+              await importFamily(data.familyName, data.members)
+              Alert.alert('¡Importación completada!', `Familia "${data.familyName}" restaurada con ${data.members.length} miembros.`)
+            },
+          },
+        ]
+      )
+    } catch (e) {
+      Alert.alert('Error al importar', e instanceof Error ? e.message : 'Error desconocido')
+    } finally {
+      setIsImporting(false)
     }
   }
 
@@ -311,6 +369,35 @@ export default function SettingsScreen() {
           ))}
         </View>
 
+        {/* ── Copia de seguridad ─────────────── */}
+        <SectionHeader title="Copia de seguridad familiar" />
+        <View style={styles.card}>
+          <Text style={styles.hint}>Exporta los perfiles de tu familia a un archivo Markdown. Guárdalo en iCloud, Google Drive o email para restaurarlos si cambias de dispositivo.</Text>
+          <View style={styles.divider} />
+          <TouchableOpacity
+            style={[styles.primaryBtn, isExporting && { opacity: 0.7 }]}
+            onPress={handleExportFamily}
+            disabled={isExporting}
+          >
+            {isExporting ? (
+              <ActivityIndicator color={Colors.white} />
+            ) : (
+              <Text style={styles.primaryBtnText}>📤 Exportar copia de seguridad</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.linkBtn, isImporting && { opacity: 0.7 }]}
+            onPress={handleImportFamily}
+            disabled={isImporting}
+          >
+            {isImporting ? (
+              <ActivityIndicator color={Colors.infoBlue} />
+            ) : (
+              <Text style={styles.linkBtnText}>📥 Importar desde archivo</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* ── Datos y privacidad ──────────────── */}
         <SectionHeader title="Datos y privacidad" />
         <View style={styles.card}>
@@ -322,9 +409,6 @@ export default function SettingsScreen() {
             <Switch value={false} trackColor={{ true: Colors.healthGreen, false: Colors.light.border }} />
           </View>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.linkBtn}>
-            <Text style={styles.linkBtnText}>📤 Exportar mis datos</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.dangerBtn} onPress={() =>
             Alert.alert('Eliminar todos los datos', 'Esto eliminará permanentemente todos tus perfiles, planes de comidas e inventario. Esta acción no se puede deshacer.', [
               { text: 'Cancelar', style: 'cancel' },

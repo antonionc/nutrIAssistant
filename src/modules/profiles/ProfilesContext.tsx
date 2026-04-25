@@ -14,41 +14,37 @@ import {
   saveProfiles,
   isAppInitialized,
 } from './profileStorage'
-import { SEED_FAMILY_PROFILES, FAMILY_NAME } from '../../seed/family-profiles'
 import { computeDailyCalorieTarget, computeMacroTargets } from './calorieCalculator'
 
 interface ProfilesContextValue {
   profiles: FamilyMember[]
   familyName: string
   isLoading: boolean
+  needsOnboarding: boolean
   addProfile: (member: Omit<FamilyMember, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
   updateProfile: (id: string, updates: Partial<FamilyMember>) => Promise<void>
   deleteProfile: (id: string) => Promise<void>
   setFamilyName: (name: string) => Promise<void>
+  completeOnboarding: (
+    familyNameInput: string,
+    members: Omit<FamilyMember, 'id' | 'createdAt' | 'updatedAt'>[]
+  ) => Promise<void>
+  importFamily: (familyNameInput: string, members: FamilyMember[]) => Promise<void>
 }
 
 const ProfilesContext = createContext<ProfilesContextValue | null>(null)
 
 export function ProfilesProvider({ children }: { children: React.ReactNode }) {
   const [profiles, setProfilesState] = useState<FamilyMember[]>([])
-  const [familyName, setFamilyNameState] = useState<string>('Your Family')
+  const [familyName, setFamilyNameState] = useState<string>('My Family')
   const [isLoading, setIsLoading] = useState(true)
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
 
   useEffect(() => {
     async function init() {
       const initialized = await isAppInitialized()
       if (!initialized) {
-        // Seed initial Potter family data
-        const seeded = SEED_FAMILY_PROFILES.map((m) => {
-          const calories = m.dailyCalorieTarget ?? computeDailyCalorieTarget(m)
-          const macros = m.macroTargets ?? computeMacroTargets(calories, m.conditions)
-          return { ...m, dailyCalorieTarget: calories, macroTargets: macros }
-        })
-        await saveProfiles(seeded)
-        await saveFamilyName(FAMILY_NAME)
-        await markAppInitialized()
-        setProfilesState(seeded)
-        setFamilyNameState(FAMILY_NAME)
+        setNeedsOnboarding(true)
       } else {
         const [p, fn] = await Promise.all([loadProfiles(), loadFamilyName()])
         setProfilesState(p)
@@ -100,16 +96,60 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
     setFamilyNameState(name)
   }, [])
 
+  const completeOnboarding = useCallback(
+    async (
+      familyNameInput: string,
+      members: Omit<FamilyMember, 'id' | 'createdAt' | 'updatedAt'>[]
+    ) => {
+      const now = new Date().toISOString()
+      const seeded: FamilyMember[] = members.map((m, i) => {
+        const partial = m as FamilyMember
+        const calories = m.dailyCalorieTarget ?? computeDailyCalorieTarget(partial)
+        const macros = m.macroTargets ?? computeMacroTargets(calories, m.conditions)
+        return {
+          ...m,
+          id: `member-${Date.now()}-${i}`,
+          dailyCalorieTarget: calories,
+          macroTargets: macros,
+          createdAt: now,
+          updatedAt: now,
+        }
+      })
+      await saveProfiles(seeded)
+      await saveFamilyName(familyNameInput)
+      await markAppInitialized()
+      setProfilesState(seeded)
+      setFamilyNameState(familyNameInput)
+      setNeedsOnboarding(false)
+    },
+    []
+  )
+
+  const importFamily = useCallback(
+    async (familyNameInput: string, members: FamilyMember[]) => {
+      await saveProfiles(members)
+      await saveFamilyName(familyNameInput)
+      await markAppInitialized()
+      setProfilesState(members)
+      setFamilyNameState(familyNameInput)
+      setNeedsOnboarding(false)
+    },
+    []
+  )
+
   return (
     <ProfilesContext.Provider
       value={{
         profiles,
         familyName,
         isLoading,
+        needsOnboarding,
         addProfile,
         updateProfile,
         deleteProfile,
         setFamilyName,
+        completeOnboarding,
+        importFamily,
       }}
     >
       {children}

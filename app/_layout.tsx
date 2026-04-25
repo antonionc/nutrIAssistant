@@ -40,6 +40,7 @@ function AppShell() {
             name="settings"
             options={{ title: 'Ajustes', headerBackTitle: 'Volver', headerStyle: { backgroundColor: isDark ? '#1a1a1a' : '#FAFAF5' }, headerTintColor: isDark ? '#FAFAF5' : '#2D2D2D' }}
           />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen
             name="recipe/[id]"
             options={{ headerShown: false }}
