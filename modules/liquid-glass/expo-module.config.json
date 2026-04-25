@@ -1,0 +1,7 @@
+{
+  "platforms": ["ios"],
+  "ios": {
+    "modules": ["LiquidGlassModule"],
+    "podspecPath": "LiquidGlassModule.podspec"
+  }
+}

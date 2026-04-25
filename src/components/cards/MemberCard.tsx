@@ -1,5 +1,5 @@
 import React from 'react'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { FamilyMember } from '../../types/profiles'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
 import { ProgressRing } from '../charts/ProgressRing'
@@ -43,9 +43,16 @@ export function MemberCard({
           animate
         />
         <View style={styles.avatarOverlay}>
-          <Text style={[styles.avatarEmoji, compact && styles.avatarEmojiCompact]}>
-            {member.avatarEmoji ?? '👤'}
-          </Text>
+          {member.avatarUrl ? (
+            <Image
+              source={{ uri: member.avatarUrl }}
+              style={[styles.avatarImage, compact && styles.avatarImageCompact]}
+            />
+          ) : (
+            <Text style={[styles.avatarEmoji, compact && styles.avatarEmojiCompact]}>
+              {member.avatarEmoji ?? '👤'}
+            </Text>
+          )}
         </View>
       </View>
       <Text style={styles.name} numberOfLines={1}>{member.name}</Text>
@@ -97,6 +104,16 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  avatarImageCompact: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   avatarEmoji: {
     fontSize: 28,

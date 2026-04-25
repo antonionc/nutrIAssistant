@@ -1,0 +1,6 @@
+{
+  "name": "liquid-glass",
+  "version": "1.0.0",
+  "description": "Native iOS Liquid Glass navigation chrome for nutrIAssistant",
+  "main": "index.ts"
+}

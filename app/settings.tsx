@@ -27,6 +27,7 @@ import {
 } from '../src/services/onDeviceLlm'
 import { OnDeviceLLMStatus } from '../src/types/ai'
 import { syncRecipes, isSynced } from '../src/modules/recipes/syncRecipes'
+import { pickAndSaveAvatar, deleteOldAvatar } from '../src/services/avatarService'
 import { getRecipeCount } from '../src/modules/recipes/recipeDB'
 import Constants from 'expo-constants'
 
@@ -376,16 +377,32 @@ function MemberProfileRow({
   onUpdate: (updates: Partial<FamilyMember>) => void
   onDelete: () => void
 }) {
+  async function handleAvatarPress() {
+    const newUri = await pickAndSaveAvatar(member.id)
+    if (!newUri) return
+    if (member.avatarUrl) await deleteOldAvatar(member.avatarUrl)
+    onUpdate({ avatarUrl: newUri })
+  }
+
   return (
     <View style={styles.memberSection}>
-      <TouchableOpacity style={styles.memberHeader} onPress={onToggle}>
-        <Text style={styles.memberEmoji}>{member.avatarEmoji ?? '👤'}</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.memberName}>{member.name}</Text>
-          <Text style={styles.memberMeta}>{member.role} · {member.age}a · {member.weight}kg</Text>
-        </View>
-        <Text style={styles.expandIcon}>{isExpanded ? '▲' : '▼'}</Text>
-      </TouchableOpacity>
+      <View style={styles.memberHeader}>
+        <TouchableOpacity onPress={handleAvatarPress} style={styles.memberAvatarBtn}>
+          {member.avatarUrl ? (
+            <Image source={{ uri: member.avatarUrl }} style={styles.memberAvatarImage} />
+          ) : (
+            <Text style={styles.memberEmoji}>{member.avatarEmoji ?? '👤'}</Text>
+          )}
+          <Text style={styles.memberAvatarEdit}>📷</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }} onPress={onToggle}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.memberName}>{member.name}</Text>
+            <Text style={styles.memberMeta}>{member.role} · {member.age}a · {member.weight}kg</Text>
+          </View>
+          <Text style={styles.expandIcon}>{isExpanded ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+      </View>
 
       {isExpanded && (
         <View style={styles.memberForm}>
@@ -554,6 +571,9 @@ const styles = StyleSheet.create({
   version: { ...Typography.caption, color: Colors.light.textMuted, textAlign: 'center', marginTop: Spacing.sm },
   memberSection: {},
   memberHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm },
+  memberAvatarBtn: { position: 'relative' },
+  memberAvatarImage: { width: 44, height: 44, borderRadius: 22 },
+  memberAvatarEdit: { position: 'absolute', bottom: -2, right: -2, fontSize: 10 },
   memberEmoji: { fontSize: 28 },
   memberName: { ...Typography.bodyLarge, color: Colors.warmCharcoal, fontFamily: Typography.heading3.fontFamily },
   memberMeta: { ...Typography.caption, color: Colors.light.textSecondary },
