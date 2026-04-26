@@ -22,9 +22,9 @@ export interface GroceryGroup {
 }
 
 export const GROCERY_CATEGORY_LABELS: Record<GroceryCategory, string> = {
-  fruits_vegetables: 'Fruits & Vegetables',
-  proteins: 'Proteins',
-  dairy_alternatives: 'Dairy & Alternatives',
-  grains_pantry: 'Grains & Pantry',
-  other: 'Other',
+  fruits_vegetables: 'Frutas y Verduras',
+  proteins: 'Proteínas',
+  dairy_alternatives: 'Lácteos y Alternativas',
+  grains_pantry: 'Cereales y Despensa',
+  other: 'Otros',
 }

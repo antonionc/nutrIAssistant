@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { Linking } from 'react-native'
 import { generateId } from '../../utils/idUtils'
+import { translateIngredient, translateUnit } from '../../utils/ingredientTranslations'
 import { GroceryItem, GroceryCategory, GROCERY_CATEGORY_LABELS, GroceryGroup } from '../../types/groceries'
 import { MealPlan } from '../../types/planner'
 import { InventoryItem } from '../../types/inventory'
@@ -11,6 +12,8 @@ import {
   deleteGroceryItem,
   clearPurchasedItems,
   batchInsertGroceryItems,
+  findActiveItemByName,
+  updateGroceryItemQuantity,
 } from './groceriesDB'
 import { inferGroceryCategory } from './groceryUtils'
 
@@ -48,12 +51,27 @@ export function GroceriesProvider({ children }: { children: React.ReactNode }) {
 
   const addItem = useCallback(
     async (name: string, quantity = 1, unit = 'units', notes?: string) => {
+      const category = inferGroceryCategory(name)
+      const translatedName = translateIngredient(name)
+      const translatedUnit = translateUnit(unit)
+
+      // Merge into an existing unpurchased item with the same name
+      const existing = await findActiveItemByName(translatedName)
+      if (existing) {
+        const merged = existing.quantity + quantity
+        await updateGroceryItemQuantity(existing.id, merged)
+        setItems((prev) =>
+          prev.map((item) => (item.id === existing.id ? { ...item, quantity: merged } : item))
+        )
+        return
+      }
+
       const newItem: GroceryItem = {
         id: generateId('groc'),
-        name,
+        name: translatedName,
         quantity,
-        unit,
-        category: inferGroceryCategory(name),
+        unit: translatedUnit,
+        category,
         notes,
         isPurchased: false,
         addedAt: new Date().toISOString(),
@@ -89,7 +107,9 @@ export function GroceriesProvider({ children }: { children: React.ReactNode }) {
   const autoPopulateFromPlan = useCallback(
     async (plans: MealPlan[], inventory: InventoryItem[]) => {
       const inventoryNames = inventory.map((i) => i.name.toLowerCase())
-      const newItems: GroceryItem[] = []
+
+      // Aggregate quantities for duplicate ingredients across all meals/plans
+      const ingredientMap = new Map<string, GroceryItem>()
 
       for (const plan of plans) {
         for (const meal of [plan.meals.breakfast, plan.meals.lunch, plan.meals.dinner]) {
@@ -100,12 +120,20 @@ export function GroceriesProvider({ children }: { children: React.ReactNode }) {
                 name.includes(ing.name.toLowerCase()) ||
                 ing.name.toLowerCase().includes(name)
             )
-            if (!inStock) {
-              newItems.push({
+            if (inStock) continue
+
+            const translatedName = translateIngredient(ing.name)
+            const key = translatedName.toLowerCase()
+
+            if (ingredientMap.has(key)) {
+              const prev = ingredientMap.get(key)!
+              ingredientMap.set(key, { ...prev, quantity: prev.quantity + ing.quantity })
+            } else {
+              ingredientMap.set(key, {
                 id: `groc-plan-${Date.now()}-${Math.random()}`,
-                name: ing.name,
+                name: translatedName,
                 quantity: ing.quantity,
-                unit: ing.unit,
+                unit: translateUnit(ing.unit),
                 category: inferGroceryCategory(ing.name),
                 isPurchased: false,
                 addedAt: new Date().toISOString(),
@@ -117,15 +145,12 @@ export function GroceriesProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      const uniqueItems = newItems.filter(
-        (item, idx, arr) =>
-          arr.findIndex((i) => i.name.toLowerCase() === item.name.toLowerCase()) === idx
-      )
+      const newItems = Array.from(ingredientMap.values())
 
-      await batchInsertGroceryItems(uniqueItems)
+      await batchInsertGroceryItems(newItems)
       setItems((prev) => {
         const existingNames = new Set(prev.map((i) => i.name.toLowerCase()))
-        const fresh = uniqueItems.filter((i) => !existingNames.has(i.name.toLowerCase()))
+        const fresh = newItems.filter((i) => !existingNames.has(i.name.toLowerCase()))
         return [...prev, ...fresh]
       })
     },

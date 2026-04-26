@@ -61,6 +61,20 @@ export async function clearPurchasedItems(): Promise<void> {
   await db.runAsync('DELETE FROM grocery_items WHERE is_purchased = 1')
 }
 
+export async function findActiveItemByName(name: string): Promise<GroceryItem | null> {
+  const db = await getDatabase()
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    'SELECT * FROM grocery_items WHERE LOWER(name) = LOWER(?) AND is_purchased = 0 LIMIT 1',
+    [name]
+  )
+  return rows.length > 0 ? rowToItem(rows[0]) : null
+}
+
+export async function updateGroceryItemQuantity(id: string, quantity: number): Promise<void> {
+  const db = await getDatabase()
+  await db.runAsync('UPDATE grocery_items SET quantity = ? WHERE id = ?', [quantity, id])
+}
+
 export async function batchInsertGroceryItems(items: GroceryItem[]): Promise<void> {
   const db = await getDatabase()
   await db.withTransactionAsync(async () => {
