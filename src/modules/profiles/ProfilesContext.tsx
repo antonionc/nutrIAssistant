@@ -16,6 +16,7 @@ import {
 } from './profileStorage'
 import { computeDailyCalorieTarget, computeMacroTargets } from './calorieCalculator'
 import { getAge } from '../../utils/ageUtils'
+import { generateId } from '../../utils/idUtils'
 
 // Converts profiles saved with the old `age: number` field to `dateOfBirth: string`
 function migrateProfile(raw: any): FamilyMember {
@@ -57,16 +58,22 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function init() {
-      const initialized = await isAppInitialized()
-      if (!initialized) {
+      try {
+        const initialized = await isAppInitialized()
+        if (!initialized) {
+          setNeedsOnboarding(true)
+        } else {
+          const [raw, fn] = await Promise.all([loadProfiles(), loadFamilyName()])
+          const p = (raw as any[]).map(migrateProfile)
+          setProfilesState(p)
+          setFamilyNameState(fn)
+        }
+      } catch (e) {
+        console.error('[Profiles] Failed to load profiles, starting fresh:', e)
         setNeedsOnboarding(true)
-      } else {
-        const [raw, fn] = await Promise.all([loadProfiles(), loadFamilyName()])
-        const p = (raw as any[]).map(migrateProfile)
-        setProfilesState(p)
-        setFamilyNameState(fn)
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     }
     init()
   }, [])
@@ -76,7 +83,7 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
       const now = new Date().toISOString()
       const newMember: FamilyMember = applySchoolAgeRule({
         ...member,
-        id: `member-${Date.now()}`,
+        id: generateId('member'),
         createdAt: now,
         updatedAt: now,
       })

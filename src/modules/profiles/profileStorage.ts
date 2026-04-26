@@ -7,7 +7,13 @@ const KEY_APP_INITIALIZED = 'app_initialized'
 
 export async function loadProfiles(): Promise<FamilyMember[]> {
   const json = await AsyncStorage.getItem(KEY_PROFILES)
-  return json ? JSON.parse(json) : []
+  if (!json) return []
+  try {
+    return JSON.parse(json)
+  } catch (e) {
+    console.error('[profileStorage] Corrupt profiles data, resetting:', e)
+    return []
+  }
 }
 
 export async function saveProfiles(profiles: FamilyMember[]): Promise<void> {

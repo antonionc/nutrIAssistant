@@ -19,10 +19,24 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   return db
 }
 
+type SqlMigration = { name: string; sql: string; tolerateDuplicate?: boolean }
+type FnMigration = { name: string; fn: (db: SQLite.SQLiteDatabase) => Promise<void> }
+type Migration = SqlMigration | FnMigration
+
+const MIGRATIONS: Migration[] = [
+  { name: '001_initial', sql: migration001 },
+  { name: '002_grocery_is_purchased', sql: migration002, tolerateDuplicate: true },
+  { name: '003_grocery_notes', sql: migration003, tolerateDuplicate: true },
+  { name: '004_clear_seed_image_urls', sql: migration004 },
+  { name: '005_grocery_purchased_at', sql: migration005, tolerateDuplicate: true },
+  { name: '006_grocery_from_meal_plan', sql: migration006, tolerateDuplicate: true },
+  { name: '007_grocery_recipe_id', sql: migration007, tolerateDuplicate: true },
+  { name: '008_grocery_rebuild', fn: migration008 },
+]
+
 export async function runMigrations(): Promise<void> {
   const database = await getDatabase()
 
-  // Track which migrations have run
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS migrations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,96 +63,25 @@ export async function runMigrations(): Promise<void> {
   }
   const ranNames = new Set(ran.map((r) => r.name))
 
-  if (!ranNames.has('001_initial')) {
-    await database.execAsync(migration001)
-    await database.runAsync(
-      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
-      ['001_initial', new Date().toISOString()]
-    )
-    console.log('[DB] Migration 001_initial completed')
-  }
+  for (const migration of MIGRATIONS) {
+    if (ranNames.has(migration.name)) continue
 
-  if (!ranNames.has('002_grocery_is_purchased')) {
-    try {
-      await database.execAsync(migration002)
-    } catch {
-      // Column may already exist on fresh installs — safe to ignore
+    if ('fn' in migration) {
+      await migration.fn(database)
+    } else {
+      try {
+        await database.execAsync(migration.sql)
+      } catch (err) {
+        if (!migration.tolerateDuplicate) throw err
+        // Column may already exist on fresh installs — safe to ignore
+      }
     }
-    await database.runAsync(
-      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
-      ['002_grocery_is_purchased', new Date().toISOString()]
-    )
-    console.log('[DB] Migration 002_grocery_is_purchased completed')
-  }
 
-  if (!ranNames.has('003_grocery_notes')) {
-    try {
-      await database.execAsync(migration003)
-    } catch {
-      // Column may already exist on fresh installs — safe to ignore
-    }
     await database.runAsync(
       'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
-      ['003_grocery_notes', new Date().toISOString()]
+      [migration.name, new Date().toISOString()]
     )
-    console.log('[DB] Migration 003_grocery_notes completed')
-  }
-
-  if (!ranNames.has('004_clear_seed_image_urls')) {
-    await database.execAsync(migration004)
-    await database.runAsync(
-      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
-      ['004_clear_seed_image_urls', new Date().toISOString()]
-    )
-    console.log('[DB] Migration 004_clear_seed_image_urls completed')
-  }
-
-  if (!ranNames.has('005_grocery_purchased_at')) {
-    try {
-      await database.execAsync(migration005)
-    } catch {
-      // Column already exists on fresh installs — safe to ignore
-    }
-    await database.runAsync(
-      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
-      ['005_grocery_purchased_at', new Date().toISOString()]
-    )
-    console.log('[DB] Migration 005_grocery_purchased_at completed')
-  }
-
-  if (!ranNames.has('006_grocery_from_meal_plan')) {
-    try {
-      await database.execAsync(migration006)
-    } catch {
-      // Column already exists on fresh installs — safe to ignore
-    }
-    await database.runAsync(
-      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
-      ['006_grocery_from_meal_plan', new Date().toISOString()]
-    )
-    console.log('[DB] Migration 006_grocery_from_meal_plan completed')
-  }
-
-  if (!ranNames.has('007_grocery_recipe_id')) {
-    try {
-      await database.execAsync(migration007)
-    } catch {
-      // Column already exists on fresh installs — safe to ignore
-    }
-    await database.runAsync(
-      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
-      ['007_grocery_recipe_id', new Date().toISOString()]
-    )
-    console.log('[DB] Migration 007_grocery_recipe_id completed')
-  }
-
-  if (!ranNames.has('008_grocery_rebuild')) {
-    await migration008(database)
-    await database.runAsync(
-      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
-      ['008_grocery_rebuild', new Date().toISOString()]
-    )
-    console.log('[DB] Migration 008_grocery_rebuild completed')
+    console.log(`[DB] Migration ${migration.name} completed`)
   }
 }
 

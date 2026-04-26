@@ -6,7 +6,6 @@ import React, {
   useState,
 } from 'react'
 import {
-  FlatList,
   Image,
   Platform,
   StyleSheet,
@@ -15,10 +14,12 @@ import {
   View,
   Animated,
   ViewStyle,
+  ImageStyle,
   TextStyle,
   PermissionsAndroid,
 } from 'react-native'
 import BottomSheet, { BottomSheetFlatList, BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet'
+import type { BottomSheetFlatListMethods } from '@gorhom/bottom-sheet'
 import * as Speech from 'expo-speech'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
 import { AIMessage } from '../../types/ai'
@@ -54,7 +55,7 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
     const [isSpeakerOn, setIsSpeakerOn] = useState(false)
     const [isListening, setIsListening] = useState(false)
     const [voiceError, setVoiceError] = useState<string | null>(null)
-    const listRef = useRef<FlatList<AIMessage>>(null)
+    const listRef = useRef<BottomSheetFlatListMethods>(null)
     const pulseAnim = useRef(new Animated.Value(1)).current
     const micAnim = useRef(new Animated.Value(1)).current
 
@@ -377,9 +378,9 @@ const viewStyles = StyleSheet.create({
   messageList: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm } as ViewStyle,
   messageRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm, alignItems: 'flex-end' } as ViewStyle,
   messageRowUser: { flexDirection: 'row-reverse' } as ViewStyle,
-  headerLogo: { width: 28, height: 28, borderRadius: 6 } as ViewStyle,
+  headerLogo: { width: 28, height: 28, borderRadius: 6 } as ImageStyle,
   botAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.softMint, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' } as ViewStyle,
-  botAvatarLogo: { width: 32, height: 32, borderRadius: 16 } as ViewStyle,
+  botAvatarLogo: { width: 32, height: 32, borderRadius: 16 } as ImageStyle,
   bubble: { maxWidth: '75%', padding: Spacing.sm, borderRadius: BorderRadius.lg, gap: 4 } as ViewStyle,
   bubbleUser: { backgroundColor: Colors.healthGreen, borderBottomRightRadius: 4 } as ViewStyle,
   bubbleBot: { backgroundColor: Colors.softMint, borderBottomLeftRadius: 4, ...Shadows.subtle } as ViewStyle,

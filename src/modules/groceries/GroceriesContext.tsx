@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { Linking } from 'react-native'
+import { generateId } from '../../utils/idUtils'
 import { GroceryItem, GroceryCategory, GROCERY_CATEGORY_LABELS, GroceryGroup } from '../../types/groceries'
 import { MealPlan } from '../../types/planner'
 import { InventoryItem } from '../../types/inventory'
@@ -48,7 +49,7 @@ export function GroceriesProvider({ children }: { children: React.ReactNode }) {
   const addItem = useCallback(
     async (name: string, quantity = 1, unit = 'units', notes?: string) => {
       const newItem: GroceryItem = {
-        id: `groc-${Date.now()}`,
+        id: generateId('groc'),
         name,
         quantity,
         unit,

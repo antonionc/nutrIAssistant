@@ -1,4 +1,5 @@
 import { getDatabase } from '../../db/database'
+import { safeJsonParse } from '../../db/dbUtils'
 import { ScanResult } from '../../types/scanner'
 
 function rowToScan(row: Record<string, unknown>): ScanResult {
@@ -10,11 +11,11 @@ function rowToScan(row: Record<string, unknown>): ScanResult {
     productName: row.product_name as string | undefined,
     brand: row.brand as string | undefined,
     imageUri: row.image_uri as string,
-    nutritionalInfo: row.nutritional_info ? JSON.parse(row.nutritional_info as string) : undefined,
+    nutritionalInfo: row.nutritional_info ? safeJsonParse(row.nutritional_info, undefined) : undefined,
     nutriscore: row.nutriscore as ScanResult['nutriscore'],
-    allergens: JSON.parse(row.allergens as string),
-    ingredients: row.ingredients ? JSON.parse(row.ingredients as string) : undefined,
-    familyCompatibility: JSON.parse(row.family_compatibility as string),
+    allergens: safeJsonParse(row.allergens, []),
+    ingredients: row.ingredients ? safeJsonParse(row.ingredients, undefined) : undefined,
+    familyCompatibility: safeJsonParse(row.family_compatibility, {}),
     addedToInventory: (row.added_to_inventory as number) === 1,
     addedToCart: (row.added_to_cart as number) === 1,
   }

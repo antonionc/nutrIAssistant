@@ -1,4 +1,5 @@
 import { getDatabase } from '../../db/database'
+import { safeJsonParse } from '../../db/dbUtils'
 import { MealPlan } from '../../types/planner'
 
 function rowToPlan(row: Record<string, unknown>): MealPlan {
@@ -7,18 +8,18 @@ function rowToPlan(row: Record<string, unknown>): MealPlan {
     date: row.date as string,
     meals: {
       breakfast: row.breakfast_recipe_id
-        ? JSON.parse(row.breakfast_recipe_id as string)
+        ? safeJsonParse(row.breakfast_recipe_id, undefined)
         : undefined,
       lunch: row.lunch_recipe_id
-        ? JSON.parse(row.lunch_recipe_id as string)
+        ? safeJsonParse(row.lunch_recipe_id, undefined)
         : undefined,
       dinner: row.dinner_recipe_id
-        ? JSON.parse(row.dinner_recipe_id as string)
+        ? safeJsonParse(row.dinner_recipe_id, undefined)
         : undefined,
     },
-    memberTargets: JSON.parse(row.member_targets as string),
+    memberTargets: safeJsonParse(row.member_targets, {}),
     schoolMenuContext: row.school_menu_context
-      ? JSON.parse(row.school_menu_context as string)
+      ? safeJsonParse(row.school_menu_context, undefined)
       : undefined,
     isLocked: (row.is_locked as number) === 1,
     generatedAt: row.generated_at as string,
@@ -120,10 +121,10 @@ export async function getSchoolMenuEntries(childId: string): Promise<Array<{
     date: row.date as string,
     childId: row.child_id as string,
     description: row.description as string,
-    extractedIngredients: JSON.parse(row.extracted_ingredients as string),
-    extractedAllergens: JSON.parse(row.extracted_allergens as string),
+    extractedIngredients: safeJsonParse(row.extracted_ingredients, []),
+    extractedAllergens: safeJsonParse(row.extracted_allergens, []),
     nutritionalEstimate: row.nutritional_estimate
-      ? JSON.parse(row.nutritional_estimate as string)
+      ? safeJsonParse(row.nutritional_estimate, undefined)
       : undefined,
   }))
 }

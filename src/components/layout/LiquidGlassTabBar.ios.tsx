@@ -22,7 +22,7 @@ const TAB_LABELS: Record<string, string> = {
   groceries: 'Compra',
 }
 
-export function LiquidGlassTabBar({ state, descriptors, navigation, style }: BottomTabBarProps) {
+export function LiquidGlassTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
   const assistantRef = useRef<BottomSheet>(null)
   const barHeight = 56 + insets.bottom
@@ -35,7 +35,7 @@ export function LiquidGlassTabBar({ state, descriptors, navigation, style }: Bot
   return (
     <>
       {/* Native view height includes safe area; overflow visible for AI button protrusion */}
-      <View style={[styles.container, { height: barHeight }, style]}>
+      <View style={[styles.container, { height: barHeight }]}>
         <LiquidGlassTabBarViewNative
           style={StyleSheet.absoluteFill}
           tabs={tabs}

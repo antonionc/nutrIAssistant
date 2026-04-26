@@ -1,4 +1,5 @@
 import { getDatabase } from '../../db/database'
+import { safeJsonParse } from '../../db/dbUtils'
 import { Recipe } from '../../types/recipes'
 
 function rowToRecipe(row: Record<string, unknown>): Recipe {
@@ -9,9 +10,9 @@ function rowToRecipe(row: Record<string, unknown>): Recipe {
     category: row.category as Recipe['category'],
     cuisine: row.cuisine as string,
     cuisineFlag: row.cuisine_flag as string | undefined,
-    instructions: JSON.parse(row.instructions as string),
-    instructionsEs: row.instructions_es ? JSON.parse(row.instructions_es as string) : undefined,
-    ingredients: JSON.parse(row.ingredients as string),
+    instructions: safeJsonParse(row.instructions, []),
+    instructionsEs: row.instructions_es ? safeJsonParse(row.instructions_es, undefined) : undefined,
+    ingredients: safeJsonParse(row.ingredients, []),
     prepTime: row.prep_time as number,
     cookTime: row.cook_time as number,
     servings: row.servings as number,
@@ -19,11 +20,11 @@ function rowToRecipe(row: Record<string, unknown>): Recipe {
     localImagePath: row.local_image_path as string | undefined,
     sourceApi: row.source_api as Recipe['sourceApi'],
     sourceId: row.source_id as string | undefined,
-    nutritionalInfo: JSON.parse(row.nutritional_info as string),
-    allergens: JSON.parse(row.allergens as string),
-    tags: JSON.parse(row.tags as string),
+    nutritionalInfo: safeJsonParse(row.nutritional_info, {} as Recipe['nutritionalInfo']),
+    allergens: safeJsonParse(row.allergens, []),
+    tags: safeJsonParse(row.tags, []),
     familyCompatibility: row.family_compatibility
-      ? JSON.parse(row.family_compatibility as string)
+      ? safeJsonParse(row.family_compatibility, undefined)
       : undefined,
     nutriscore: row.nutriscore as Recipe['nutriscore'],
     isFavorite: (row.is_favorite as number) === 1,

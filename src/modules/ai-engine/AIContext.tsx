@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { AIContext as AIContextType, AIMessage, AIRoute, OnDeviceLLMStatus } from '../../types/ai'
+import { generateId } from '../../utils/idUtils'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { routeQuery, isOffline } from '../../services/aiRouter'
 import { streamCompletion, complete } from '../../services/claude'
@@ -42,7 +43,9 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
   const schoolMenuRef = useRef<SchoolMenuEntry[]>([])
 
   useEffect(() => {
-    getLLMStatus().then(setLlmStatus)
+    getLLMStatus().then(setLlmStatus).catch((e) => {
+      console.error('[AIEngine] Failed to get LLM status:', e)
+    })
   }, [])
 
   const setInventory = useCallback((items: InventoryItem[]) => {
@@ -71,7 +74,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
       }
 
       const userMessage: AIMessage = {
-        id: `msg-${Date.now()}`,
+        id: generateId('msg'),
         role: 'user',
         content,
         timestamp: new Date().toISOString(),

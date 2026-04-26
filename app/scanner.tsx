@@ -30,6 +30,7 @@ import { MacroBar } from '../src/components/charts/MacroBar'
 import { FamilyCompatibilityRow } from '../src/components/badges/CompatibilityBadge'
 import { ScanResult } from '../src/types/scanner'
 import { NutritionalInfo } from '../src/types/nutrition'
+import { generateId } from '../src/utils/idUtils'
 
 type ScanMode = 'barcode' | 'photo'
 
@@ -69,7 +70,7 @@ export default function ScannerScreen() {
       const nutriscore = product.nutriscore ?? computeNutriScore(product.nutritionalInfo)
 
       const result: ScanResult = {
-        id: `scan-${Date.now()}`,
+        id: generateId('scan'),
         scanType: 'barcode',
         timestamp: new Date().toISOString(),
         barcode: data,

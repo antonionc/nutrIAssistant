@@ -1,4 +1,5 @@
 import { getDatabase } from '../../db/database'
+import { safeJsonParse } from '../../db/dbUtils'
 import { InventoryItem } from '../../types/inventory'
 
 function rowToItem(row: Record<string, unknown>): InventoryItem {
@@ -11,7 +12,7 @@ function rowToItem(row: Record<string, unknown>): InventoryItem {
     expiryDate: row.expiry_date as string | undefined,
     addedAt: row.added_at as string,
     imageUrl: row.image_url as string | undefined,
-    nutritionalInfo: row.nutritional_info ? JSON.parse(row.nutritional_info as string) : undefined,
+    nutritionalInfo: row.nutritional_info ? safeJsonParse(row.nutritional_info, undefined) : undefined,
     barcode: row.barcode as string | undefined,
     lowStockThreshold: row.low_stock_threshold as number | undefined,
   }

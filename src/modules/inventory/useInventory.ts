@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { InventoryItem } from '../../types/inventory'
+import { generateId } from '../../utils/idUtils'
 import {
   getAllInventoryItems,
   upsertInventoryItem,
@@ -37,7 +38,7 @@ export function useInventory() {
     async (item: Omit<InventoryItem, 'id' | 'addedAt'>) => {
       const newItem: InventoryItem = {
         ...item,
-        id: `inv-${Date.now()}`,
+        id: generateId('inv'),
         addedAt: new Date().toISOString(),
       }
       await upsertInventoryItem(newItem)
