@@ -17,10 +17,12 @@ import {
   ImageStyle,
   TextStyle,
   PermissionsAndroid,
+  Alert,
 } from 'react-native'
 import BottomSheet, { BottomSheetFlatList, BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet'
 import type { BottomSheetFlatListMethods } from '@gorhom/bottom-sheet'
 import * as Speech from 'expo-speech'
+import { VoiceQuality } from 'expo-speech'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
 import { AIMessage } from '../../types/ai'
 import { useAIEngine } from '../../modules/ai-engine/AIContext'
@@ -31,10 +33,12 @@ let Voice: {
   stop: () => Promise<void>
   cancel: () => Promise<void>
   destroy: () => Promise<void>
+  isAvailable: () => Promise<0 | 1>
   onSpeechStart?: (() => void) | null
   onSpeechEnd?: (() => void) | null
   onSpeechResults?: ((e: { value?: string[] }) => void) | null
-  onSpeechError?: ((e: { error?: { message?: string } }) => void) | null
+  onSpeechPartialResults?: ((e: { value?: string[] }) => void) | null
+  onSpeechError?: ((e: { error?: { code?: string; message?: string } }) => void) | null
 } | null = null
 
 try {
@@ -43,10 +47,40 @@ try {
   console.log('[AIAssistant] @react-native-voice/voice no disponible — modo solo texto')
 }
 
+// Quality preference order for TTS voice selection
+const VOICE_QUALITY_RANK: Record<VoiceQuality, number> = {
+  [VoiceQuality.Enhanced]: 2,
+  [VoiceQuality.Default]: 1,
+}
+
+// Friendly Spanish error messages for known voice recognition error codes
+function voiceErrorMessage(code?: string): string {
+  switch (code) {
+    case 'not_allowed':
+    case 'permissions':
+      return 'Permiso de micrófono denegado. Actívalo en Ajustes.'
+    case 'recognizer_unavailable':
+    case 'recognizer-unavailable':
+      return 'Reconocimiento de voz no disponible en este dispositivo.'
+    case 'network':
+    case 'network-error':
+      return 'Se necesita conexión a internet para el reconocimiento de voz.'
+    case 'no-speech':
+    case 'speech_timeout':
+      return 'No se detectó voz. Habla más cerca del micrófono.'
+    case 'audio':
+    case 'audio-capture':
+      return 'Error de audio. Cierra otras apps que usen el micrófono.'
+    case 'aborted':
+      return ''   // user-initiated stop, no message needed
+    default:
+      return 'Error de reconocimiento de voz. Inténtalo de nuevo.'
+  }
+}
+
 interface AIAssistantProps {
   onClose?: () => void
 }
-
 
 export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
   function AIAssistant({ onClose }, ref) {
@@ -55,11 +89,108 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
     const [isSpeakerOn, setIsSpeakerOn] = useState(false)
     const [isListening, setIsListening] = useState(false)
     const [voiceError, setVoiceError] = useState<string | null>(null)
+    const [voiceAvailable, setVoiceAvailable] = useState<boolean | null>(null)
+    const [ttsVoice, setTtsVoice] = useState<string | undefined>(undefined)
     const listRef = useRef<BottomSheetFlatListMethods>(null)
     const pulseAnim = useRef(new Animated.Value(1)).current
     const micAnim = useRef(new Animated.Value(1)).current
+    // Track whether results arrived before we clear the listening state
+    const gotResultsRef = useRef(false)
 
-    // Pulse animation for typing indicator
+    // ── TTS: find best available Spanish voice on mount ──────────────────────
+    useEffect(() => {
+      Speech.getAvailableVoicesAsync().then((voices) => {
+        const spanish = voices.filter(
+          (v) => v.language.startsWith('es') && v.identifier
+        )
+        if (spanish.length === 0) return
+
+        // Sort by quality descending, then prefer es-ES over other locales
+        spanish.sort((a, b) => {
+          const qa = VOICE_QUALITY_RANK[a.quality] ?? 1
+          const qb = VOICE_QUALITY_RANK[b.quality] ?? 1
+          if (qb !== qa) return qb - qa
+          const aES = a.language === 'es-ES' ? 1 : 0
+          const bES = b.language === 'es-ES' ? 1 : 0
+          return bES - aES
+        })
+
+        setTtsVoice(spanish[0].identifier)
+        console.log(`[TTS] Using voice: ${spanish[0].name} (${spanish[0].quality}, ${spanish[0].language})`)
+      }).catch(() => {/* use default voice */})
+    }, [])
+
+    // ── Check voice recognition availability ─────────────────────────────────
+    useEffect(() => {
+      if (!Voice) {
+        setVoiceAvailable(false)
+        return
+      }
+      Voice.isAvailable().then((available) => {
+        setVoiceAvailable(available === 1)
+      }).catch(() => setVoiceAvailable(false))
+    }, [])
+
+    // ── Setup voice recognition listeners ────────────────────────────────────
+    useEffect(() => {
+      if (!Voice) return
+
+      Voice.onSpeechStart = () => {
+        gotResultsRef.current = false
+        setIsListening(true)
+        setVoiceError(null)
+      }
+
+      Voice.onSpeechPartialResults = (e) => {
+        const partial = e.value?.[0]
+        if (partial) setInput(partial)
+      }
+
+      Voice.onSpeechResults = (e) => {
+        const text = e.value?.[0]
+        if (text) {
+          gotResultsRef.current = true
+          setInput(text)
+        }
+        setIsListening(false)
+      }
+
+      Voice.onSpeechEnd = () => {
+        setIsListening(false)
+        // If recognition ended with no results, give feedback
+        if (!gotResultsRef.current) {
+          const msg = voiceErrorMessage('no-speech')
+          if (msg) {
+            setVoiceError(msg)
+            setTimeout(() => setVoiceError(null), 3000)
+          }
+        }
+      }
+
+      Voice.onSpeechError = (e) => {
+        const code = e.error?.code
+        const msg = voiceErrorMessage(code)
+        if (msg) {
+          setVoiceError(msg)
+          setTimeout(() => setVoiceError(null), 4000)
+        }
+        setIsListening(false)
+        console.warn('[Voice] Error:', code, e.error?.message)
+      }
+
+      return () => {
+        if (Voice) {
+          Voice.onSpeechStart = null
+          Voice.onSpeechPartialResults = null
+          Voice.onSpeechResults = null
+          Voice.onSpeechEnd = null
+          Voice.onSpeechError = null
+          Voice.destroy().catch(() => {})
+        }
+      }
+    }, [])
+
+    // ── Animations ───────────────────────────────────────────────────────────
     useEffect(() => {
       if (isResponding) {
         Animated.loop(
@@ -74,7 +205,6 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
       }
     }, [isResponding, pulseAnim])
 
-    // Mic pulse animation
     useEffect(() => {
       if (isListening) {
         Animated.loop(
@@ -89,56 +219,28 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
       }
     }, [isListening, micAnim])
 
-    // Auto-scroll to bottom on new messages
+    // ── Auto-scroll on new messages ───────────────────────────────────────────
     useEffect(() => {
       if (messages.length > 0) {
         setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)
       }
     }, [messages])
 
-    // TTS for assistant responses (Spanish)
+    // ── TTS: speak assistant replies ─────────────────────────────────────────
     useEffect(() => {
       if (!isSpeakerOn) return
       const lastMsg = messages[messages.length - 1]
       if (lastMsg?.role === 'assistant' && !lastMsg.isStreaming && lastMsg.content) {
         Speech.speak(lastMsg.content, {
           language: 'es-ES',
-          rate: 1.0,
+          rate: 0.95,
           pitch: 1.0,
+          voice: ttsVoice,
         })
       }
-    }, [messages, isSpeakerOn])
+    }, [messages, isSpeakerOn, ttsVoice])
 
-    // Setup voice recognition listeners
-    useEffect(() => {
-      if (!Voice) return
-
-      Voice.onSpeechStart = () => setIsListening(true)
-      Voice.onSpeechEnd = () => setIsListening(false)
-      Voice.onSpeechResults = (e) => {
-        const text = e.value?.[0]
-        if (text) {
-          setInput(text)
-          setIsListening(false)
-        }
-      }
-      Voice.onSpeechError = (e) => {
-        setVoiceError(e.error?.message ?? 'Error de voz')
-        setIsListening(false)
-        setTimeout(() => setVoiceError(null), 3000)
-      }
-
-      return () => {
-        if (Voice) {
-          Voice.onSpeechStart = null
-          Voice.onSpeechEnd = null
-          Voice.onSpeechResults = null
-          Voice.onSpeechError = null
-          Voice.destroy().catch(() => {})
-        }
-      }
-    }, [])
-
+    // ── Permissions ───────────────────────────────────────────────────────────
     const requestMicPermission = async (): Promise<boolean> => {
       if (Platform.OS === 'android') {
         try {
@@ -156,40 +258,63 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
           return false
         }
       }
-      return true // iOS handles permissions automatically
+      // iOS: permission was declared in Info.plist; the OS prompts automatically on first use
+      return true
     }
 
+    // ── Voice input handler ───────────────────────────────────────────────────
     const handleVoiceInput = useCallback(async () => {
-      if (!Voice) return
+      if (!Voice || voiceAvailable === false) {
+        Alert.alert(
+          'Voz no disponible',
+          'El reconocimiento de voz no está disponible en este dispositivo.'
+        )
+        return
+      }
 
+      // Stop if already listening
       if (isListening) {
-        await Voice.stop()
+        try {
+          await Voice.stop()
+        } catch {
+          await Voice.cancel().catch(() => {})
+        }
         setIsListening(false)
         return
       }
 
+      // Stop any active TTS to free the audio session before recording
+      await Speech.stop()
+
       const hasPermission = await requestMicPermission()
       if (!hasPermission) {
-        setVoiceError('Se necesita permiso de micrófono')
-        setTimeout(() => setVoiceError(null), 3000)
+        setVoiceError('Permiso de micrófono denegado. Actívalo en Ajustes.')
+        setTimeout(() => setVoiceError(null), 4000)
         return
       }
 
+      // Destroy any stale session before starting a fresh one
       try {
-        await Voice.start('es-ES')
-        setIsListening(true)
-        setVoiceError(null)
-      } catch (e) {
-        setVoiceError('Error al iniciar reconocimiento de voz')
-        setTimeout(() => setVoiceError(null), 3000)
-      }
-    }, [isListening])
+        await Voice.destroy()
+      } catch {/* ignore */}
 
+      try {
+        gotResultsRef.current = false
+        await Voice.start('es-ES')
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Error al iniciar el micrófono'
+        setVoiceError(msg)
+        setTimeout(() => setVoiceError(null), 4000)
+        console.warn('[Voice] start() failed:', e)
+      }
+    }, [isListening, voiceAvailable])
+
+    // ── Send handler ──────────────────────────────────────────────────────────
     const handleSend = useCallback(async () => {
       const text = input.trim()
       if (!text || isResponding) return
       if (isListening && Voice) {
-        await Voice.cancel()
+        await Voice.cancel().catch(() => {})
         setIsListening(false)
       }
       setInput('')
@@ -202,6 +327,7 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
       if (!next) Speech.stop()
     }, [isSpeakerOn])
 
+    // ── Render ────────────────────────────────────────────────────────────────
     const renderMessage = ({ item }: { item: AIMessage }) => {
       const isUser = item.role === 'user'
       return (
@@ -226,13 +352,13 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
       )
     }
 
-    const snapPoints = ['50%']
+    const showMicButton = voiceAvailable !== false  // show until we know it's unavailable
 
     return (
       <BottomSheet
         ref={ref}
         index={-1}
-        snapPoints={snapPoints}
+        snapPoints={['50%']}
         enablePanDownToClose
         onClose={onClose}
         backgroundStyle={viewStyles.sheetBackground}
@@ -266,14 +392,14 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
             </View>
           </View>
 
-          {/* Voice error */}
-          {voiceError && (
+          {/* Voice error banner */}
+          {voiceError ? (
             <View style={viewStyles.errorBanner}>
               <Text style={textStyles.errorText}>{voiceError}</Text>
             </View>
-          )}
+          ) : null}
 
-          {/* Messages — flex:1 so they fill all space between header and input */}
+          {/* Messages */}
           <View style={viewStyles.messagesArea}>
             {messages.length === 0 ? (
               <BottomSheetScrollView
@@ -302,14 +428,15 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
             )}
           </View>
 
-          {/* Input — always pinned to the bottom */}
+          {/* Input row */}
           <View style={viewStyles.inputContainer}>
-            {Voice && (
+            {showMicButton && (
               <Animated.View style={{ transform: [{ scale: micAnim }] }}>
                 <TouchableOpacity
                   style={[viewStyles.micBtn, isListening && viewStyles.micBtnActive]}
                   onPress={handleVoiceInput}
                   disabled={isResponding}
+                  accessibilityLabel={isListening ? 'Detener grabación' : 'Iniciar grabación de voz'}
                 >
                   <Text style={textStyles.micIcon}>{isListening ? '⏹' : '🎙️'}</Text>
                 </TouchableOpacity>
