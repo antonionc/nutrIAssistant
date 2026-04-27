@@ -1,4 +1,4 @@
-// EN → ES dictionary for common TheMealDB ingredient names.
+// EN → ES dictionary for common ingredient names.
 // Keys are lowercase English names; values are Spanish equivalents.
 const INGREDIENT_MAP: Record<string, string> = {
   // Vegetables

@@ -7,6 +7,14 @@ import { ES } from './es'
 export type Translations = typeof EN
 type AnyTranslations = Translations | typeof ES
 
+// Compile-time key-drift guard: TS errors if ES is missing any top-level key
+// that EN defines (or vice-versa). Nested keys are intentionally not checked
+// here — an explicit Translations interface would be required for that.
+type _ENKeys = keyof typeof EN
+type _ESKeys = keyof typeof ES
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _KeyGuard = [_ENKeys] extends [_ESKeys] ? ([_ESKeys] extends [_ENKeys] ? true : never) : never
+
 const SUPPORTED: Partial<Record<string, AnyTranslations>> = { en: EN, es: ES }
 
 function resolveTranslations(): Translations {

@@ -329,7 +329,7 @@ export default function SettingsScreen() {
             <Text style={styles.label}>Recetas en local</Text>
             <Text style={styles.value}>{recipeCount} recetas</Text>
           </View>
-          <Text style={styles.hint}>Sincroniza para obtener nuevas recetas de TheMealDB. Requiere conexión a internet.</Text>
+          <Text style={styles.hint}>Sincroniza para obtener recetas mediterráneas de FatSecret. Requiere conexión a internet.</Text>
           <View style={styles.divider} />
           {isSyncing ? (
             <View style={styles.progressContainer}>

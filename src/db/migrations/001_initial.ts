@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS recipes (
   servings INTEGER NOT NULL DEFAULT 4,
   image_url TEXT,
   local_image_path TEXT,
-  source_api TEXT DEFAULT 'themealdb',
+  source_api TEXT DEFAULT 'user_created',
   source_id TEXT,
   nutritional_info TEXT NOT NULL DEFAULT '{}',
   allergens TEXT NOT NULL DEFAULT '[]',

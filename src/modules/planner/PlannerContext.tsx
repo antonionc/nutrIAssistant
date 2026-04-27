@@ -146,7 +146,7 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
           dayPlans = JSON.parse(partial.startsWith('[') ? partial : '[' + partial)
         }
 
-        // Find the best matching verified recipe (TheMealDB / seed) for a meal
+        // Find the best matching verified recipe (FatSecret / seed) for a meal
         // suggestion from the AI. We never store AI-generated recipe stubs.
         const findVerifiedRecipe = async (
           mealName: string,

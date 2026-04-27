@@ -17,15 +17,7 @@ import { useGroceries } from '../../src/modules/groceries/GroceriesContext'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
 import { EmptyState } from '../../src/components/layout/EmptyState'
 import { GroceryItem } from '../../src/types/groceries'
-
-const RETAILERS = [
-  { key: 'amazon',    name: 'Amazon',    logo: require('../../assets/retailers/amazon.png'),    active: true  },
-  { key: 'mercadona', name: 'Mercadona', logo: require('../../assets/retailers/mercadona.png'), active: false },
-  { key: 'carrefour', name: 'Carrefour', logo: require('../../assets/retailers/carrefour.png'), active: false },
-  { key: 'alcampo',   name: 'Alcampo',   logo: require('../../assets/retailers/Alcampo.png'),   active: false },
-  { key: 'dia',       name: 'DIA',       logo: require('../../assets/retailers/dia.png'),       active: false },
-  { key: 'lidl',      name: 'Lidl',      logo: require('../../assets/retailers/lidl.png'),      active: false },
-]
+import { RETAILERS } from '../../src/constants/retailers'
 
 export default function GroceriesScreen() {
   const {

@@ -1,6 +1,7 @@
 import { getDatabase } from '../../db/database'
 import { safeJsonParse } from '../../db/dbUtils'
-import { Recipe } from '../../types/recipes'
+import { Recipe, RecipeIngredient } from '../../types/recipes'
+import { NutritionalInfo } from '../../types/nutrition'
 
 function rowToRecipe(row: Record<string, unknown>): Recipe {
   return {
@@ -88,7 +89,7 @@ export async function getRecipeById(id: string): Promise<Recipe | null> {
 }
 
 // Only recipes from verified, traceable sources are shown to users.
-const VERIFIED_SOURCES = `source_api IN ('themealdb', 'user_created')`
+const VERIFIED_SOURCES = `source_api IN ('fatsecret', 'user_created')`
 
 export async function searchRecipes(
   query: string,
@@ -175,20 +176,39 @@ export async function updateRecipeCompatibility(
   )
 }
 
-export async function updateRecipeImageUrl(id: string, imageUrl: string): Promise<void> {
-  const db = await getDatabase()
-  await db.runAsync(
-    'UPDATE recipes SET image_url = ?, updated_at = ? WHERE id = ?',
-    [imageUrl, new Date().toISOString(), id]
-  )
+
+export interface RecipeFullDetail {
+  prepTime: number
+  cookTime: number
+  servings: number
+  instructions: string[]
+  ingredients: RecipeIngredient[]
+  nutritionalInfo: NutritionalInfo
+  allergens: string[]
 }
 
-export async function getSeedRecipesWithoutImage(): Promise<Recipe[]> {
+export async function updateRecipeFullDetail(
+  id: string,
+  detail: RecipeFullDetail
+): Promise<void> {
   const db = await getDatabase()
-  const rows = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM recipes WHERE source_api = 'user_created' AND (image_url IS NULL OR image_url = '')`
+  await db.runAsync(
+    `UPDATE recipes SET
+      instructions = ?, ingredients = ?, prep_time = ?, cook_time = ?,
+      servings = ?, nutritional_info = ?, allergens = ?, updated_at = ?
+    WHERE id = ?`,
+    [
+      JSON.stringify(detail.instructions),
+      JSON.stringify(detail.ingredients),
+      detail.prepTime,
+      detail.cookTime,
+      detail.servings,
+      JSON.stringify(detail.nutritionalInfo),
+      JSON.stringify(detail.allergens),
+      new Date().toISOString(),
+      id,
+    ]
   )
-  return rows.map(rowToRecipe)
 }
 
 export async function getRandomRecipes(

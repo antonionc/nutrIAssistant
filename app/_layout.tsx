@@ -20,7 +20,7 @@ import { AIEngineProvider } from '../src/modules/ai-engine/AIContext'
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext'
 import { runMigrations } from '../src/db/database'
 import { seedRecipesIfNeeded } from '../src/modules/recipes/seedRecipes'
-import { isSynced, syncRecipes, enrichSeedRecipeImages } from '../src/modules/recipes/syncRecipes'
+import { isSynced, syncRecipes } from '../src/modules/recipes/syncRecipes'
 import { ensureModelAvailable } from '../src/services/onDeviceLlm'
 
 function AppShell() {
@@ -72,20 +72,16 @@ export default function RootLayout() {
         await runMigrations()
         await seedRecipesIfNeeded()
 
-        // Download TheMealDB recipes in the background if the DB is not yet
-        // fully synced (new install or sync version bumped).
+        // Download FatSecret Mediterranean recipes in the background if the
+        // DB is not yet fully synced (new install or sync version bumped).
         isSynced().then((synced) => {
           if (!synced) {
-            console.log('[Init] Starting background TheMealDB sync...')
+            console.log('[Init] Starting background FatSecret sync...')
             syncRecipes().catch((e) =>
               console.warn('[Init] Background recipe sync failed:', e)
             )
           }
         })
-
-        // Silently enrich seed recipes that have no image by searching
-        // TheMealDB — runs in the background, never blocks startup.
-        enrichSeedRecipeImages().catch(() => {/* silent */})
       } catch (e) {
         console.error('[Init] Error durante la inicialización:', e)
       }

@@ -94,7 +94,7 @@ function TabButton({
     >
       <Ionicons
         name={iconName}
-        size={26}
+        size={23}
         color={isFocused ? ICON_COLOR_ACTIVE : ICON_COLOR_DEFAULT}
       />
     </TouchableOpacity>
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 56,
+    height: 46,
     paddingHorizontal: Spacing.sm,
   },
   tabButton: {
@@ -126,26 +126,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   centerContainer: {
-    width: 80,
+    width: 72,
     alignItems: 'center',
     justifyContent: 'center',
   },
   aiButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 20,
     backgroundColor: Colors.cream,
     alignItems: 'center',
     justifyContent: 'center',
-    bottom: 12,
-    borderWidth: 3,
+    bottom: 10,
+    borderWidth: 2.5,
     borderColor: Colors.healthGreen,
     overflow: 'hidden',
     ...Shadows.elevated,
   },
   aiLogo: {
-    width: 46,
-    height: 46,
-    borderRadius: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 16,
   },
 })

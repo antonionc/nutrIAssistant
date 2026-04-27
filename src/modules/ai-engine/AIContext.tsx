@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { AIContext as AIContextType, AIMessage, AIRoute, OnDeviceLLMStatus } from '../../types/ai'
 import { generateId } from '../../utils/idUtils'
 import { useProfiles } from '../profiles/ProfilesContext'
@@ -11,19 +11,11 @@ import {
   getPreferOnDevice,
   generateOnDevice,
 } from '../../services/onDeviceLlm'
-import { InventoryItem } from '../../types/inventory'
-import { MealPlan } from '../../types/planner'
-import { SchoolMenuEntry } from '../../types/profiles'
-
 interface AIEngineContextValue {
   messages: AIMessage[]
   isResponding: boolean
-  llmStatus: OnDeviceLLMStatus
   sendMessage: (content: string, imageBase64?: string) => Promise<void>
   clearHistory: () => void
-  setInventory: (items: InventoryItem[]) => void
-  setMealPlans: (plans: MealPlan[]) => void
-  setSchoolMenu: (entries: SchoolMenuEntry[]) => void
 }
 
 const AIEngineContext = createContext<AIEngineContextValue | null>(null)
@@ -38,26 +30,10 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
     isLoaded: false,
     downloadProgress: 0,
   })
-  const inventoryRef = useRef<InventoryItem[]>([])
-  const mealPlansRef = useRef<MealPlan[]>([])
-  const schoolMenuRef = useRef<SchoolMenuEntry[]>([])
-
   useEffect(() => {
     getLLMStatus().then(setLlmStatus).catch((e) => {
       console.error('[AIEngine] Failed to get LLM status:', e)
     })
-  }, [])
-
-  const setInventory = useCallback((items: InventoryItem[]) => {
-    inventoryRef.current = items
-  }, [])
-
-  const setMealPlans = useCallback((plans: MealPlan[]) => {
-    mealPlansRef.current = plans
-  }, [])
-
-  const setSchoolMenu = useCallback((entries: SchoolMenuEntry[]) => {
-    schoolMenuRef.current = entries
   }, [])
 
   const sendMessage = useCallback(
@@ -65,9 +41,9 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
       const offline = await isOffline()
       const context: AIContextType = {
         familyProfiles: profiles,
-        inventory: inventoryRef.current,
-        currentMealPlan: mealPlansRef.current,
-        schoolMenuEntries: schoolMenuRef.current,
+        inventory: [],
+        currentMealPlan: [],
+        schoolMenuEntries: [],
         isOffline: offline,
         requiresImage: !!imageBase64,
         imageBase64,
@@ -104,7 +80,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
 
         if (route === 'on_device' && preferOnDevice && llmStatus.isLoaded) {
           // Use on-device LLM
-          const systemPrompt = buildOnDeviceSystemPrompt(profiles, inventoryRef.current)
+          const systemPrompt = buildOnDeviceSystemPrompt(profiles, [])
           let fullText = ''
           await generateOnDevice(content, systemPrompt, (token) => {
             fullText += token
@@ -125,12 +101,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
           )
         } else {
           // Use Claude API
-          const systemPrompt = buildCloudSystemPrompt(
-            profiles,
-            inventoryRef.current,
-            mealPlansRef.current,
-            schoolMenuRef.current
-          )
+          const systemPrompt = buildCloudSystemPrompt(profiles, [], [], [])
 
           await streamCompletion(allMessages, systemPrompt, {
             onDelta: (text) => {
@@ -191,12 +162,8 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
       value={{
         messages,
         isResponding,
-        llmStatus,
         sendMessage,
         clearHistory,
-        setInventory,
-        setMealPlans,
-        setSchoolMenu,
       }}
     >
       {children}

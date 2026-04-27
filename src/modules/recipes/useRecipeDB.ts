@@ -8,10 +8,11 @@ import {
   getRandomRecipes,
   searchRecipes,
   toggleFavorite,
+  getRecipeCount,
 } from './recipeDB'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { checkFamilyCompatibility } from '../profiles/allergenEngine'
-import { getRecipeCount } from './recipeDB'
+import { enrichRecipeDetail } from './syncRecipes'
 
 export function useRecipeDB() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
@@ -76,8 +77,15 @@ export function useRecipeDB() {
 
   const getById = useCallback(
     async (id: string): Promise<Recipe | null> => {
-      const recipe = await getRecipeById(id)
+      let recipe = await getRecipeById(id)
       if (!recipe) return null
+
+      // Lazy-load full detail for FatSecret stubs (first open only)
+      if (recipe.sourceApi === 'fatsecret' && recipe.instructions.length === 0 && recipe.sourceId) {
+        const ok = await enrichRecipeDetail(recipe.id, recipe.sourceId)
+        if (ok) recipe = (await getRecipeById(id)) ?? recipe
+      }
+
       return {
         ...recipe,
         familyCompatibility: checkFamilyCompatibility(recipe, profiles),

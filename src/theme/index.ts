@@ -1,6 +1,5 @@
 export { Colors } from './colors'
 export type { ColorScheme } from './colors'
-export { FontFamily, Typography } from './typography'
+export { Typography } from './typography'
 export { Spacing, BorderRadius } from './spacing'
 export { Shadows } from './shadows'
-export { SpringPresets, TimingPresets } from './animations'

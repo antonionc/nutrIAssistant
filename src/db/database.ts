@@ -7,6 +7,8 @@ import { migration005 } from './migrations/005_grocery_purchased_at'
 import { migration006 } from './migrations/006_grocery_from_meal_plan'
 import { migration007 } from './migrations/007_grocery_recipe_id'
 import { migration008 } from './migrations/008_grocery_rebuild'
+import { migration009 } from './migrations/009_purge_themealdb'
+import { migration010 } from './migrations/010_drop_unused_tables'
 
 let db: SQLite.SQLiteDatabase | null = null
 
@@ -32,6 +34,8 @@ const MIGRATIONS: Migration[] = [
   { name: '006_grocery_from_meal_plan', sql: migration006, tolerateDuplicate: true },
   { name: '007_grocery_recipe_id', sql: migration007, tolerateDuplicate: true },
   { name: '008_grocery_rebuild', fn: migration008 },
+  { name: '009_purge_themealdb', sql: migration009 },
+  { name: '010_drop_unused_tables', sql: migration010 },
 ]
 
 export async function runMigrations(): Promise<void> {

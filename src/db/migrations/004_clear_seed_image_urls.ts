@@ -1,8 +1,7 @@
-// Clears hardcoded (wrong) TheMealDB image URLs that were stored on
-// user_created (seed) recipes in earlier builds.  These images were copied
-// from random TheMealDB entries and did not match the recipe name.
-// After this migration the field is NULL for seed recipes; the app will
-// try to resolve a correct image via TheMealDB search at runtime.
+// Clears any TheMealDB image URLs that were stored on user_created (seed)
+// recipes in earlier builds. These images were copied from random TheMealDB
+// entries and did not match the recipe name. After this migration the field
+// is NULL for affected seed recipes.
 export const migration004 = `
 UPDATE recipes
 SET    image_url  = NULL,

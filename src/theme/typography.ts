@@ -1,6 +1,6 @@
 import { TextStyle } from 'react-native'
 
-export const FontFamily = {
+const FontFamily = {
   regular: 'Poppins_400Regular',
   light: 'Poppins_300Light',
   medium: 'Poppins_500Medium',
