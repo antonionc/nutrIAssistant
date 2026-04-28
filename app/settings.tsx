@@ -30,11 +30,24 @@ import {
   setPreferOnDevice,
 } from '../src/services/onDeviceLlm'
 import { OnDeviceLLMStatus } from '../src/types/ai'
-import { syncRecipes, isSynced } from '../src/modules/recipes/syncRecipes'
+import { syncSource, isSynced } from '../src/modules/recipes/syncRecipes'
+import {
+  getSourcesConfig,
+  setSourceEnabled,
+  RecipeSourceKey,
+  RecipeSourceInfo,
+  SOURCE_LABELS,
+  DEFAULT_SOURCES_CONFIG,
+} from '../src/modules/recipes/recipeSourcesConfig'
+import {
+  getSpoonacularCallsToday,
+  getSpoonacularCallsRemaining,
+  SPOONACULAR_DAILY_LIMIT,
+} from '../src/services/spoonacular'
 import { pickAndSaveAvatar, deleteOldAvatar, resolveAvatarUri } from '../src/services/avatarService'
 import { exportFamilyToMarkdown, importFamilyFromFile } from '../src/services/familyExport'
 import * as Sharing from 'expo-sharing'
-import { getRecipeCount } from '../src/modules/recipes/recipeDB'
+import { getRecipeCount, cleanDuplicateImageUrls } from '../src/modules/recipes/recipeDB'
 import Constants from 'expo-constants'
 
 const DIET_OPTIONS: DietPreference[] = ['none', 'mediterranean', 'vegetarian', 'vegan', 'pescatarian', 'keto']
@@ -70,17 +83,34 @@ export default function SettingsScreen() {
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [editingFamilyName, setEditingFamilyName] = useState(false)
   const [familyNameInput, setFamilyNameInput] = useState(familyName)
-  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncingSource, setSyncingSource] = useState<RecipeSourceKey | null>(null)
   const [syncProgress, setSyncProgress] = useState(0)
   const [syncMessage, setSyncMessage] = useState('')
   const [recipeCount, setRecipeCount] = useState(0)
+  const [sourcesConfig, setSourcesConfig] = useState<Record<RecipeSourceKey, RecipeSourceInfo>>(DEFAULT_SOURCES_CONFIG)
+  const [spCallsToday, setSpCallsToday] = useState(0)
+  const [spCallsRemaining, setSpCallsRemaining] = useState(SPOONACULAR_DAILY_LIMIT)
+  const [isCleaningImages, setIsCleaningImages] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
+
+  const refreshSourceStats = async () => {
+    const [config, count, callsToday, callsRemaining] = await Promise.all([
+      getSourcesConfig(),
+      getRecipeCount(),
+      getSpoonacularCallsToday(),
+      getSpoonacularCallsRemaining(),
+    ])
+    setSourcesConfig(config)
+    setRecipeCount(count)
+    setSpCallsToday(callsToday)
+    setSpCallsRemaining(callsRemaining)
+  }
 
   useEffect(() => {
     getLLMStatus().then(setLlmStatus)
     getPreferOnDevice().then(setPreferOnDeviceState)
-    getRecipeCount().then(setRecipeCount)
+    refreshSourceStats()
   }, [])
 
   const handleDownloadModel = async () => {
@@ -113,24 +143,43 @@ export default function SettingsScreen() {
     await setPreferOnDevice(val)
   }
 
-  const handleSyncRecipes = async () => {
-    setIsSyncing(true)
+  const handleSyncSource = async (key: RecipeSourceKey) => {
+    if (syncingSource) return
+    setSyncingSource(key)
     setSyncProgress(0)
     setSyncMessage('')
     try {
-      await syncRecipes((progress, message) => {
+      const count = await syncSource(key, (progress, message) => {
         setSyncProgress(progress)
         setSyncMessage(message)
       })
-      const count = await getRecipeCount()
-      setRecipeCount(count)
-      Alert.alert('¡Sincronización completa!', `Base de datos actualizada con ${count} recetas.`)
+      await refreshSourceStats()
+      Alert.alert('¡Sincronización completa!', `${SOURCE_LABELS[key].name}: ${count} recetas descargadas.`)
     } catch (e) {
       Alert.alert('Error de sincronización', e instanceof Error ? e.message : 'Error desconocido')
     } finally {
-      setIsSyncing(false)
+      setSyncingSource(null)
       setSyncProgress(0)
       setSyncMessage('')
+    }
+  }
+
+  const handleToggleSource = async (key: RecipeSourceKey, value: boolean) => {
+    await setSourceEnabled(key, value)
+    setSourcesConfig((prev) => ({ ...prev, [key]: { ...prev[key], enabled: value } }))
+  }
+
+  const handleCleanImages = async () => {
+    setIsCleaningImages(true)
+    try {
+      const removed = await cleanDuplicateImageUrls()
+      Alert.alert('Imágenes limpiadas', removed > 0
+        ? `Se eliminaron ${removed} imágenes incorrectas o duplicadas.`
+        : 'No se encontraron imágenes duplicadas.')
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Error desconocido')
+    } finally {
+      setIsCleaningImages(false)
     }
   }
 
@@ -323,26 +372,123 @@ export default function SettingsScreen() {
           )}
         </View>
 
-        {/* ── Base de datos de recetas ────────── */}
-        <SectionHeader title="Base de datos de recetas" colors={colors} />
+        {/* ── Fuentes de recetas ─────────────── */}
+        <SectionHeader title="Fuentes de recetas" colors={colors} />
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.label}>Recetas en local</Text>
+            <Text style={styles.label}>Total en base de datos</Text>
             <Text style={styles.value}>{recipeCount} recetas</Text>
           </View>
-          <Text style={styles.hint}>Sincroniza para obtener recetas mediterráneas de FatSecret. Requiere conexión a internet.</Text>
+          <Text style={styles.hint}>
+            Las imágenes incorrectas se filtran automáticamente en cada sincronización.
+          </Text>
           <View style={styles.divider} />
-          {isSyncing ? (
-            <View style={styles.progressContainer}>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
-              </View>
-              <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || 'Sincronizando...'}</Text>
+          <TouchableOpacity
+            style={[styles.primaryBtn, isCleaningImages && styles.primaryBtnDisabled]}
+            onPress={handleCleanImages}
+            disabled={isCleaningImages}
+          >
+            {isCleaningImages
+              ? <ActivityIndicator color={Colors.white} size="small" />
+              : <Text style={styles.primaryBtnText}>🧹 Limpiar imágenes incorrectas</Text>
+            }
+          </TouchableOpacity>
+        </View>
+
+        {/* FatSecret */}
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>{SOURCE_LABELS.fatsecret.emoji} {SOURCE_LABELS.fatsecret.name}</Text>
+              <Text style={styles.hint}>{SOURCE_LABELS.fatsecret.description}</Text>
             </View>
-          ) : (
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleSyncRecipes}>
-              <Text style={styles.primaryBtnText}>🔄 Sincronizar recetas</Text>
-            </TouchableOpacity>
+            <Switch
+              value={sourcesConfig.fatsecret.enabled}
+              onValueChange={(v) => handleToggleSource('fatsecret', v)}
+              trackColor={{ false: colors.border, true: `${Colors.healthGreen}60` }}
+              thumbColor={sourcesConfig.fatsecret.enabled ? Colors.healthGreen : colors.textMuted}
+            />
+          </View>
+          {sourcesConfig.fatsecret.lastSyncedAt && (
+            <Text style={styles.hint}>
+              Última sinc.: {new Date(sourcesConfig.fatsecret.lastSyncedAt).toLocaleDateString('es-ES')}
+              {sourcesConfig.fatsecret.syncedCount > 0 ? ` · ${sourcesConfig.fatsecret.syncedCount} recetas` : ''}
+            </Text>
+          )}
+          {sourcesConfig.fatsecret.enabled && (
+            <>
+              <View style={styles.divider} />
+              {syncingSource === 'fatsecret' ? (
+                <View style={styles.progressContainer}>
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
+                  </View>
+                  <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || 'Sincronizando...'}</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.primaryBtn, !!syncingSource && styles.primaryBtnDisabled]}
+                  onPress={() => handleSyncSource('fatsecret')}
+                  disabled={!!syncingSource}
+                >
+                  <Text style={styles.primaryBtnText}>🔄 Sincronizar FatSecret</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+        </View>
+
+        {/* Spoonacular */}
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>{SOURCE_LABELS.spoonacular.emoji} {SOURCE_LABELS.spoonacular.name}</Text>
+              <Text style={styles.hint}>{SOURCE_LABELS.spoonacular.description}</Text>
+            </View>
+            <Switch
+              value={sourcesConfig.spoonacular.enabled}
+              onValueChange={(v) => handleToggleSource('spoonacular', v)}
+              trackColor={{ false: colors.border, true: `${Colors.healthGreen}60` }}
+              thumbColor={sourcesConfig.spoonacular.enabled ? Colors.healthGreen : colors.textMuted}
+            />
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.hint}>Llamadas hoy: {spCallsToday} / {SPOONACULAR_DAILY_LIMIT}</Text>
+            <Text style={[styles.hint, { color: spCallsRemaining < 20 ? Colors.errorRed : colors.textMuted }]}>
+              {spCallsRemaining} disponibles
+            </Text>
+          </View>
+          {sourcesConfig.spoonacular.lastSyncedAt && (
+            <Text style={styles.hint}>
+              Última sinc.: {new Date(sourcesConfig.spoonacular.lastSyncedAt).toLocaleDateString('es-ES')}
+              {sourcesConfig.spoonacular.syncedCount > 0 ? ` · ${sourcesConfig.spoonacular.syncedCount} recetas` : ''}
+            </Text>
+          )}
+          {sourcesConfig.spoonacular.enabled && (
+            <>
+              <View style={styles.divider} />
+              {syncingSource === 'spoonacular' ? (
+                <View style={styles.progressContainer}>
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
+                  </View>
+                  <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || 'Sincronizando...'}</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.primaryBtn, (!!syncingSource || spCallsRemaining < 10) && styles.primaryBtnDisabled]}
+                  onPress={() => handleSyncSource('spoonacular')}
+                  disabled={!!syncingSource || spCallsRemaining < 10}
+                >
+                  <Text style={styles.primaryBtnText}>🔄 Sincronizar Spoonacular</Text>
+                </TouchableOpacity>
+              )}
+              {spCallsRemaining < 10 && (
+                <Text style={[styles.hint, { color: Colors.errorRed, marginTop: 4 }]}>
+                  Límite diario casi alcanzado. Vuelve mañana.
+                </Text>
+              )}
+            </>
           )}
         </View>
 
@@ -653,6 +799,7 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: Colors.healthGreen, borderRadius: BorderRadius.pill,
       padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.sm,
     },
+    primaryBtnDisabled: { backgroundColor: colors.border },
     primaryBtnText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
     dangerBtn: {
       backgroundColor: `${Colors.errorRed}15`, borderRadius: BorderRadius.pill,

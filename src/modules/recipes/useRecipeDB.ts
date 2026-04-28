@@ -12,7 +12,7 @@ import {
 } from './recipeDB'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { checkFamilyCompatibility } from '../profiles/allergenEngine'
-import { enrichRecipeDetail } from './syncRecipes'
+import { enrichRecipeDetail, enrichSpoonacularDetail } from './syncRecipes'
 
 export function useRecipeDB() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
@@ -80,9 +80,14 @@ export function useRecipeDB() {
       let recipe = await getRecipeById(id)
       if (!recipe) return null
 
-      // Lazy-load full detail for FatSecret stubs (first open only)
-      if (recipe.sourceApi === 'fatsecret' && recipe.instructions.length === 0 && recipe.sourceId) {
-        const ok = await enrichRecipeDetail(recipe.id, recipe.sourceId)
+      // Lazy-load full detail for stub recipes (first open only)
+      if (recipe.instructions.length === 0 && recipe.sourceId) {
+        let ok = false
+        if (recipe.sourceApi === 'fatsecret') {
+          ok = await enrichRecipeDetail(recipe.id, recipe.sourceId)
+        } else if (recipe.sourceApi === 'spoonacular') {
+          ok = await enrichSpoonacularDetail(recipe.id, recipe.sourceId)
+        }
         if (ok) recipe = (await getRecipeById(id)) ?? recipe
       }
 

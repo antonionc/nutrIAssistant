@@ -61,10 +61,30 @@ export async function upsertRecipe(recipe: Recipe): Promise<void> {
   )
 }
 
+/**
+ * Removes imageUrl from any recipe whose image URL is shared by 2+ recipes
+ * with different names in the batch. Stock/placeholder CDN images are often
+ * reused across unrelated recipes, producing wrong images in the UI.
+ */
+function deduplicateBatchImages(recipes: Recipe[]): Recipe[] {
+  const urlNames = new Map<string, Set<string>>()
+  for (const r of recipes) {
+    if (!r.imageUrl) continue
+    if (!urlNames.has(r.imageUrl)) urlNames.set(r.imageUrl, new Set())
+    urlNames.get(r.imageUrl)!.add(r.name)
+  }
+  return recipes.map((r) => {
+    if (!r.imageUrl) return r
+    const names = urlNames.get(r.imageUrl)!
+    return names.size > 1 ? { ...r, imageUrl: undefined } : r
+  })
+}
+
 export async function batchUpsertRecipes(recipes: Recipe[]): Promise<void> {
+  const cleaned = deduplicateBatchImages(recipes)
   const db = await getDatabase()
   await db.withTransactionAsync(async () => {
-    for (const recipe of recipes) {
+    for (const recipe of cleaned) {
       await db.runAsync(
         `INSERT OR REPLACE INTO recipes (
           id, name, name_es, category, cuisine, cuisine_flag,
@@ -80,6 +100,28 @@ export async function batchUpsertRecipes(recipes: Recipe[]): Promise<void> {
   })
 }
 
+/**
+ * Scans the entire recipes table and nulls out imageUrl for any URL that
+ * appears across 2+ recipes with different names. Safe to call any time;
+ * run after sync to clean up pre-existing bad images.
+ */
+export async function cleanDuplicateImageUrls(): Promise<number> {
+  const db = await getDatabase()
+  const result = await db.runAsync(
+    `UPDATE recipes
+     SET image_url = NULL, updated_at = ?
+     WHERE image_url IS NOT NULL
+       AND image_url IN (
+         SELECT image_url FROM recipes
+         WHERE image_url IS NOT NULL
+         GROUP BY image_url
+         HAVING COUNT(DISTINCT name) > 1
+       )`,
+    [new Date().toISOString()]
+  )
+  return result.changes
+}
+
 export async function getRecipeById(id: string): Promise<Recipe | null> {
   const db = await getDatabase()
   const row = await db.getFirstAsync<Record<string, unknown>>(
@@ -89,7 +131,7 @@ export async function getRecipeById(id: string): Promise<Recipe | null> {
 }
 
 // Only recipes from verified, traceable sources are shown to users.
-const VERIFIED_SOURCES = `source_api IN ('fatsecret', 'user_created')`
+const VERIFIED_SOURCES = `source_api IN ('fatsecret', 'spoonacular', 'user_created')`
 
 export async function searchRecipes(
   query: string,
