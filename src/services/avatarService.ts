@@ -3,7 +3,15 @@ import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
 import { ActionSheetIOS, Alert, Linking, Platform } from 'react-native'
 
-const AVATARS_DIR = `${FileSystem.documentDirectory}avatars/`
+const AVATARS_PREFIX = 'avatars/'
+const AVATARS_DIR = `${FileSystem.documentDirectory}${AVATARS_PREFIX}`
+
+// Stored avatarUrl values are relative (e.g. "avatars/member-1_123.jpg").
+// Absolute file:// paths written by older builds are also accepted.
+export function resolveAvatarUri(avatarUrl: string): string {
+  if (avatarUrl.startsWith('file://') || avatarUrl.startsWith('/')) return avatarUrl
+  return `${FileSystem.documentDirectory ?? ''}${avatarUrl}`
+}
 
 async function ensureAvatarsDir(): Promise<void> {
   if (!FileSystem.documentDirectory) return
@@ -51,9 +59,9 @@ async function pickFromPhotos(memberId: string): Promise<string | null> {
   })
   if (result.canceled) return null
   await ensureAvatarsDir()
-  const dest = `${AVATARS_DIR}${memberId}_${Date.now()}.jpg`
-  await FileSystem.copyAsync({ from: result.assets[0].uri, to: dest })
-  return dest
+  const filename = `${memberId}_${Date.now()}.jpg`
+  await FileSystem.copyAsync({ from: result.assets[0].uri, to: `${AVATARS_DIR}${filename}` })
+  return `${AVATARS_PREFIX}${filename}`
 }
 
 async function pickFromFiles(memberId: string): Promise<string | null> {
@@ -63,9 +71,9 @@ async function pickFromFiles(memberId: string): Promise<string | null> {
   })
   if (result.canceled || !result.assets?.[0]) return null
   await ensureAvatarsDir()
-  const dest = `${AVATARS_DIR}${memberId}_${Date.now()}.jpg`
-  await FileSystem.copyAsync({ from: result.assets[0].uri, to: dest })
-  return dest
+  const filename = `${memberId}_${Date.now()}.jpg`
+  await FileSystem.copyAsync({ from: result.assets[0].uri, to: `${AVATARS_DIR}${filename}` })
+  return `${AVATARS_PREFIX}${filename}`
 }
 
 export async function pickAndSaveAvatar(memberId: string): Promise<string | null> {
@@ -75,6 +83,7 @@ export async function pickAndSaveAvatar(memberId: string): Promise<string | null
 }
 
 export async function deleteOldAvatar(uri: string): Promise<void> {
-  if (!uri.startsWith(FileSystem.documentDirectory ?? '')) return
-  await FileSystem.deleteAsync(uri, { idempotent: true })
+  const resolved = resolveAvatarUri(uri)
+  if (!resolved.startsWith(FileSystem.documentDirectory ?? '')) return
+  await FileSystem.deleteAsync(resolved, { idempotent: true })
 }

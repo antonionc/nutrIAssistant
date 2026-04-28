@@ -31,7 +31,7 @@ import {
 } from '../src/services/onDeviceLlm'
 import { OnDeviceLLMStatus } from '../src/types/ai'
 import { syncRecipes, isSynced } from '../src/modules/recipes/syncRecipes'
-import { pickAndSaveAvatar, deleteOldAvatar } from '../src/services/avatarService'
+import { pickAndSaveAvatar, deleteOldAvatar, resolveAvatarUri } from '../src/services/avatarService'
 import { exportFamilyToMarkdown, importFamilyFromFile } from '../src/services/familyExport'
 import * as Sharing from 'expo-sharing'
 import { getRecipeCount } from '../src/modules/recipes/recipeDB'
@@ -468,20 +468,31 @@ function MemberProfileRow({
   onDelete: () => void
 }) {
   const tr = useTranslation()
+  const { updateProfile } = useProfiles()
+  const [avatarError, setAvatarError] = useState(false)
+  useEffect(() => { setAvatarError(false) }, [member.avatarUrl])
 
   async function handleAvatarPress() {
-    const newUri = await pickAndSaveAvatar(member.id)
-    if (!newUri) return
-    if (member.avatarUrl) await deleteOldAvatar(member.avatarUrl)
-    onUpdate({ avatarUrl: newUri })
+    try {
+      const newUri = await pickAndSaveAvatar(member.id)
+      if (!newUri) return
+      await updateProfile(member.id, { avatarUrl: newUri })
+      if (member.avatarUrl) await deleteOldAvatar(member.avatarUrl)
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar la foto. Inténtalo de nuevo.')
+    }
   }
 
   return (
     <View style={styles.memberSection}>
       <View style={styles.memberHeader}>
         <TouchableOpacity onPress={handleAvatarPress} style={styles.memberAvatarBtn}>
-          {member.avatarUrl ? (
-            <Image source={{ uri: member.avatarUrl }} style={styles.memberAvatarImage} />
+          {member.avatarUrl && !avatarError ? (
+            <Image
+              source={{ uri: resolveAvatarUri(member.avatarUrl) }}
+              style={styles.memberAvatarImage}
+              onError={() => setAvatarError(true)}
+            />
           ) : (
             <Text style={styles.memberEmoji}>{member.avatarEmoji ?? '👤'}</Text>
           )}

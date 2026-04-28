@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useState,
 } from 'react'
+import * as FileSystem from 'expo-file-system/legacy'
 import { FamilyMember } from '../../types/profiles'
 import {
   loadFamilyName,
@@ -17,6 +18,25 @@ import {
 import { computeDailyCalorieTarget, computeMacroTargets } from './calorieCalculator'
 import { getAge } from '../../utils/ageUtils'
 import { generateId } from '../../utils/idUtils'
+import { resolveAvatarUri } from '../../services/avatarService'
+
+// Removes avatarUrl for any member whose image file no longer exists on disk.
+// Returns the cleaned array and a flag indicating whether anything changed.
+async function sanitiseAvatarUris(
+  profiles: FamilyMember[]
+): Promise<{ profiles: FamilyMember[]; changed: boolean }> {
+  let changed = false
+  const sanitised = await Promise.all(
+    profiles.map(async (p) => {
+      if (!p.avatarUrl) return p
+      const { exists } = await FileSystem.getInfoAsync(resolveAvatarUri(p.avatarUrl))
+      if (exists) return p
+      changed = true
+      return { ...p, avatarUrl: undefined }
+    })
+  )
+  return { profiles: sanitised, changed }
+}
 
 // Converts profiles saved with the old `age: number` field to `dateOfBirth: string`
 function migrateProfile(raw: any): FamilyMember {
@@ -64,7 +84,9 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
           setNeedsOnboarding(true)
         } else {
           const [raw, fn] = await Promise.all([loadProfiles(), loadFamilyName()])
-          const p = (raw as any[]).map(migrateProfile)
+          const migrated = (raw as any[]).map(migrateProfile)
+          const { profiles: p, changed } = await sanitiseAvatarUris(migrated)
+          if (changed) await saveProfiles(p)
           setProfilesState(p)
           setFamilyNameState(fn)
         }
@@ -96,13 +118,16 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
 
   const updateProfile = useCallback(
     async (id: string, updates: Partial<FamilyMember>) => {
-      const updated = profiles.map((p) =>
-        p.id === id ? applySchoolAgeRule({ ...p, ...updates, updatedAt: new Date().toISOString() }) : p
-      )
-      await saveProfiles(updated)
-      setProfilesState(updated)
+      let next: FamilyMember[] = []
+      setProfilesState(prev => {
+        next = prev.map(p =>
+          p.id === id ? applySchoolAgeRule({ ...p, ...updates, updatedAt: new Date().toISOString() }) : p
+        )
+        return next
+      })
+      await saveProfiles(next)
     },
-    [profiles]
+    []
   )
 
   const deleteProfile = useCallback(
