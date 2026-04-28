@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { Colors, Typography, Spacing } from '../../theme'
+import { Colors, Typography, Spacing, BorderRadius } from '../../theme'
+import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 
 interface EmptyStateProps {
   emoji?: string
@@ -17,6 +18,9 @@ export function EmptyState({
   actionLabel,
   onAction,
 }: EmptyStateProps) {
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+
   return (
     <View style={styles.container}>
       <Text style={styles.emoji}>{emoji}</Text>
@@ -31,37 +35,39 @@ export function EmptyState({
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: Spacing.xxl,
-    paddingHorizontal: Spacing.xl,
-    gap: Spacing.md,
-  },
-  emoji: {
-    fontSize: 64,
-  },
-  title: {
-    ...Typography.heading2,
-    color: Colors.warmCharcoal,
-    textAlign: 'center',
-  },
-  description: {
-    ...Typography.body,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-  },
-  button: {
-    backgroundColor: Colors.healthGreen,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.sm,
-    borderRadius: 100,
-    marginTop: Spacing.sm,
-  },
-  buttonText: {
-    ...Typography.bodyLarge,
-    color: Colors.white,
-    fontFamily: Typography.heading3.fontFamily,
-  },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: Spacing.xxl,
+      paddingHorizontal: Spacing.xl,
+      gap: Spacing.md,
+    },
+    emoji: {
+      fontSize: 64,
+    },
+    title: {
+      ...Typography.heading2,
+      color: colors.text,
+      textAlign: 'center',
+    },
+    description: {
+      ...Typography.body,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    button: {
+      backgroundColor: Colors.healthGreen,
+      paddingHorizontal: Spacing.xl,
+      paddingVertical: Spacing.sm,
+      borderRadius: 100,
+      marginTop: Spacing.sm,
+    },
+    buttonText: {
+      ...Typography.bodyLarge,
+      color: Colors.white,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+  })
+}

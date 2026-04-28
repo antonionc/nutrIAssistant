@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,7 @@ import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
 import { Recipe, RecipeIngredient } from '../../src/types/recipes'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
+import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
 import { MEAL_LABELS, MEAL_EMOJIS } from '../../src/constants/mealTypes'
 import { NutriScoreBadge } from '../../src/components/charts/NutriScoreBadge'
 import { MacroBar } from '../../src/components/charts/MacroBar'
@@ -37,6 +38,8 @@ export default function RecipeDetailScreen() {
   const { addItem: addToGroceries } = useGroceries()
   const { setMealForDate, removeMealFromDate } = usePlanner()
   const { profiles } = useProfiles()
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
 
   const [recipe, setRecipe] = useState<Recipe | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -162,7 +165,6 @@ export default function RecipeDetailScreen() {
     )
   }
 
-  // Parallax image animation
   const imageTranslate = scrollY.interpolate({
     inputRange: [-100, 0, PARALLAX_HEIGHT],
     outputRange: [-30, 0, PARALLAX_HEIGHT * 0.4],
@@ -202,7 +204,6 @@ export default function RecipeDetailScreen() {
   const missingCount = recipe.ingredients.filter((i) => !ingredientInPantry(i)).length
   const pantryCount = recipe.ingredients.length - missingCount
 
-  // Build next 7 days for the plan picker
   const nextDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date()
     d.setDate(d.getDate() + i)
@@ -283,15 +284,15 @@ export default function RecipeDetailScreen() {
 
           {/* Quick stats strip */}
           <View style={styles.statsStrip}>
-            <StatChip icon="⏱" label={`${totalTime} min`} sub="Tiempo total" />
+            <StatChip icon="⏱" label={`${totalTime} min`} sub="Tiempo total" colors={colors} />
             <View style={styles.statDivider} />
-            <StatChip icon="👥" label={`${servings}`} sub="Raciones" />
+            <StatChip icon="👥" label={`${servings}`} sub="Raciones" colors={colors} />
             <View style={styles.statDivider} />
-            <StatChip icon="🔥" label={`${scaledNutrition(recipe.nutritionalInfo.calories)}`} sub="kcal" />
+            <StatChip icon="🔥" label={`${scaledNutrition(recipe.nutritionalInfo.calories)}`} sub="kcal" colors={colors} />
             {recipe.tags.length > 0 && (
               <>
                 <View style={styles.statDivider} />
-                <StatChip icon="🏷️" label={recipe.tags[0]} sub="Etiqueta" />
+                <StatChip icon="🏷️" label={recipe.tags[0]} sub="Etiqueta" colors={colors} />
               </>
             )}
           </View>
@@ -321,10 +322,10 @@ export default function RecipeDetailScreen() {
             <Text style={styles.sectionLabel}>Info nutricional (por ración)</Text>
             <MacroBar nutritionalInfo={recipe.nutritionalInfo} height={10} showLabels />
             <View style={styles.nutritionGrid}>
-              <NutritionCell label="Calorías" value={`${scaledNutrition(recipe.nutritionalInfo.calories)}`} unit="kcal" color={Colors.goldenAmber} />
-              <NutritionCell label="Proteínas" value={`${scaledNutrition(recipe.nutritionalInfo.protein)}`} unit="g" color={Colors.healthGreen} />
-              <NutritionCell label="Carbohid." value={`${scaledNutrition(recipe.nutritionalInfo.carbs)}`} unit="g" color={Colors.goldenAmber} />
-              <NutritionCell label="Grasas" value={`${scaledNutrition(recipe.nutritionalInfo.fat)}`} unit="g" color="#FF8C42" />
+              <NutritionCell label="Calorías" value={`${scaledNutrition(recipe.nutritionalInfo.calories)}`} unit="kcal" color={Colors.goldenAmber} colors={colors} />
+              <NutritionCell label="Proteínas" value={`${scaledNutrition(recipe.nutritionalInfo.protein)}`} unit="g" color={Colors.healthGreen} colors={colors} />
+              <NutritionCell label="Carbohid." value={`${scaledNutrition(recipe.nutritionalInfo.carbs)}`} unit="g" color={Colors.goldenAmber} colors={colors} />
+              <NutritionCell label="Grasas" value={`${scaledNutrition(recipe.nutritionalInfo.fat)}`} unit="g" color="#FF8C42" colors={colors} />
             </View>
             {(recipe.nutritionalInfo.fiber !== undefined || recipe.nutritionalInfo.sodium !== undefined) && (
               <View style={styles.extraNutrition}>
@@ -476,7 +477,6 @@ export default function RecipeDetailScreen() {
             </View>
           )}
 
-          {/* Bottom spacer for action bar */}
           <View style={{ height: 120 }} />
         </View>
       </Animated.ScrollView>
@@ -571,7 +571,8 @@ function formatDateLabel(dateStr: string, long: boolean): string {
     : DAY_NAMES_ES[d.getDay()]
 }
 
-function StatChip({ icon, label, sub }: { icon: string; label: string; sub: string }) {
+function StatChip({ icon, label, sub, colors }: { icon: string; label: string; sub: string; colors: ThemeColors }) {
+  const styles = useMemo(() => makeStyles(colors), [colors])
   return (
     <View style={styles.statChip}>
       <Text style={styles.statIcon}>{icon}</Text>
@@ -581,7 +582,8 @@ function StatChip({ icon, label, sub }: { icon: string; label: string; sub: stri
   )
 }
 
-function NutritionCell({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
+function NutritionCell({ label, value, unit, color, colors }: { label: string; value: string; unit: string; color: string; colors: ThemeColors }) {
+  const styles = useMemo(() => makeStyles(colors), [colors])
   return (
     <View style={[styles.nutritionCell, { borderTopColor: color }]}>
       <Text style={styles.nutritionValue}>{value}</Text>
@@ -591,236 +593,225 @@ function NutritionCell({ label, value, unit, color }: { label: string; value: st
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.cream },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.cream },
-  errorText: { ...Typography.heading2, color: Colors.warmCharcoal, marginBottom: Spacing.md },
-  backBtnFallback: { padding: Spacing.sm },
-  backBtnFallbackText: { ...Typography.bodyLarge, color: Colors.healthGreen },
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
+    errorText: { ...Typography.heading2, color: colors.text, marginBottom: Spacing.md },
+    backBtnFallback: { padding: Spacing.sm },
+    backBtnFallbackText: { ...Typography.bodyLarge, color: Colors.healthGreen },
 
-  // Sticky header
-  stickyHeader: {
-    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 100,
-    backgroundColor: Colors.cream, borderBottomWidth: 1, borderBottomColor: Colors.light.border,
-    ...Shadows.subtle,
-  },
-  stickyHeaderInner: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md,
-    height: HEADER_HEIGHT, gap: Spacing.sm,
-  },
-  stickyBackBtn: { padding: Spacing.sm },
-  stickyBackText: { fontSize: 22, color: Colors.warmCharcoal },
-  stickyTitle: { flex: 1, ...Typography.heading3, color: Colors.warmCharcoal },
-  stickyFavBtn: { padding: Spacing.sm },
-  stickyFavText: { fontSize: 22, color: Colors.healthGreen },
+    stickyHeader: {
+      position: 'absolute', top: 0, left: 0, right: 0, zIndex: 100,
+      backgroundColor: colors.background, borderBottomWidth: 1, borderBottomColor: colors.border,
+      ...Shadows.subtle,
+    },
+    stickyHeaderInner: {
+      flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.md,
+      height: HEADER_HEIGHT, gap: Spacing.sm,
+    },
+    stickyBackBtn: { padding: Spacing.sm },
+    stickyBackText: { fontSize: 22, color: colors.text },
+    stickyTitle: { flex: 1, ...Typography.heading3, color: colors.text },
+    stickyFavBtn: { padding: Spacing.sm },
+    stickyFavText: { fontSize: 22, color: Colors.healthGreen },
 
-  // Parallax image
-  imageWrapper: { height: PARALLAX_HEIGHT, overflow: 'hidden' },
-  imageContainer: { position: 'absolute', top: 0, left: 0, right: 0, height: PARALLAX_HEIGHT + 40 },
-  heroImage: { width: '100%', height: PARALLAX_HEIGHT + 40, resizeMode: 'cover' },
-  imagePlaceholder: { backgroundColor: Colors.softMint, alignItems: 'center', justifyContent: 'center' },
-  imagePlaceholderText: { fontSize: 80 },
-  imageOverlay: { position: 'absolute', top: 0, left: 0, right: 0 },
-  imageTopBar: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md, paddingTop: Spacing.sm,
-  },
-  overlayBtn: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  overlayBtnText: { color: Colors.white, fontSize: 18 },
-  favActiveText: { color: '#FF6B6B' },
+    imageWrapper: { height: PARALLAX_HEIGHT, overflow: 'hidden' },
+    imageContainer: { position: 'absolute', top: 0, left: 0, right: 0, height: PARALLAX_HEIGHT + 40 },
+    heroImage: { width: '100%', height: PARALLAX_HEIGHT + 40, resizeMode: 'cover' },
+    imagePlaceholder: { backgroundColor: colors.mintSurface, alignItems: 'center', justifyContent: 'center' },
+    imagePlaceholderText: { fontSize: 80 },
+    imageOverlay: { position: 'absolute', top: 0, left: 0, right: 0 },
+    imageTopBar: {
+      flexDirection: 'row', justifyContent: 'space-between',
+      paddingHorizontal: Spacing.md, paddingTop: Spacing.sm,
+    },
+    overlayBtn: {
+      width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.4)',
+      alignItems: 'center', justifyContent: 'center',
+    },
+    overlayBtnText: { color: Colors.white, fontSize: 18 },
+    favActiveText: { color: '#FF6B6B' },
 
-  // Content Card
-  contentCard: {
-    backgroundColor: Colors.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    marginTop: -24, paddingHorizontal: Spacing.md, paddingTop: Spacing.lg,
-  },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: Spacing.sm, marginBottom: Spacing.sm },
-  titleBlock: { flex: 1 },
-  recipeName: { ...Typography.heading1, color: Colors.warmCharcoal, flexWrap: 'wrap' },
-  recipeCuisine: { ...Typography.body, color: Colors.light.textSecondary, marginTop: 2 },
+    contentCard: {
+      backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      marginTop: -24, paddingHorizontal: Spacing.md, paddingTop: Spacing.lg,
+    },
+    titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: Spacing.sm, marginBottom: Spacing.sm },
+    titleBlock: { flex: 1 },
+    recipeName: { ...Typography.heading1, color: colors.text, flexWrap: 'wrap' },
+    recipeCuisine: { ...Typography.body, color: colors.textSecondary, marginTop: 2 },
 
-  // Stats
-  statsStrip: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white,
-    borderRadius: BorderRadius.lg, padding: Spacing.sm, marginBottom: Spacing.md,
-    ...Shadows.subtle,
-  },
-  statChip: { flex: 1, alignItems: 'center', gap: 2 },
-  statDivider: { width: 1, height: 36, backgroundColor: Colors.light.border },
-  statIcon: { fontSize: 18 },
-  statLabel: { ...Typography.heading3, color: Colors.warmCharcoal, fontSize: 14 },
-  statSub: { ...Typography.caption, color: Colors.light.textSecondary },
+    statsStrip: {
+      flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
+      borderRadius: BorderRadius.lg, padding: Spacing.sm, marginBottom: Spacing.md,
+      ...Shadows.subtle,
+    },
+    statChip: { flex: 1, alignItems: 'center', gap: 2 },
+    statDivider: { width: 1, height: 36, backgroundColor: colors.border },
+    statIcon: { fontSize: 18 },
+    statLabel: { ...Typography.heading3, color: colors.text, fontSize: 14 },
+    statSub: { ...Typography.caption, color: colors.textSecondary },
 
-  // Serving selector
-  servingSelector: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: Spacing.md,
-  },
-  servingControl: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  servingBtn: {
-    width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.healthGreen,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  servingBtnText: { color: Colors.white, fontSize: 18, lineHeight: 20 },
-  servingCount: { ...Typography.heading2, color: Colors.warmCharcoal, minWidth: 28, textAlign: 'center' },
+    servingSelector: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      marginBottom: Spacing.md,
+    },
+    servingControl: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    servingBtn: {
+      width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.healthGreen,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    servingBtnText: { color: Colors.white, fontSize: 18, lineHeight: 20 },
+    servingCount: { ...Typography.heading2, color: colors.text, minWidth: 28, textAlign: 'center' },
 
-  // Section
-  section: { marginBottom: Spacing.lg },
-  sectionLabel: { ...Typography.heading3, color: Colors.warmCharcoal, marginBottom: Spacing.sm },
-  sectionHeaderRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  pantryStatus: { ...Typography.caption, color: Colors.healthGreen },
-  expandToggle: { ...Typography.body, color: Colors.light.textSecondary },
+    section: { marginBottom: Spacing.lg },
+    sectionLabel: { ...Typography.heading3, color: colors.text, marginBottom: Spacing.sm },
+    sectionHeaderRow: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      marginBottom: Spacing.sm,
+    },
+    pantryStatus: { ...Typography.caption, color: Colors.healthGreen },
+    expandToggle: { ...Typography.body, color: colors.textSecondary },
 
-  // Nutrition grid
-  nutritionGrid: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
-  nutritionCell: {
-    flex: 1, backgroundColor: Colors.white, borderRadius: BorderRadius.md,
-    padding: Spacing.sm, alignItems: 'center', borderTopWidth: 3, ...Shadows.subtle,
-  },
-  nutritionValue: { ...Typography.heading2, color: Colors.warmCharcoal, fontSize: 18 },
-  nutritionUnit: { ...Typography.caption, color: Colors.light.textSecondary, fontSize: 10 },
-  nutritionLabel: { ...Typography.caption, color: Colors.light.textSecondary, marginTop: 2 },
+    nutritionGrid: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
+    nutritionCell: {
+      flex: 1, backgroundColor: colors.surface, borderRadius: BorderRadius.md,
+      padding: Spacing.sm, alignItems: 'center', borderTopWidth: 3, ...Shadows.subtle,
+    },
+    nutritionValue: { ...Typography.heading2, color: colors.text, fontSize: 18 },
+    nutritionUnit: { ...Typography.caption, color: colors.textSecondary, fontSize: 10 },
+    nutritionLabel: { ...Typography.caption, color: colors.textSecondary, marginTop: 2 },
 
-  extraNutrition: {
-    flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm,
-    backgroundColor: Colors.softMint, borderRadius: BorderRadius.md, padding: Spacing.sm,
-  },
-  extraNutritionItem: { flex: 1, alignItems: 'center' },
-  extraNutritionLabel: { ...Typography.caption, color: Colors.light.textSecondary },
-  extraNutritionValue: { ...Typography.bodyLarge, color: Colors.warmCharcoal, fontFamily: Typography.heading3.fontFamily },
+    extraNutrition: {
+      flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm,
+      backgroundColor: colors.mintSurface, borderRadius: BorderRadius.md, padding: Spacing.sm,
+    },
+    extraNutritionItem: { flex: 1, alignItems: 'center' },
+    extraNutritionLabel: { ...Typography.caption, color: colors.textSecondary },
+    extraNutritionValue: { ...Typography.bodyLarge, color: colors.text, fontFamily: Typography.heading3.fontFamily },
 
-  // Allergens
-  allergenRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
-  allergenBadge: {
-    backgroundColor: `${Colors.errorRed}15`, borderRadius: BorderRadius.pill,
-    paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1, borderColor: `${Colors.errorRed}40`,
-  },
-  allergenText: { ...Typography.caption, color: Colors.errorRed },
+    allergenRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+    allergenBadge: {
+      backgroundColor: `${Colors.errorRed}15`, borderRadius: BorderRadius.pill,
+      paddingHorizontal: Spacing.sm, paddingVertical: 4, borderWidth: 1, borderColor: `${Colors.errorRed}40`,
+    },
+    allergenText: { ...Typography.caption, color: Colors.errorRed },
 
-  // Ingredients
-  ingredientRow: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    backgroundColor: Colors.white, borderRadius: BorderRadius.md,
-    padding: Spacing.sm, marginBottom: Spacing.xs, ...Shadows.subtle,
-  },
-  ingredientDot: {
-    width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.light.border,
-  },
-  ingredientDotPantry: { backgroundColor: Colors.healthGreen },
-  ingredientDotAllergen: { backgroundColor: Colors.errorRed },
-  ingredientInfo: { flex: 1 },
-  ingredientName: { ...Typography.bodyLarge, color: Colors.warmCharcoal },
-  ingredientQty: { ...Typography.caption, color: Colors.light.textSecondary },
-  ingredientBadges: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' },
-  pantryBadge: {
-    backgroundColor: `${Colors.healthGreen}20`, borderRadius: BorderRadius.pill,
-    paddingHorizontal: Spacing.xs, paddingVertical: 2,
-  },
-  pantryBadgeText: { ...Typography.overline, color: Colors.healthGreen, fontSize: 9 },
-  allergenSmallBadge: {
-    width: 22, height: 22, borderRadius: 11, backgroundColor: `${Colors.errorRed}20`,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  allergenSmallText: { fontSize: 12, color: Colors.errorRed },
-  addCartBtn: {
-    backgroundColor: Colors.softMint, borderRadius: BorderRadius.pill,
-    paddingHorizontal: Spacing.xs, paddingVertical: 3,
-  },
-  addCartBtnText: { ...Typography.overline, color: Colors.healthGreen, fontSize: 9 },
-  inCartBadge: { padding: 2 },
-  inCartText: { fontSize: 14 },
-  addAllMissingBtn: {
-    backgroundColor: Colors.healthGreen, borderRadius: BorderRadius.pill,
-    padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.sm,
-  },
-  addAllMissingText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    ingredientRow: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+      backgroundColor: colors.surface, borderRadius: BorderRadius.md,
+      padding: Spacing.sm, marginBottom: Spacing.xs, ...Shadows.subtle,
+    },
+    ingredientDot: {
+      width: 10, height: 10, borderRadius: 5, backgroundColor: colors.border,
+    },
+    ingredientDotPantry: { backgroundColor: Colors.healthGreen },
+    ingredientDotAllergen: { backgroundColor: Colors.errorRed },
+    ingredientInfo: { flex: 1 },
+    ingredientName: { ...Typography.bodyLarge, color: colors.text },
+    ingredientQty: { ...Typography.caption, color: colors.textSecondary },
+    ingredientBadges: { flexDirection: 'row', gap: Spacing.xs, alignItems: 'center' },
+    pantryBadge: {
+      backgroundColor: `${Colors.healthGreen}20`, borderRadius: BorderRadius.pill,
+      paddingHorizontal: Spacing.xs, paddingVertical: 2,
+    },
+    pantryBadgeText: { ...Typography.overline, color: Colors.healthGreen, fontSize: 9 },
+    allergenSmallBadge: {
+      width: 22, height: 22, borderRadius: 11, backgroundColor: `${Colors.errorRed}20`,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    allergenSmallText: { fontSize: 12, color: Colors.errorRed },
+    addCartBtn: {
+      backgroundColor: colors.mintSurface, borderRadius: BorderRadius.pill,
+      paddingHorizontal: Spacing.xs, paddingVertical: 3,
+    },
+    addCartBtnText: { ...Typography.overline, color: Colors.healthGreen, fontSize: 9 },
+    inCartBadge: { padding: 2 },
+    inCartText: { fontSize: 14 },
+    addAllMissingBtn: {
+      backgroundColor: Colors.healthGreen, borderRadius: BorderRadius.pill,
+      padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.sm,
+    },
+    addAllMissingText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
 
-  // No-ingredients fallback
-  noIngredientsNote: {
-    backgroundColor: `${Colors.goldenAmber}15`,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.sm,
-    borderWidth: 1,
-    borderColor: `${Colors.goldenAmber}40`,
-    marginBottom: Spacing.sm,
-  },
-  noIngredientsText: { ...Typography.body, color: Colors.warmCharcoal, fontStyle: 'italic' },
+    noIngredientsNote: {
+      backgroundColor: `${Colors.goldenAmber}15`,
+      borderRadius: BorderRadius.md,
+      padding: Spacing.sm,
+      borderWidth: 1,
+      borderColor: `${Colors.goldenAmber}40`,
+      marginBottom: Spacing.sm,
+    },
+    noIngredientsText: { ...Typography.body, color: colors.text, fontStyle: 'italic' },
 
-  // Instructions
-  instructionsPreview: { ...Typography.body, color: Colors.light.textSecondary, fontStyle: 'italic' },
-  stepRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
-  stepNumber: {
-    width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.healthGreen,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2,
-  },
-  stepNumberText: { ...Typography.caption, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  stepText: { ...Typography.body, color: Colors.warmCharcoal, flex: 1, lineHeight: 22 },
+    instructionsPreview: { ...Typography.body, color: colors.textSecondary, fontStyle: 'italic' },
+    stepRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
+    stepNumber: {
+      width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.healthGreen,
+      alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2,
+    },
+    stepNumberText: { ...Typography.caption, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    stepText: { ...Typography.body, color: colors.text, flex: 1, lineHeight: 22 },
 
-  // Add to Plan modal
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center', justifyContent: 'center', padding: Spacing.lg,
-  },
-  modalCard: {
-    backgroundColor: Colors.cream, borderRadius: BorderRadius.xl,
-    padding: Spacing.lg, width: '100%', ...Shadows.elevated,
-  },
-  modalTitle: { ...Typography.heading2, color: Colors.warmCharcoal, marginBottom: 4 },
-  modalRecipeName: { ...Typography.body, color: Colors.light.textSecondary, marginBottom: Spacing.md },
-  modalSectionLabel: { ...Typography.overline, color: Colors.light.textSecondary, marginBottom: Spacing.xs },
-  dayScroll: { marginBottom: Spacing.md },
-  dayPill: {
-    alignItems: 'center', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.pill, borderWidth: 1, borderColor: Colors.light.border,
-    marginRight: Spacing.xs, backgroundColor: Colors.white, minWidth: 52,
-  },
-  dayPillSelected: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
-  dayPillLabel: { ...Typography.overline, color: Colors.light.textSecondary },
-  dayPillDate: { ...Typography.heading3, color: Colors.warmCharcoal, fontSize: 16 },
-  dayPillLabelSelected: { color: Colors.white },
-  mealRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
-  mealBtn: {
-    flex: 1, alignItems: 'center', paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.light.border,
-    backgroundColor: Colors.white,
-  },
-  mealBtnSelected: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
-  mealBtnEmoji: { fontSize: 20, marginBottom: 4 },
-  mealBtnLabel: { ...Typography.caption, color: Colors.warmCharcoal },
-  mealBtnLabelSelected: { color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  modalActions: { flexDirection: 'row', gap: Spacing.sm },
-  modalCancelBtn: {
-    flex: 1, padding: Spacing.sm, borderRadius: BorderRadius.pill,
-    backgroundColor: Colors.softMint, alignItems: 'center',
-  },
-  modalCancelText: { ...Typography.body, color: Colors.warmCharcoal },
-  modalConfirmBtn: {
-    flex: 2, padding: Spacing.sm, borderRadius: BorderRadius.pill,
-    backgroundColor: Colors.healthGreen, alignItems: 'center',
-  },
-  modalConfirmText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    modalOverlay: {
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
+      alignItems: 'center', justifyContent: 'center', padding: Spacing.lg,
+    },
+    modalCard: {
+      backgroundColor: colors.background, borderRadius: BorderRadius.xl,
+      padding: Spacing.lg, width: '100%', ...Shadows.elevated,
+    },
+    modalTitle: { ...Typography.heading2, color: colors.text, marginBottom: 4 },
+    modalRecipeName: { ...Typography.body, color: colors.textSecondary, marginBottom: Spacing.md },
+    modalSectionLabel: { ...Typography.overline, color: colors.textSecondary, marginBottom: Spacing.xs },
+    dayScroll: { marginBottom: Spacing.md },
+    dayPill: {
+      alignItems: 'center', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.pill, borderWidth: 1, borderColor: colors.border,
+      marginRight: Spacing.xs, backgroundColor: colors.surface, minWidth: 52,
+    },
+    dayPillSelected: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
+    dayPillLabel: { ...Typography.overline, color: colors.textSecondary },
+    dayPillDate: { ...Typography.heading3, color: colors.text, fontSize: 16 },
+    dayPillLabelSelected: { color: Colors.white },
+    mealRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+    mealBtn: {
+      flex: 1, alignItems: 'center', paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    mealBtnSelected: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
+    mealBtnEmoji: { fontSize: 20, marginBottom: 4 },
+    mealBtnLabel: { ...Typography.caption, color: colors.text },
+    mealBtnLabelSelected: { color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    modalActions: { flexDirection: 'row', gap: Spacing.sm },
+    modalCancelBtn: {
+      flex: 1, padding: Spacing.sm, borderRadius: BorderRadius.pill,
+      backgroundColor: colors.mintSurface, alignItems: 'center',
+    },
+    modalCancelText: { ...Typography.body, color: colors.text },
+    modalConfirmBtn: {
+      flex: 2, padding: Spacing.sm, borderRadius: BorderRadius.pill,
+      backgroundColor: Colors.healthGreen, alignItems: 'center',
+    },
+    modalConfirmText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
 
-  // Action bar
-  actionBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: Colors.cream, borderTopWidth: 1, borderTopColor: Colors.light.border,
-    paddingHorizontal: Spacing.md, paddingBottom: Spacing.lg, paddingTop: Spacing.sm,
-    flexDirection: 'row', gap: Spacing.sm, ...Shadows.elevated,
-  },
-  actionBtnSecondary: {
-    flex: 1, backgroundColor: Colors.softMint, borderRadius: BorderRadius.pill,
-    padding: Spacing.sm, alignItems: 'center',
-  },
-  actionBtnSecondaryText: { ...Typography.body, color: Colors.warmCharcoal, fontFamily: Typography.heading3.fontFamily },
-  actionBtnPrimary: {
-    flex: 2, backgroundColor: Colors.healthGreen, borderRadius: BorderRadius.pill,
-    padding: Spacing.sm, alignItems: 'center',
-  },
-  actionBtnPrimaryText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-})
+    actionBar: {
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      backgroundColor: colors.background, borderTopWidth: 1, borderTopColor: colors.border,
+      paddingHorizontal: Spacing.md, paddingBottom: Spacing.lg, paddingTop: Spacing.sm,
+      flexDirection: 'row', gap: Spacing.sm, ...Shadows.elevated,
+    },
+    actionBtnSecondary: {
+      flex: 1, backgroundColor: colors.mintSurface, borderRadius: BorderRadius.pill,
+      padding: Spacing.sm, alignItems: 'center',
+    },
+    actionBtnSecondaryText: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily },
+    actionBtnPrimary: {
+      flex: 2, backgroundColor: Colors.healthGreen, borderRadius: BorderRadius.pill,
+      padding: Spacing.sm, alignItems: 'center',
+    },
+    actionBtnPrimaryText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+  })
+}

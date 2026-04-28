@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +15,8 @@ import { router } from 'expo-router'
 import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useInventory } from '../../src/modules/inventory/useInventory'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
+import { Colors, Typography, Spacing, BorderRadius } from '../../src/theme'
+import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
 import { MealCard } from '../../src/components/cards/MealCard'
 import { PillSelector, PillOption } from '../../src/components/inputs/PillSelector'
 import { EmptyState } from '../../src/components/layout/EmptyState'
@@ -43,6 +44,8 @@ export default function NutritionScreen() {
     lockDay,
     uploadSchoolMenu,
   } = usePlanner()
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
 
   const dayOptions = getDayOptions()
   const todayStr = new Date().toISOString().split('T')[0]
@@ -118,7 +121,7 @@ export default function NutritionScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* School Menu Upload Banner — always visible */}
+        {/* School Menu Upload Banner */}
         <TouchableOpacity
           style={styles.schoolBanner}
           onPress={handleUploadSchoolMenu}
@@ -160,9 +163,7 @@ export default function NutritionScreen() {
                     if (recipe) router.push(`/recipe/${recipe.id}`)
                   }}
                   onLock={() => lockDay(selectedDay)}
-                  onSuggestAlternative={() => {
-                    // TODO: regenerate single slot
-                  }}
+                  onSuggestAlternative={() => {}}
                 />
 
                 {/* Supplement reminders */}
@@ -198,34 +199,36 @@ export default function NutritionScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.cream },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm,
-  },
-  title: { ...Typography.heading1, color: Colors.warmCharcoal },
-  generateBtn: {
-    backgroundColor: Colors.healthGreen, paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm, borderRadius: BorderRadius.pill, minWidth: 100, alignItems: 'center',
-  },
-  generateBtnDisabled: { backgroundColor: Colors.light.textMuted },
-  generateBtnText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  pillSelectorContent: { paddingVertical: Spacing.lg },
-  scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
-  loader: { marginTop: Spacing.xxl },
-  schoolBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    backgroundColor: Colors.forestGreen, borderRadius: BorderRadius.lg,
-    padding: Spacing.md, marginBottom: Spacing.md,
-  },
-  schoolBannerEmoji: { fontSize: 24 },
-  schoolBannerText: { flex: 1 },
-  schoolBannerTitle: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  schoolBannerSub: { ...Typography.caption, color: `${Colors.white}CC` },
-  schoolBannerArrow: { color: Colors.white, fontSize: 20 },
-  mealsContainer: { gap: Spacing.md },
-  supplementRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginTop: Spacing.xs, paddingHorizontal: Spacing.xs },
-  supplementChip: { backgroundColor: `${Colors.goldenAmber}20`, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.pill },
-  supplementText: { ...Typography.caption, color: Colors.warmCharcoal },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm,
+    },
+    title: { ...Typography.heading1, color: colors.text },
+    generateBtn: {
+      backgroundColor: Colors.healthGreen, paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm, borderRadius: BorderRadius.pill, minWidth: 100, alignItems: 'center',
+    },
+    generateBtnDisabled: { backgroundColor: colors.textMuted },
+    generateBtnText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    pillSelectorContent: { paddingVertical: Spacing.lg },
+    scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+    loader: { marginTop: Spacing.xxl },
+    schoolBanner: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+      backgroundColor: Colors.forestGreen, borderRadius: BorderRadius.lg,
+      padding: Spacing.md, marginBottom: Spacing.md,
+    },
+    schoolBannerEmoji: { fontSize: 24 },
+    schoolBannerText: { flex: 1 },
+    schoolBannerTitle: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    schoolBannerSub: { ...Typography.caption, color: `${Colors.white}CC` },
+    schoolBannerArrow: { color: Colors.white, fontSize: 20 },
+    mealsContainer: { gap: Spacing.md },
+    supplementRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginTop: Spacing.xs, paddingHorizontal: Spacing.xs },
+    supplementChip: { backgroundColor: `${Colors.goldenAmber}20`, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.pill },
+    supplementText: { ...Typography.caption, color: colors.text },
+  })
+}

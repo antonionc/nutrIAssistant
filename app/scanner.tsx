@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +25,7 @@ import { computeNutriScore } from '../src/services/nutriscore'
 import { checkFamilyCompatibility } from '../src/modules/profiles/allergenEngine'
 import { saveScanResult, getScanHistory } from '../src/modules/scanner/scannerDB'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../src/theme'
+import { useTheme, ThemeColors } from '../src/theme/ThemeContext'
 import { NutriScoreBadge } from '../src/components/charts/NutriScoreBadge'
 import { MacroBar } from '../src/components/charts/MacroBar'
 import { FamilyCompatibilityRow } from '../src/components/badges/CompatibilityBadge'
@@ -38,6 +39,8 @@ export default function ScannerScreen() {
   const insets = useSafeAreaInsets()
   const { profiles } = useProfiles()
   const { addItem } = useInventory()
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
   const [permission, requestPermission] = useCameraPermissions()
   const [mode, setMode] = useState<ScanMode>('barcode')
   const [scannedResult, setScannedResult] = useState<ScanResult | null>(null)
@@ -119,7 +122,7 @@ export default function ScannerScreen() {
 
   if (!permission.granted) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.permissionScreen} edges={['top']}>
         <View style={styles.permissionContainer}>
           <Text style={styles.permissionTitle}>Acceso a cámara requerido</Text>
           <Text style={styles.permissionText}>NutrIAssistant necesita acceso a la cámara para escanear códigos de barras y etiquetas.</Text>
@@ -144,7 +147,7 @@ export default function ScannerScreen() {
         onBarcodeScanned={mode === 'barcode' && !scannedResult ? handleBarcodeScan : undefined}
         barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'qr'] }}
       >
-        {/* Floating back button — clears status bar on all iOS devices */}
+        {/* Floating back button */}
         <TouchableOpacity
           onPress={() => router.back()}
           style={[styles.backCircleBtn, { top: insets.top + 12 }]}
@@ -215,7 +218,7 @@ export default function ScannerScreen() {
               {scannedResult.imageUri ? (
                 <Image source={{ uri: scannedResult.imageUri }} style={styles.productImage} />
               ) : (
-                <View style={[styles.productImage, { backgroundColor: Colors.softMint, alignItems: 'center', justifyContent: 'center' }]}>
+                <View style={[styles.productImage, styles.productImagePlaceholder]}>
                   <Text style={{ fontSize: 32 }}>🥫</Text>
                 </View>
               )}
@@ -233,10 +236,10 @@ export default function ScannerScreen() {
                 <Text style={styles.sectionLabel}>Info nutricional (por 100g)</Text>
                 <MacroBar nutritionalInfo={scannedResult.nutritionalInfo} height={8} showLabels />
                 <View style={styles.nutritionGrid}>
-                  <NutritionCell label="Calorías" value={`${scannedResult.nutritionalInfo.calories} kcal`} />
-                  <NutritionCell label="Proteínas" value={`${scannedResult.nutritionalInfo.protein}g`} />
-                  <NutritionCell label="Carbohid." value={`${scannedResult.nutritionalInfo.carbs}g`} />
-                  <NutritionCell label="Grasas" value={`${scannedResult.nutritionalInfo.fat}g`} />
+                  <NutritionCell label="Calorías" value={`${scannedResult.nutritionalInfo.calories} kcal`} colors={colors} />
+                  <NutritionCell label="Proteínas" value={`${scannedResult.nutritionalInfo.protein}g`} colors={colors} />
+                  <NutritionCell label="Carbohid." value={`${scannedResult.nutritionalInfo.carbs}g`} colors={colors} />
+                  <NutritionCell label="Grasas" value={`${scannedResult.nutritionalInfo.fat}g`} colors={colors} />
                 </View>
               </View>
             )}
@@ -265,7 +268,8 @@ export default function ScannerScreen() {
   )
 }
 
-function NutritionCell({ label, value }: { label: string; value: string }) {
+function NutritionCell({ label, value, colors }: { label: string; value: string; colors: ThemeColors }) {
+  const styles = useMemo(() => makeStyles(colors), [colors])
   return (
     <View style={styles.nutritionCell}>
       <Text style={styles.nutritionValue}>{value}</Text>
@@ -274,79 +278,83 @@ function NutritionCell({ label, value }: { label: string; value: string }) {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  camera: { flex: 1 },
-  overlay: { flex: 1 },
-  topBar: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-  },
-  scanTitle: { ...Typography.heading3, color: Colors.white },
-  backCircleBtn: {
-    position: 'absolute',
-    left: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
-  },
-  backCircleIcon: { color: Colors.white, fontSize: 32, lineHeight: 36, marginLeft: -2 },
-  overlayBtn: { padding: Spacing.sm, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: BorderRadius.md },
-  overlayBtnText: { color: Colors.white, fontSize: 14 },
-  modeToggle: {
-    flexDirection: 'row', alignSelf: 'center', gap: Spacing.xs,
-    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: BorderRadius.pill, padding: 4,
-  },
-  modeBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.pill },
-  modeBtnActive: { backgroundColor: Colors.healthGreen },
-  modeBtnText: { ...Typography.body, color: 'rgba(255,255,255,0.7)' },
-  modeBtnTextActive: { color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  frameContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  frame: {
-    width: 260, height: 160, borderWidth: 2, borderColor: Colors.healthGreen,
-    borderRadius: BorderRadius.lg, alignItems: 'center', justifyContent: 'center',
-  },
-  frameHint: { ...Typography.body, color: 'rgba(255,255,255,0.8)', textAlign: 'center' },
-  bottomBar: {
-    flexDirection: 'row', justifyContent: 'center', gap: Spacing.md,
-    paddingBottom: Spacing.xl, paddingHorizontal: Spacing.md,
-  },
-  historyBtn: { backgroundColor: 'rgba(0,0,0,0.5)', padding: Spacing.sm, borderRadius: BorderRadius.pill },
-  historyBtnText: { ...Typography.body, color: Colors.white },
-  rescanBtn: { backgroundColor: Colors.healthGreen, padding: Spacing.sm, borderRadius: BorderRadius.pill },
-  rescanBtnText: { ...Typography.body, color: Colors.white },
-  resultSheet: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: Colors.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    maxHeight: '60%', ...Shadows.elevated,
-  },
-  resultContent: { padding: Spacing.md, gap: Spacing.md },
-  resultHeader: { flexDirection: 'row', gap: Spacing.md },
-  productImage: { width: 80, height: 80, borderRadius: BorderRadius.md, resizeMode: 'contain' },
-  productInfo: { flex: 1, gap: Spacing.xs },
-  productName: { ...Typography.heading2, color: Colors.warmCharcoal },
-  productBrand: { ...Typography.body, color: Colors.light.textSecondary },
-  nutritionSection: { gap: Spacing.sm },
-  sectionLabel: { ...Typography.heading3, color: Colors.warmCharcoal },
-  nutritionGrid: { flexDirection: 'row', gap: Spacing.sm },
-  nutritionCell: { flex: 1, backgroundColor: Colors.softMint, borderRadius: BorderRadius.md, padding: Spacing.sm, alignItems: 'center' },
-  nutritionValue: { ...Typography.heading3, color: Colors.warmCharcoal },
-  nutritionLabel: { ...Typography.caption, color: Colors.light.textSecondary },
-  compatSection: { gap: Spacing.sm },
-  resultActions: { flexDirection: 'row', gap: Spacing.sm },
-  actionBtn: { flex: 1, backgroundColor: Colors.healthGreen, padding: Spacing.sm, borderRadius: BorderRadius.pill, alignItems: 'center' },
-  actionBtnText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  actionBtnSecondary: { backgroundColor: Colors.softMint },
-  actionBtnTextSecondary: { ...Typography.bodyLarge, color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },
-  permissionContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.md },
-  permissionTitle: { ...Typography.heading1, color: Colors.warmCharcoal, textAlign: 'center' },
-  permissionText: { ...Typography.body, color: Colors.light.textSecondary, textAlign: 'center' },
-  permissionBtn: { backgroundColor: Colors.healthGreen, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, borderRadius: BorderRadius.pill },
-  permissionBtnText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  backBtn: { padding: Spacing.sm },
-  backBtnText: { ...Typography.body, color: Colors.healthGreen },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#000' },
+    camera: { flex: 1 },
+    overlay: { flex: 1 },
+    permissionScreen: { flex: 1, backgroundColor: colors.background },
+    topBar: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    },
+    scanTitle: { ...Typography.heading3, color: Colors.white },
+    backCircleBtn: {
+      position: 'absolute',
+      left: 16,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 10,
+    },
+    backCircleIcon: { color: Colors.white, fontSize: 32, lineHeight: 36, marginLeft: -2 },
+    overlayBtn: { padding: Spacing.sm, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: BorderRadius.md },
+    overlayBtnText: { color: Colors.white, fontSize: 14 },
+    modeToggle: {
+      flexDirection: 'row', alignSelf: 'center', gap: Spacing.xs,
+      backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: BorderRadius.pill, padding: 4,
+    },
+    modeBtn: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: BorderRadius.pill },
+    modeBtnActive: { backgroundColor: Colors.healthGreen },
+    modeBtnText: { ...Typography.body, color: 'rgba(255,255,255,0.7)' },
+    modeBtnTextActive: { color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    frameContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    frame: {
+      width: 260, height: 160, borderWidth: 2, borderColor: Colors.healthGreen,
+      borderRadius: BorderRadius.lg, alignItems: 'center', justifyContent: 'center',
+    },
+    frameHint: { ...Typography.body, color: 'rgba(255,255,255,0.8)', textAlign: 'center' },
+    bottomBar: {
+      flexDirection: 'row', justifyContent: 'center', gap: Spacing.md,
+      paddingBottom: Spacing.xl, paddingHorizontal: Spacing.md,
+    },
+    historyBtn: { backgroundColor: 'rgba(0,0,0,0.5)', padding: Spacing.sm, borderRadius: BorderRadius.pill },
+    historyBtnText: { ...Typography.body, color: Colors.white },
+    rescanBtn: { backgroundColor: Colors.healthGreen, padding: Spacing.sm, borderRadius: BorderRadius.pill },
+    rescanBtnText: { ...Typography.body, color: Colors.white },
+    resultSheet: {
+      position: 'absolute', bottom: 0, left: 0, right: 0,
+      backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      maxHeight: '60%', ...Shadows.elevated,
+    },
+    resultContent: { padding: Spacing.md, gap: Spacing.md },
+    resultHeader: { flexDirection: 'row', gap: Spacing.md },
+    productImage: { width: 80, height: 80, borderRadius: BorderRadius.md, resizeMode: 'contain' },
+    productImagePlaceholder: { backgroundColor: colors.mintSurface, alignItems: 'center', justifyContent: 'center' },
+    productInfo: { flex: 1, gap: Spacing.xs },
+    productName: { ...Typography.heading2, color: colors.text },
+    productBrand: { ...Typography.body, color: colors.textSecondary },
+    nutritionSection: { gap: Spacing.sm },
+    sectionLabel: { ...Typography.heading3, color: colors.text },
+    nutritionGrid: { flexDirection: 'row', gap: Spacing.sm },
+    nutritionCell: { flex: 1, backgroundColor: colors.mintSurface, borderRadius: BorderRadius.md, padding: Spacing.sm, alignItems: 'center' },
+    nutritionValue: { ...Typography.heading3, color: colors.text },
+    nutritionLabel: { ...Typography.caption, color: colors.textSecondary },
+    compatSection: { gap: Spacing.sm },
+    resultActions: { flexDirection: 'row', gap: Spacing.sm },
+    actionBtn: { flex: 1, backgroundColor: Colors.healthGreen, padding: Spacing.sm, borderRadius: BorderRadius.pill, alignItems: 'center' },
+    actionBtnText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    actionBtnSecondary: { backgroundColor: colors.mintSurface },
+    actionBtnTextSecondary: { ...Typography.bodyLarge, color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },
+    permissionContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xl, gap: Spacing.md },
+    permissionTitle: { ...Typography.heading1, color: colors.text, textAlign: 'center' },
+    permissionText: { ...Typography.body, color: colors.textSecondary, textAlign: 'center' },
+    permissionBtn: { backgroundColor: Colors.healthGreen, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, borderRadius: BorderRadius.pill },
+    permissionBtnText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    backBtn: { padding: Spacing.sm },
+    backBtnText: { ...Typography.body, color: Colors.healthGreen },
+  })
+}

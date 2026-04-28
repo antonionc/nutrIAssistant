@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   Alert,
   Image,
@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useGroceries } from '../../src/modules/groceries/GroceriesContext'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
+import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
 import { EmptyState } from '../../src/components/layout/EmptyState'
 import { GroceryItem } from '../../src/types/groceries'
 import { RETAILERS } from '../../src/constants/retailers'
@@ -31,6 +32,8 @@ export default function GroceriesScreen() {
     exportToAmazon,
     grouped,
   } = useGroceries()
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
 
   const [showAddModal, setShowAddModal] = useState(false)
   const [newItemName, setNewItemName] = useState('')
@@ -76,6 +79,7 @@ export default function GroceriesScreen() {
                 <GroceryRow
                   key={item.id}
                   item={item}
+                  colors={colors}
                   onToggle={() => togglePurchased(item.id)}
                   onDelete={() => {
                     Alert.alert('Eliminar artículo', `¿Eliminar "${item.name}"?`, [
@@ -110,6 +114,7 @@ export default function GroceriesScreen() {
                 <GroceryRow
                   key={item.id}
                   item={item}
+                  colors={colors}
                   onToggle={() => togglePurchased(item.id)}
                   onDelete={() => removeItem(item.id)}
                   purchased
@@ -174,6 +179,7 @@ export default function GroceriesScreen() {
             <TextInput
               style={styles.modalInput}
               placeholder="Nombre del artículo (ej. Tomates)"
+              placeholderTextColor={colors.textMuted}
               value={newItemName}
               onChangeText={setNewItemName}
               autoFocus
@@ -183,6 +189,7 @@ export default function GroceriesScreen() {
               <TextInput
                 style={[styles.modalInput, styles.modalInputSmall]}
                 placeholder="Cant."
+                placeholderTextColor={colors.textMuted}
                 value={newItemQty}
                 onChangeText={setNewItemQty}
                 keyboardType="numeric"
@@ -190,6 +197,7 @@ export default function GroceriesScreen() {
               <TextInput
                 style={[styles.modalInput, styles.modalInputSmall]}
                 placeholder="Unidad"
+                placeholderTextColor={colors.textMuted}
                 value={newItemUnit}
                 onChangeText={setNewItemUnit}
               />
@@ -211,15 +219,18 @@ export default function GroceriesScreen() {
 
 function GroceryRow({
   item,
+  colors,
   onToggle,
   onDelete,
   purchased = false,
 }: {
   item: GroceryItem
+  colors: ThemeColors
   onToggle: () => void
   onDelete: () => void
   purchased?: boolean
 }) {
+  const styles = useMemo(() => makeStyles(colors), [colors])
   return (
     <TouchableOpacity style={styles.groceryRow} onPress={onToggle} onLongPress={onDelete}>
       <View style={[styles.checkbox, item.isPurchased && styles.checkboxChecked]}>
@@ -240,81 +251,83 @@ function GroceryRow({
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.cream },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm,
-  },
-  title: { ...Typography.heading1, color: Colors.warmCharcoal },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  count: { ...Typography.body, color: Colors.light.textSecondary },
-  scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
-  group: { marginBottom: Spacing.md },
-  groupLabel: {
-    ...Typography.overline, color: Colors.light.textSecondary,
-    marginBottom: Spacing.sm, paddingLeft: Spacing.xs,
-  },
-  groceryRow: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    backgroundColor: Colors.white, borderRadius: BorderRadius.md,
-    padding: Spacing.sm, marginBottom: Spacing.xs, ...Shadows.subtle,
-  },
-  checkbox: {
-    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
-    borderColor: Colors.light.border, alignItems: 'center', justifyContent: 'center',
-  },
-  checkboxChecked: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
-  checkmark: { color: Colors.white, fontSize: 12, fontWeight: 'bold' },
-  groceryInfo: { flex: 1 },
-  groceryName: { ...Typography.bodyLarge, color: Colors.warmCharcoal },
-  groceryNamePurchased: { textDecorationLine: 'line-through', color: Colors.light.textMuted },
-  groceryMeta: { ...Typography.caption, color: Colors.light.textSecondary },
-  planBadge: { padding: Spacing.xs },
-  planBadgeText: { fontSize: 14 },
-  purchasedSection: { marginBottom: Spacing.md },
-  purchasedToggle: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: Spacing.sm,
-  },
-  purchasedToggleText: { ...Typography.bodyLarge, color: Colors.light.textSecondary, fontFamily: Typography.heading3.fontFamily },
-  clearText: { ...Typography.body, color: Colors.errorRed },
-  retailerSection: { marginBottom: Spacing.lg },
-  retailerTitle: { ...Typography.heading2, color: Colors.warmCharcoal, marginBottom: Spacing.sm },
-  retailerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  retailerCard: {
-    width: '30%', backgroundColor: Colors.white, borderRadius: BorderRadius.md,
-    padding: Spacing.md, alignItems: 'center', gap: Spacing.sm, ...Shadows.subtle,
-    borderWidth: 1, borderColor: Colors.light.border,
-  },
-  retailerCardDisabled: { opacity: 0.65 },
-  retailerLogo: { width: 48, height: 48, borderRadius: BorderRadius.sm },
-  retailerName: { ...Typography.caption, color: Colors.warmCharcoal, textAlign: 'center' },
-  comingSoonBadge: { backgroundColor: Colors.goldenAmber, paddingHorizontal: 6, paddingVertical: 2, borderRadius: BorderRadius.pill },
-  comingSoonText: { ...Typography.overline, color: Colors.white, fontSize: 8 },
-  shopBtn: { ...Typography.caption, color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
-  fab: {
-    position: 'absolute', right: Spacing.md, bottom: 90,
-    width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.healthGreen,
-    alignItems: 'center', justifyContent: 'center', ...Shadows.elevated,
-  },
-  fabText: { color: Colors.white, fontSize: 28, lineHeight: 30 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }, // KAV shrinks this when keyboard appears
-  modalSheet: {
-    backgroundColor: Colors.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: Spacing.xl, gap: Spacing.md,
-  },
-  modalTitle: { ...Typography.heading2, color: Colors.warmCharcoal },
-  modalInput: {
-    backgroundColor: Colors.white, borderRadius: BorderRadius.md,
-    padding: Spacing.sm, ...Typography.bodyLarge, color: Colors.warmCharcoal,
-    borderWidth: 1, borderColor: Colors.light.border,
-  },
-  modalInputSmall: { flex: 1 },
-  modalRow: { flexDirection: 'row', gap: Spacing.sm },
-  modalActions: { flexDirection: 'row', gap: Spacing.sm },
-  cancelBtn: { flex: 1, padding: Spacing.sm, borderRadius: BorderRadius.pill, backgroundColor: Colors.softMint, alignItems: 'center' },
-  cancelBtnText: { ...Typography.bodyLarge, color: Colors.warmCharcoal },
-  addBtn: { flex: 2, padding: Spacing.sm, borderRadius: BorderRadius.pill, backgroundColor: Colors.healthGreen, alignItems: 'center' },
-  addBtnText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm,
+    },
+    title: { ...Typography.heading1, color: colors.text },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    count: { ...Typography.body, color: colors.textSecondary },
+    scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+    group: { marginBottom: Spacing.md },
+    groupLabel: {
+      ...Typography.overline, color: colors.textSecondary,
+      marginBottom: Spacing.sm, paddingLeft: Spacing.xs,
+    },
+    groceryRow: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+      backgroundColor: colors.surface, borderRadius: BorderRadius.md,
+      padding: Spacing.sm, marginBottom: Spacing.xs, ...Shadows.subtle,
+    },
+    checkbox: {
+      width: 24, height: 24, borderRadius: 12, borderWidth: 2,
+      borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
+    },
+    checkboxChecked: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
+    checkmark: { color: Colors.white, fontSize: 12, fontWeight: 'bold' },
+    groceryInfo: { flex: 1 },
+    groceryName: { ...Typography.bodyLarge, color: colors.text },
+    groceryNamePurchased: { textDecorationLine: 'line-through', color: colors.textMuted },
+    groceryMeta: { ...Typography.caption, color: colors.textSecondary },
+    planBadge: { padding: Spacing.xs },
+    planBadgeText: { fontSize: 14 },
+    purchasedSection: { marginBottom: Spacing.md },
+    purchasedToggle: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingVertical: Spacing.sm,
+    },
+    purchasedToggleText: { ...Typography.bodyLarge, color: colors.textSecondary, fontFamily: Typography.heading3.fontFamily },
+    clearText: { ...Typography.body, color: Colors.errorRed },
+    retailerSection: { marginBottom: Spacing.lg },
+    retailerTitle: { ...Typography.heading2, color: colors.text, marginBottom: Spacing.sm },
+    retailerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    retailerCard: {
+      width: '30%', backgroundColor: colors.surface, borderRadius: BorderRadius.md,
+      padding: Spacing.md, alignItems: 'center', gap: Spacing.sm, ...Shadows.subtle,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    retailerCardDisabled: { opacity: 0.65 },
+    retailerLogo: { width: 48, height: 48, borderRadius: BorderRadius.sm },
+    retailerName: { ...Typography.caption, color: colors.text, textAlign: 'center' },
+    comingSoonBadge: { backgroundColor: Colors.goldenAmber, paddingHorizontal: 6, paddingVertical: 2, borderRadius: BorderRadius.pill },
+    comingSoonText: { ...Typography.overline, color: Colors.white, fontSize: 8 },
+    shopBtn: { ...Typography.caption, color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
+    fab: {
+      position: 'absolute', right: Spacing.md, bottom: 90,
+      width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.healthGreen,
+      alignItems: 'center', justifyContent: 'center', ...Shadows.elevated,
+    },
+    fabText: { color: Colors.white, fontSize: 28, lineHeight: 30 },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+    modalSheet: {
+      backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      padding: Spacing.xl, gap: Spacing.md,
+    },
+    modalTitle: { ...Typography.heading2, color: colors.text },
+    modalInput: {
+      backgroundColor: colors.surface, borderRadius: BorderRadius.md,
+      padding: Spacing.sm, ...Typography.bodyLarge, color: colors.text,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    modalInputSmall: { flex: 1 },
+    modalRow: { flexDirection: 'row', gap: Spacing.sm },
+    modalActions: { flexDirection: 'row', gap: Spacing.sm },
+    cancelBtn: { flex: 1, padding: Spacing.sm, borderRadius: BorderRadius.pill, backgroundColor: colors.mintSurface, alignItems: 'center' },
+    cancelBtnText: { ...Typography.bodyLarge, color: colors.text },
+    addBtn: { flex: 2, padding: Spacing.sm, borderRadius: BorderRadius.pill, backgroundColor: Colors.healthGreen, alignItems: 'center' },
+    addBtnText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+  })
+}

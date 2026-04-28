@@ -2,6 +2,7 @@ import React, {
   forwardRef,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -24,6 +25,7 @@ import type { BottomSheetFlatListMethods } from '@gorhom/bottom-sheet'
 import * as Speech from 'expo-speech'
 import { VoiceQuality } from 'expo-speech'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
+import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 import { AIMessage } from '../../types/ai'
 import { useAIEngine } from '../../modules/ai-engine/AIContext'
 
@@ -85,6 +87,8 @@ interface AIAssistantProps {
 export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
   function AIAssistant({ onClose }, ref) {
     const { messages, isResponding, sendMessage, clearHistory } = useAIEngine()
+    const { colors, isDark } = useTheme()
+    const { vs, ts } = useMemo(() => makeStyles(colors), [colors])
     const [input, setInput] = useState('')
     const [isSpeakerOn, setIsSpeakerOn] = useState(false)
     const [isListening, setIsListening] = useState(false)
@@ -331,21 +335,21 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
     const renderMessage = ({ item }: { item: AIMessage }) => {
       const isUser = item.role === 'user'
       return (
-        <View style={[viewStyles.messageRow, isUser && viewStyles.messageRowUser]}>
+        <View style={[vs.messageRow, isUser && vs.messageRowUser]}>
           {!isUser && (
-            <View style={viewStyles.botAvatar}>
-              <Image source={require('../../../assets/images/icon.png')} style={viewStyles.botAvatarLogo} />
+            <View style={vs.botAvatar}>
+              <Image source={require('../../../assets/images/icon.png')} style={vs.botAvatarLogo} />
             </View>
           )}
-          <View style={[viewStyles.bubble, isUser ? viewStyles.bubbleUser : viewStyles.bubbleBot]}>
+          <View style={[vs.bubble, isUser ? vs.bubbleUser : vs.bubbleBot]}>
             {!isUser && (
-              <Text style={textStyles.botName}>NutriBot</Text>
+              <Text style={ts.botName}>NutriBot</Text>
             )}
-            <Text style={[textStyles.messageText, isUser && textStyles.messageTextUser]}>
+            <Text style={[ts.messageText, isUser && ts.messageTextUser]}>
               {item.content}
             </Text>
             {item.isStreaming && (
-              <Animated.Text style={[textStyles.cursor, { opacity: pulseAnim }]}>▋</Animated.Text>
+              <Animated.Text style={[ts.cursor, { opacity: pulseAnim }]}>▋</Animated.Text>
             )}
           </View>
         </View>
@@ -361,8 +365,8 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
         snapPoints={['50%']}
         enablePanDownToClose
         onClose={onClose}
-        backgroundStyle={viewStyles.sheetBackground}
-        handleIndicatorStyle={viewStyles.handle}
+        backgroundStyle={vs.sheetBackground}
+        handleIndicatorStyle={vs.handle}
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
         android_keyboardInputMode="adjustResize"
@@ -371,45 +375,45 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
         {/* Regular View — NOT BottomSheetView. BottomSheetView is for dynamic
             sizing; with enableDynamicSizing={false} + fixed snapPoints it
             breaks flex layout and prevents proper scroll containment. */}
-        <View style={viewStyles.container}>
+        <View style={vs.container}>
           {/* Header */}
-          <View style={viewStyles.header}>
-            <View style={viewStyles.headerLeft}>
-              <Image source={require('../../../assets/images/icon.png')} style={viewStyles.headerLogo} />
-              <Text style={textStyles.title}>NutrIAssistant</Text>
-              <View style={viewStyles.statusDot} />
+          <View style={vs.header}>
+            <View style={vs.headerLeft}>
+              <Image source={require('../../../assets/images/icon.png')} style={vs.headerLogo} />
+              <Text style={ts.title}>NutrIAssistant</Text>
+              <View style={vs.statusDot} />
             </View>
-            <View style={viewStyles.headerRight}>
+            <View style={vs.headerRight}>
               <TouchableOpacity
-                style={[viewStyles.headerBtn, isSpeakerOn && viewStyles.headerBtnActive]}
+                style={[vs.headerBtn, isSpeakerOn && vs.headerBtnActive]}
                 onPress={handleSpeakerToggle}
               >
                 <Text>{isSpeakerOn ? '🔊' : '🔇'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={viewStyles.headerBtn} onPress={clearHistory}>
-                <Text style={textStyles.clearText}>Limpiar</Text>
+              <TouchableOpacity style={vs.headerBtn} onPress={clearHistory}>
+                <Text style={ts.clearText}>Limpiar</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Voice error banner */}
           {voiceError ? (
-            <View style={viewStyles.errorBanner}>
-              <Text style={textStyles.errorText}>{voiceError}</Text>
+            <View style={vs.errorBanner}>
+              <Text style={ts.errorText}>{voiceError}</Text>
             </View>
           ) : null}
 
           {/* Messages */}
-          <View style={viewStyles.messagesArea}>
+          <View style={vs.messagesArea}>
             {messages.length === 0 ? (
               <BottomSheetScrollView
-                contentContainerStyle={viewStyles.welcome}
+                contentContainerStyle={vs.welcome}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
               >
-                <Text style={textStyles.welcomeEmoji}>👋</Text>
-                <Text style={textStyles.welcomeTitle}>¡Hola, soy NutriBot!</Text>
-                <Text style={textStyles.welcomeText}>
+                <Text style={ts.welcomeEmoji}>👋</Text>
+                <Text style={ts.welcomeTitle}>¡Hola, soy NutriBot!</Text>
+                <Text style={ts.welcomeText}>
                   Tu asistente de nutrición familiar con IA. Pregúntame sobre recetas, ingredientes, planes de comidas o alérgenos.
                 </Text>
               </BottomSheetScrollView>
@@ -419,46 +423,46 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
                 data={messages}
                 keyExtractor={(item) => item.id}
                 renderItem={renderMessage}
-                contentContainerStyle={viewStyles.messageList}
+                contentContainerStyle={vs.messageList}
                 showsVerticalScrollIndicator={true}
-                indicatorStyle="black"
+                indicatorStyle={isDark ? 'white' : 'black'}
                 scrollIndicatorInsets={{ right: 1 }}
-                style={viewStyles.messageListContainer}
+                style={vs.messageListContainer}
               />
             )}
           </View>
 
           {/* Input row */}
-          <View style={viewStyles.inputContainer}>
+          <View style={vs.inputContainer}>
             {showMicButton && (
               <Animated.View style={{ transform: [{ scale: micAnim }] }}>
                 <TouchableOpacity
-                  style={[viewStyles.micBtn, isListening && viewStyles.micBtnActive]}
+                  style={[vs.micBtn, isListening && vs.micBtnActive]}
                   onPress={handleVoiceInput}
                   disabled={isResponding}
                   accessibilityLabel={isListening ? 'Detener grabación' : 'Iniciar grabación de voz'}
                 >
-                  <Text style={textStyles.micIcon}>{isListening ? '⏹' : '🎙️'}</Text>
+                  <Text style={ts.micIcon}>{isListening ? '⏹' : '🎙️'}</Text>
                 </TouchableOpacity>
               </Animated.View>
             )}
             <BottomSheetTextInput
-              style={textStyles.input}
+              style={ts.input}
               value={input}
               onChangeText={setInput}
               placeholder={isListening ? 'Escuchando...' : 'Pregunta a NutriBot...'}
-              placeholderTextColor={Colors.light.textMuted}
+              placeholderTextColor={colors.textMuted}
               multiline
               maxLength={500}
               returnKeyType="send"
               onSubmitEditing={handleSend}
             />
             <TouchableOpacity
-              style={[viewStyles.sendBtn, (!input.trim() || isResponding) && viewStyles.sendBtnDisabled]}
+              style={[vs.sendBtn, (!input.trim() || isResponding) && vs.sendBtnDisabled]}
               onPress={handleSend}
               disabled={!input.trim() || isResponding}
             >
-              <Text style={textStyles.sendIcon}>↑</Text>
+              <Text style={ts.sendIcon}>↑</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -467,86 +471,90 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
   }
 )
 
-const viewStyles = StyleSheet.create({
-  sheetBackground: {
-    backgroundColor: Colors.cream,
-    borderRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 24,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-  } as ViewStyle,
-  handle: { backgroundColor: Colors.light.border, width: 40 } as ViewStyle,
-  container: {
-    flex: 1,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
-    overflow: 'hidden',
-  } as ViewStyle,
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    borderBottomWidth: 1, borderBottomColor: Colors.light.border,
-  } as ViewStyle,
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm } as ViewStyle,
-  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.healthGreen } as ViewStyle,
-  headerRight: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' } as ViewStyle,
-  headerBtn: { padding: Spacing.xs, borderRadius: BorderRadius.sm } as ViewStyle,
-  headerBtnActive: { backgroundColor: `${Colors.healthGreen}20` } as ViewStyle,
-  errorBanner: {
-    backgroundColor: `${Colors.errorRed}15`, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
-    borderBottomWidth: 1, borderBottomColor: `${Colors.errorRed}30`,
-  } as ViewStyle,
-  messagesArea: { flex: 1, overflow: 'hidden' } as ViewStyle,
-  messageListContainer: { flex: 1 } as ViewStyle,
-  welcome: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, gap: Spacing.md, paddingVertical: Spacing.xl } as ViewStyle,
-  messageList: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm } as ViewStyle,
-  messageRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm, alignItems: 'flex-end' } as ViewStyle,
-  messageRowUser: { flexDirection: 'row-reverse' } as ViewStyle,
-  headerLogo: { width: 28, height: 28, borderRadius: 6 } as ImageStyle,
-  botAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.softMint, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' } as ViewStyle,
-  botAvatarLogo: { width: 32, height: 32, borderRadius: 16 } as ImageStyle,
-  bubble: { maxWidth: '75%', padding: Spacing.sm, borderRadius: BorderRadius.lg, gap: 4 } as ViewStyle,
-  bubbleUser: { backgroundColor: Colors.healthGreen, borderBottomRightRadius: 4 } as ViewStyle,
-  bubbleBot: { backgroundColor: Colors.softMint, borderBottomLeftRadius: 4, ...Shadows.subtle } as ViewStyle,
-  inputContainer: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.sm, gap: Spacing.sm,
-    borderTopWidth: 1, borderTopColor: Colors.light.border,
-  } as ViewStyle,
-  micBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: `${Colors.goldenAmber}20`,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: Colors.goldenAmber,
-  } as ViewStyle,
-  micBtnActive: {
-    backgroundColor: `${Colors.errorRed}20`,
-    borderColor: Colors.errorRed,
-  } as ViewStyle,
-  sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.healthGreen, alignItems: 'center', justifyContent: 'center' } as ViewStyle,
-  sendBtnDisabled: { backgroundColor: Colors.light.border } as ViewStyle,
-})
+function makeStyles(colors: ThemeColors) {
+  const vs = StyleSheet.create({
+    sheetBackground: {
+      backgroundColor: colors.background,
+      borderRadius: 24,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -6 },
+      shadowOpacity: 0.18,
+      shadowRadius: 16,
+      elevation: 24,
+      borderWidth: 1,
+      borderColor: colors.border,
+    } as ViewStyle,
+    handle: { backgroundColor: colors.border, width: 40 } as ViewStyle,
+    container: {
+      flex: 1,
+      paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+      overflow: 'hidden',
+    } as ViewStyle,
+    header: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+      borderBottomWidth: 1, borderBottomColor: colors.border,
+    } as ViewStyle,
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm } as ViewStyle,
+    statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.healthGreen } as ViewStyle,
+    headerRight: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' } as ViewStyle,
+    headerBtn: { padding: Spacing.xs, borderRadius: BorderRadius.sm } as ViewStyle,
+    headerBtnActive: { backgroundColor: `${Colors.healthGreen}20` } as ViewStyle,
+    errorBanner: {
+      backgroundColor: `${Colors.errorRed}15`, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
+      borderBottomWidth: 1, borderBottomColor: `${Colors.errorRed}30`,
+    } as ViewStyle,
+    messagesArea: { flex: 1, overflow: 'hidden' } as ViewStyle,
+    messageListContainer: { flex: 1 } as ViewStyle,
+    welcome: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, gap: Spacing.md, paddingVertical: Spacing.xl } as ViewStyle,
+    messageList: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm } as ViewStyle,
+    messageRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm, alignItems: 'flex-end' } as ViewStyle,
+    messageRowUser: { flexDirection: 'row-reverse' } as ViewStyle,
+    headerLogo: { width: 28, height: 28, borderRadius: 6 } as ImageStyle,
+    botAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.mintSurface, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' } as ViewStyle,
+    botAvatarLogo: { width: 32, height: 32, borderRadius: 16 } as ImageStyle,
+    bubble: { maxWidth: '75%', padding: Spacing.sm, borderRadius: BorderRadius.lg, gap: 4 } as ViewStyle,
+    bubbleUser: { backgroundColor: Colors.healthGreen, borderBottomRightRadius: 4 } as ViewStyle,
+    bubbleBot: { backgroundColor: colors.mintSurface, borderBottomLeftRadius: 4, ...Shadows.subtle } as ViewStyle,
+    inputContainer: {
+      flexDirection: 'row', alignItems: 'flex-end',
+      paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.sm, gap: Spacing.sm,
+      borderTopWidth: 1, borderTopColor: colors.border,
+    } as ViewStyle,
+    micBtn: {
+      width: 40, height: 40, borderRadius: 20,
+      backgroundColor: `${Colors.goldenAmber}20`,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 1, borderColor: Colors.goldenAmber,
+    } as ViewStyle,
+    micBtnActive: {
+      backgroundColor: `${Colors.errorRed}20`,
+      borderColor: Colors.errorRed,
+    } as ViewStyle,
+    sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.healthGreen, alignItems: 'center', justifyContent: 'center' } as ViewStyle,
+    sendBtnDisabled: { backgroundColor: colors.border } as ViewStyle,
+  })
 
-const textStyles = StyleSheet.create({
-  title: { ...Typography.heading2, color: Colors.warmCharcoal } as TextStyle,
-  clearText: { ...Typography.body, color: Colors.light.textSecondary } as TextStyle,
-  welcomeEmoji: { fontSize: 48 } as TextStyle,
-  welcomeTitle: { ...Typography.heading1, color: Colors.warmCharcoal, textAlign: 'center' } as TextStyle,
-  welcomeText: { ...Typography.body, color: Colors.light.textSecondary, textAlign: 'center' } as TextStyle,
-  botName: { ...Typography.overline, color: Colors.forestGreen } as TextStyle,
-  messageText: { ...Typography.body, color: Colors.warmCharcoal } as TextStyle,
-  messageTextUser: { color: Colors.white } as TextStyle,
-  cursor: { color: Colors.healthGreen, fontSize: 16 } as TextStyle,
-  errorText: { ...Typography.caption, color: Colors.errorRed } as TextStyle,
-  micIcon: { fontSize: 18 } as TextStyle,
-  input: {
-    ...Typography.body, color: Colors.warmCharcoal,
-    flex: 1, backgroundColor: Colors.white, borderRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    maxHeight: 100, ...Shadows.subtle,
-  } as TextStyle,
-  sendIcon: { color: Colors.white, fontSize: 18, fontWeight: 'bold' } as TextStyle,
-})
+  const ts = StyleSheet.create({
+    title: { ...Typography.heading2, color: colors.text } as TextStyle,
+    clearText: { ...Typography.body, color: colors.textSecondary } as TextStyle,
+    welcomeEmoji: { fontSize: 48 } as TextStyle,
+    welcomeTitle: { ...Typography.heading1, color: colors.text, textAlign: 'center' } as TextStyle,
+    welcomeText: { ...Typography.body, color: colors.textSecondary, textAlign: 'center' } as TextStyle,
+    botName: { ...Typography.overline, color: Colors.forestGreen } as TextStyle,
+    messageText: { ...Typography.body, color: colors.text } as TextStyle,
+    messageTextUser: { color: Colors.white } as TextStyle,
+    cursor: { color: Colors.healthGreen, fontSize: 16 } as TextStyle,
+    errorText: { ...Typography.caption, color: Colors.errorRed } as TextStyle,
+    micIcon: { fontSize: 18 } as TextStyle,
+    input: {
+      ...Typography.body, color: colors.text,
+      flex: 1, backgroundColor: colors.surface, borderRadius: BorderRadius.xl,
+      paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+      maxHeight: 100, ...Shadows.subtle,
+    } as TextStyle,
+    sendIcon: { color: Colors.white, fontSize: 18, fontWeight: 'bold' } as TextStyle,
+  })
+
+  return { vs, ts }
+}

@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import { CompatibilityResult } from '../../types/recipes'
 import { FamilyMember } from '../../types/profiles'
 import { Colors, Typography, Spacing } from '../../theme'
+import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 
 interface CompatibilityBadgeProps {
   result: CompatibilityResult
@@ -11,6 +12,9 @@ interface CompatibilityBadgeProps {
 }
 
 export function CompatibilityBadge({ result, member, showName = true }: CompatibilityBadgeProps) {
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+
   const icon = result.riskLevel === 'danger'
     ? '✗'
     : result.riskLevel === 'warning'
@@ -63,6 +67,9 @@ export function FamilyCompatibilityRow({
   members: FamilyMember[]
   compact?: boolean
 }) {
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+
   return (
     <View style={[styles.row, compact && styles.rowCompact]}>
       {members.map((member) => {
@@ -85,6 +92,9 @@ function CompactCompatibilityDot({
   result: CompatibilityResult
   member: FamilyMember
 }) {
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+
   const borderColor =
     result.riskLevel === 'danger'
       ? Colors.errorRed
@@ -103,67 +113,69 @@ function CompactCompatibilityDot({
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-  },
-  iconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  emoji: {
-    fontSize: 16,
-  },
-  icon: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  statusIcon: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  name: {
-    ...Typography.caption,
-    color: Colors.warmCharcoal,
-    fontFamily: Typography.body.fontFamily,
-  },
-  reason: {
-    ...Typography.caption,
-    maxWidth: 140,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    flexWrap: 'wrap',
-  },
-  rowCompact: {
-    gap: Spacing.xs,
-  },
-  dot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.softMint,
-  },
-  dotImage: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  dotEmoji: {
-    fontSize: 14,
-  },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.xs,
+    },
+    iconCircle: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarImage: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+    },
+    emoji: {
+      fontSize: 16,
+    },
+    icon: {
+      fontSize: 14,
+      fontWeight: 'bold',
+    },
+    statusIcon: {
+      fontSize: 12,
+      fontWeight: 'bold',
+    },
+    name: {
+      ...Typography.caption,
+      color: colors.text,
+      fontFamily: Typography.body.fontFamily,
+    },
+    reason: {
+      ...Typography.caption,
+      maxWidth: 140,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      flexWrap: 'wrap',
+    },
+    rowCompact: {
+      gap: Spacing.xs,
+    },
+    dot: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.mintSurface,
+    },
+    dotImage: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+    },
+    dotEmoji: {
+      fontSize: 14,
+    },
+  })
+}

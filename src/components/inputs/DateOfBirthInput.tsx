@@ -1,6 +1,7 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState, useMemo } from 'react'
 import { View, TextInput, Text, StyleSheet } from 'react-native'
-import { Colors, Typography, Spacing, BorderRadius } from '../../theme'
+import { BorderRadius } from '../../theme'
+import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 
 interface Props {
   value: string            // 'YYYY-MM-DD' or ''
@@ -8,6 +9,8 @@ interface Props {
 }
 
 export function DateOfBirthInput({ value, onChange }: Props) {
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
   const [day,   setDay]   = useState(value.length >= 10 ? value.slice(8, 10) : '')
   const [month, setMonth] = useState(value.length >= 10 ? value.slice(5, 7)  : '')
   const [year,  setYear]  = useState(value.length >= 10 ? value.slice(0, 4)  : '')
@@ -46,7 +49,7 @@ export function DateOfBirthInput({ value, onChange }: Props) {
           if (clean.length === 2) monthRef.current?.focus()
         }}
         placeholder="DD"
-        placeholderTextColor={Colors.light.textMuted}
+        placeholderTextColor={colors.textMuted}
         keyboardType="numeric"
         maxLength={2}
         textAlign="center"
@@ -65,7 +68,7 @@ export function DateOfBirthInput({ value, onChange }: Props) {
           if (clean.length === 2) yearRef.current?.focus()
         }}
         placeholder="MM"
-        placeholderTextColor={Colors.light.textMuted}
+        placeholderTextColor={colors.textMuted}
         keyboardType="numeric"
         maxLength={2}
         textAlign="center"
@@ -83,7 +86,7 @@ export function DateOfBirthInput({ value, onChange }: Props) {
           emit(day, month, clean)
         }}
         placeholder="AAAA"
-        placeholderTextColor={Colors.light.textMuted}
+        placeholderTextColor={colors.textMuted}
         keyboardType="numeric"
         maxLength={4}
         textAlign="center"
@@ -93,18 +96,20 @@ export function DateOfBirthInput({ value, onChange }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  input: {
-    fontSize: 14,
-    color: Colors.warmCharcoal,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: 4,
-    paddingVertical: 6,
-    width: 36,
-  },
-  yearInput: { width: 50 },
-  sep: { fontSize: 14, color: Colors.light.textSecondary },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    input: {
+      fontSize: 14,
+      color: colors.text,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: BorderRadius.sm,
+      paddingHorizontal: 4,
+      paddingVertical: 6,
+      width: 36,
+    },
+    yearInput: { width: 50 },
+    sep: { fontSize: 14, color: colors.textSecondary },
+  })
+}

@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors, Shadows, Spacing } from '../../theme'
+import { useTheme } from '../../theme/ThemeContext'
 import { AIAssistant } from './AIAssistant'
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name']
@@ -27,6 +28,7 @@ const ICON_COLOR_ACTIVE  = Colors.white
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
+  const { colors, isDark } = useTheme()
   const assistantRef = useRef<BottomSheet>(null)
 
   const openAssistant = () => assistantRef.current?.expand()
@@ -53,14 +55,18 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           {/* Center AI button */}
           <View style={styles.centerContainer}>
             <TouchableOpacity
-              style={styles.aiButton}
+              style={[styles.aiButton, { backgroundColor: isDark ? Colors.white : colors.background }]}
               onPress={openAssistant}
               activeOpacity={0.85}
             >
               <Image
-                source={require('../../../assets/images/icon.png')}
-                style={styles.aiLogo}
-                resizeMode="cover"
+                source={
+                  isDark
+                    ? require('../../../assets/images/android-icon-foreground.png')
+                    : require('../../../assets/images/icon.png')
+                }
+                style={isDark ? styles.aiLogoForeground : styles.aiLogo}
+                resizeMode="contain"
               />
             </TouchableOpacity>
           </View>
@@ -134,7 +140,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 20,
-    backgroundColor: Colors.cream,
+    backgroundColor: Colors.cream, // overridden inline
     alignItems: 'center',
     justifyContent: 'center',
     bottom: 10,
@@ -147,5 +153,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 16,
+  },
+  aiLogoForeground: {
+    width: 42,
+    height: 42,
   },
 })

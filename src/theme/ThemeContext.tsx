@@ -16,6 +16,7 @@ export interface ThemeColors {
   divider: string
   tabBar: string
   tabBarInactive: string
+  mintSurface: string
   // Brand colors (fixed regardless of theme)
   primary: string
   primaryDark: string
@@ -51,6 +52,7 @@ function buildColors(isDark: boolean): ThemeColors {
     divider: semantic.divider,
     tabBar: semantic.tabBar,
     tabBarInactive: semantic.tabBarInactive,
+    mintSurface: isDark ? 'rgba(29, 158, 117, 0.15)' : Colors.softMint,
     // Brand (fixed)
     primary: Colors.healthGreen,
     primaryDark: Colors.forestGreen,

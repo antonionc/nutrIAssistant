@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   FlatList,
   ScrollView,
@@ -11,6 +11,7 @@ import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRecipeDB } from '../../src/modules/recipes/useRecipeDB'
 import { Colors, Typography, Spacing, BorderRadius } from '../../src/theme'
+import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
 import { SearchBar } from '../../src/components/inputs/SearchBar'
 import { RecipeCard } from '../../src/components/cards/RecipeCard'
 import { EmptyState } from '../../src/components/layout/EmptyState'
@@ -43,6 +44,8 @@ const CATEGORY_FILTERS: { key: RecipeCategory | 'all'; label: string }[] = [
 
 export default function RecipesScreen() {
   const { recipes, isLoading, load, search, filterByCategory, filterByCuisine } = useRecipeDB()
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
   const [query, setQuery] = useState('')
   const [selectedCuisine, setSelectedCuisine] = useState('All')
   const [selectedCategory, setSelectedCategory] = useState<RecipeCategory | 'all'>('all')
@@ -165,41 +168,43 @@ export default function RecipesScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.cream },
-  header: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
-  title: { ...Typography.heading1, color: Colors.warmCharcoal },
-  searchContainer: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  pill: {
-    flex: 1,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.pill,
-    backgroundColor: Colors.softMint,
-    alignItems: 'center',
-  },
-  pillActive: { backgroundColor: Colors.healthGreen },
-  pillText: { ...Typography.body, color: Colors.warmCharcoal },
-  pillTextActive: { color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  cuisineSection: { marginBottom: Spacing.sm },
-  cuisineLabel: { ...Typography.overline, color: Colors.light.textSecondary, paddingHorizontal: Spacing.md, marginBottom: Spacing.xs },
-  cuisineStrip: { paddingHorizontal: Spacing.md, gap: Spacing.sm },
-  cuisineBtn: {
-    alignItems: 'center', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.md, backgroundColor: Colors.white, minWidth: 60,
-    borderWidth: 1, borderColor: Colors.light.border,
-  },
-  cuisineBtnActive: { borderColor: Colors.healthGreen, backgroundColor: `${Colors.healthGreen}15` },
-  cuisineFlag: { fontSize: 20 },
-  cuisineText: { ...Typography.caption, color: Colors.warmCharcoal },
-  cuisineTextActive: { color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
-  recipeList: { flex: 1 },
-  grid: { paddingTop: Spacing.md },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { ...Typography.body, color: Colors.light.textSecondary },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
+    title: { ...Typography.heading1, color: colors.text },
+    searchContainer: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
+    filterRow: {
+      flexDirection: 'row',
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      gap: Spacing.sm,
+    },
+    pill: {
+      flex: 1,
+      paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.pill,
+      backgroundColor: colors.mintSurface,
+      alignItems: 'center',
+    },
+    pillActive: { backgroundColor: Colors.healthGreen },
+    pillText: { ...Typography.body, color: colors.text },
+    pillTextActive: { color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    cuisineSection: { marginBottom: Spacing.sm },
+    cuisineLabel: { ...Typography.overline, color: colors.textSecondary, paddingHorizontal: Spacing.md, marginBottom: Spacing.xs },
+    cuisineStrip: { paddingHorizontal: Spacing.md, gap: Spacing.sm },
+    cuisineBtn: {
+      alignItems: 'center', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.md, backgroundColor: colors.surface, minWidth: 60,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    cuisineBtnActive: { borderColor: Colors.healthGreen, backgroundColor: `${Colors.healthGreen}15` },
+    cuisineFlag: { fontSize: 20 },
+    cuisineText: { ...Typography.caption, color: colors.text },
+    cuisineTextActive: { color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
+    recipeList: { flex: 1 },
+    grid: { paddingTop: Spacing.md },
+    loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    loadingText: { ...Typography.body, color: colors.textSecondary },
+  })
+}

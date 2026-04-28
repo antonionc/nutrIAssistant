@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { Colors, Typography } from '../../theme'
+import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 
 interface ProgressRingProps {
   value: number
@@ -24,12 +25,16 @@ export function ProgressRing({
   size = 80,
   strokeWidth = 8,
   color = Colors.healthGreen,
-  trackColor = Colors.softMint,
+  trackColor,
   label,
   sublabel,
   showPercent = false,
   animate = true,
 }: ProgressRingProps) {
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+  const resolvedTrackColor = trackColor ?? colors.mintSurface
+
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const progress = Math.min(1, max > 0 ? value / max : 0)
@@ -65,7 +70,7 @@ export function ProgressRing({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={trackColor}
+          stroke={resolvedTrackColor}
           strokeWidth={strokeWidth}
           fill="none"
         />
@@ -96,25 +101,24 @@ export function ProgressRing({
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  textContainer: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    fontFamily: Typography.heading2.fontFamily,
-    color: Colors.warmCharcoal,
-    textAlign: 'center',
-  },
-  sublabel: {
-    ...Typography.caption,
-    color: Colors.warmCharcoal,
-    opacity: 0.6,
-    textAlign: 'center',
-  },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { alignItems: 'center', justifyContent: 'center' },
+    textContainer: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    label: {
+      fontFamily: Typography.heading2.fontFamily,
+      color: colors.text,
+      textAlign: 'center',
+    },
+    sublabel: {
+      ...Typography.caption,
+      color: colors.text,
+      opacity: 0.6,
+      textAlign: 'center',
+    },
+  })
+}

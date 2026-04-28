@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Alert,
   Image,
@@ -19,7 +19,7 @@ import { getAge } from '../src/utils/ageUtils'
 import { DateOfBirthInput } from '../src/components/inputs/DateOfBirthInput'
 import { useTranslation } from '../src/i18n'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../src/theme'
-import { useTheme, ThemePreference } from '../src/theme/ThemeContext'
+import { useTheme, ThemePreference, ThemeColors } from '../src/theme/ThemeContext'
 import { FamilyMember, AllergenType, DietPreference } from '../src/types/profiles'
 import { EU_14_ALLERGENS, ALLERGEN_DISPLAY_NAMES } from '../src/seed/allergen-rules'
 import {
@@ -61,7 +61,8 @@ const CONDITIONS_LABELS: Record<string, string> = {
 export default function SettingsScreen() {
   const tr = useTranslation()
   const { profiles, familyName, addProfile, updateProfile, deleteProfile, setFamilyName, importFamily } = useProfiles()
-  const { preference: themePreference, setPreference: setThemePreference } = useTheme()
+  const { preference: themePreference, setPreference: setThemePreference, colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
   const [llmStatus, setLlmStatus] = useState<OnDeviceLLMStatus>({ isDownloaded: false, isDownloading: false, isLoaded: false, downloadProgress: 0 })
   const [preferOnDevice, setPreferOnDeviceState] = useState(true)
@@ -200,7 +201,7 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
         {/* ── Apariencia ──────────────────────── */}
-        <SectionHeader title="Apariencia" />
+        <SectionHeader title="Apariencia" colors={colors} />
         <View style={styles.card}>
           <Text style={styles.label}>Modo de color</Text>
           <View style={styles.themeRow}>
@@ -278,14 +279,14 @@ export default function SettingsScreen() {
         </View>
 
         {/* ── Motor de IA ─────────────────────── */}
-        <SectionHeader title="Motor de IA" />
+        <SectionHeader title="Motor de IA" colors={colors} />
         <View style={styles.card}>
           <View style={styles.row}>
             <Text style={styles.label}>Preferir IA local</Text>
             <Switch
               value={preferOnDevice}
               onValueChange={togglePreferOnDevice}
-              trackColor={{ true: Colors.healthGreen, false: Colors.light.border }}
+              trackColor={{ true: Colors.healthGreen, false: colors.border }}
               thumbColor={Colors.white}
             />
           </View>
@@ -323,7 +324,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* ── Base de datos de recetas ────────── */}
-        <SectionHeader title="Base de datos de recetas" />
+        <SectionHeader title="Base de datos de recetas" colors={colors} />
         <View style={styles.card}>
           <View style={styles.row}>
             <Text style={styles.label}>Recetas en local</Text>
@@ -346,14 +347,14 @@ export default function SettingsScreen() {
         </View>
 
         {/* ── Integraciones de salud ──────────── */}
-        <SectionHeader title="Integraciones de salud" />
+        <SectionHeader title="Integraciones de salud" colors={colors} />
         <View style={styles.card}>
           <Text style={styles.comingSoon}>🏃 Apple Health & Google Fit — próximamente</Text>
           <Text style={styles.comingSoon}>⌚ Garmin Connect — próximamente</Text>
         </View>
 
         {/* ── Supermercados ───────────────────── */}
-        <SectionHeader title="Supermercados" />
+        <SectionHeader title="Supermercados" colors={colors} />
         <View style={styles.card}>
           {([
             { name: 'Amazon',    image: require('../assets/retailers/amazon.png'),    active: true },
@@ -376,7 +377,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* ── Copia de seguridad ─────────────── */}
-        <SectionHeader title="Copia de seguridad familiar" />
+        <SectionHeader title="Copia de seguridad familiar" colors={colors} />
         <View style={styles.card}>
           <Text style={styles.hint}>Exporta los perfiles de tu familia a un archivo Markdown. Guárdalo en iCloud, Google Drive o email para restaurarlos si cambias de dispositivo.</Text>
           <View style={styles.divider} />
@@ -405,14 +406,14 @@ export default function SettingsScreen() {
         </View>
 
         {/* ── Datos y privacidad ──────────────── */}
-        <SectionHeader title="Datos y privacidad" />
+        <SectionHeader title="Datos y privacidad" colors={colors} />
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>Compartir datos anónimos</Text>
               <Text style={styles.hint}>Ayuda a mejorar NutrIAssistant</Text>
             </View>
-            <Switch value={false} trackColor={{ true: Colors.healthGreen, false: Colors.light.border }} />
+            <Switch value={false} trackColor={{ true: Colors.healthGreen, false: colors.border }} />
           </View>
           <View style={styles.divider} />
           <TouchableOpacity style={styles.dangerBtn} onPress={() =>
@@ -426,11 +427,11 @@ export default function SettingsScreen() {
         </View>
 
         {/* ── Contacto ────────────────────────── */}
-        <SectionHeader title="Contacto" />
+        <SectionHeader title="Contacto" colors={colors} />
         <View style={styles.card}>
-          <ContactRow label="📧 Email" value="hola@nutriassistant.ai" onPress={() => Linking.openURL('mailto:hola@nutriassistant.ai')} />
-          <ContactRow label="📸 Instagram" value="@nutriassistant.ai" onPress={() => Linking.openURL('https://instagram.com/nutriassistant.ai')} />
-          <ContactRow label="🌐 Web" value="nutriassistant.ai" onPress={() => Linking.openURL('https://www.nutriassistant.ai')} />
+          <ContactRow label="📧 Email" value="hola@nutriassistant.ai" onPress={() => Linking.openURL('mailto:hola@nutriassistant.ai')} colors={colors} />
+          <ContactRow label="📸 Instagram" value="@nutriassistant.ai" onPress={() => Linking.openURL('https://instagram.com/nutriassistant.ai')} colors={colors} />
+          <ContactRow label="🌐 Web" value="nutriassistant.ai" onPress={() => Linking.openURL('https://www.nutriassistant.ai')} colors={colors} />
           <View style={styles.divider} />
           <Text style={styles.version}>Versión {appVersion}</Text>
         </View>
@@ -441,11 +442,13 @@ export default function SettingsScreen() {
   )
 }
 
-function SectionHeader({ title }: { title: string }) {
+function SectionHeader({ title, colors }: { title: string; colors: ThemeColors }) {
+  const styles = useMemo(() => makeStyles(colors), [colors])
   return <Text style={styles.sectionHeader}>{title}</Text>
 }
 
-function ContactRow({ label, value, onPress }: { label: string; value: string; onPress: () => void }) {
+function ContactRow({ label, value, onPress, colors }: { label: string; value: string; onPress: () => void; colors: ThemeColors }) {
+  const styles = useMemo(() => makeStyles(colors), [colors])
   return (
     <TouchableOpacity style={styles.row} onPress={onPress}>
       <Text style={styles.label}>{label}</Text>
@@ -469,6 +472,8 @@ function MemberProfileRow({
 }) {
   const tr = useTranslation()
   const { updateProfile } = useProfiles()
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
   const [avatarError, setAvatarError] = useState(false)
   useEffect(() => { setAvatarError(false) }, [member.avatarUrl])
 
@@ -509,20 +514,20 @@ function MemberProfileRow({
 
       {isExpanded && (
         <View style={styles.memberForm}>
-          <FormRow label="Nombre">
+          <FormRow label="Nombre" colors={colors}>
             <TextInput
               style={styles.formInput}
               value={member.name}
               onChangeText={(v) => onUpdate({ name: v })}
             />
           </FormRow>
-          <FormRow label="Fecha de nacimiento">
+          <FormRow label="Fecha de nacimiento" colors={colors}>
             <DateOfBirthInput
               value={member.dateOfBirth ?? ''}
               onChange={(iso) => onUpdate({ dateOfBirth: iso })}
             />
           </FormRow>
-          <FormRow label="Peso (kg)">
+          <FormRow label="Peso (kg)" colors={colors}>
             <TextInput
               style={styles.formInput}
               value={String(member.weight)}
@@ -530,7 +535,7 @@ function MemberProfileRow({
               keyboardType="numeric"
             />
           </FormRow>
-          <FormRow label="Altura (cm)">
+          <FormRow label="Altura (cm)" colors={colors}>
             <TextInput
               style={styles.formInput}
               value={String(member.height)}
@@ -590,7 +595,7 @@ function MemberProfileRow({
             <Switch
               value={member.isSchoolAge}
               onValueChange={(v) => onUpdate({ isSchoolAge: v })}
-              trackColor={{ true: Colors.healthGreen, false: Colors.light.border }}
+              trackColor={{ true: Colors.healthGreen, false: colors.border }}
             />
           </View>
 
@@ -604,7 +609,8 @@ function MemberProfileRow({
   )
 }
 
-function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FormRow({ label, children, colors }: { label: string; children: React.ReactNode; colors: ThemeColors }) {
+  const styles = useMemo(() => makeStyles(colors), [colors])
   return (
     <View style={styles.formRow}>
       <Text style={styles.formRowLabel}>{label}</Text>
@@ -613,96 +619,96 @@ function FormRow({ label, children }: { label: string; children: React.ReactNode
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.cream },
-  scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
-  sectionHeader: {
-    ...Typography.overline, color: Colors.light.textSecondary,
-    marginTop: Spacing.md, marginBottom: Spacing.xs, paddingLeft: Spacing.xs,
-  },
-  card: {
-    backgroundColor: Colors.white, borderRadius: BorderRadius.lg,
-    padding: Spacing.md, ...Shadows.card, marginBottom: Spacing.sm,
-  },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Spacing.xs },
-  label: { ...Typography.bodyLarge, color: Colors.warmCharcoal, fontFamily: Typography.heading3.fontFamily },
-  value: { ...Typography.body, color: Colors.light.textSecondary },
-  hint: { ...Typography.caption, color: Colors.light.textMuted, marginTop: 2 },
-  divider: { height: 1, backgroundColor: Colors.light.divider, marginVertical: Spacing.sm },
-  // Theme picker
-  themeRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
-  themeBtn: {
-    flex: 1, alignItems: 'center', paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.md, borderWidth: 1.5, borderColor: Colors.light.border,
-    backgroundColor: Colors.cream, gap: 4,
-  },
-  themeBtnActive: { borderColor: Colors.healthGreen, backgroundColor: `${Colors.healthGreen}12` },
-  themeEmoji: { fontSize: 22 },
-  themeLabel: { ...Typography.caption, color: Colors.light.textSecondary },
-  themeLabelActive: { color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },
-  familyHeading: { ...Typography.heading3, color: Colors.warmCharcoal },
-  // Members
-  addMemberBtn: { alignItems: 'center', paddingVertical: Spacing.sm },
-  addMemberText: { ...Typography.bodyLarge, color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },
-  primaryBtn: {
-    backgroundColor: Colors.healthGreen, borderRadius: BorderRadius.pill,
-    padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.sm,
-  },
-  primaryBtnText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  dangerBtn: {
-    backgroundColor: `${Colors.errorRed}15`, borderRadius: BorderRadius.pill,
-    padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.sm,
-    borderWidth: 1, borderColor: `${Colors.errorRed}40`,
-  },
-  dangerBtnText: { ...Typography.bodyLarge, color: Colors.errorRed },
-  linkBtn: { padding: Spacing.sm, alignItems: 'flex-start' },
-  linkBtnText: { ...Typography.bodyLarge, color: Colors.infoBlue },
-  progressContainer: { marginTop: Spacing.sm, gap: Spacing.xs },
-  progressTrack: { height: 6, backgroundColor: Colors.softMint, borderRadius: 3 },
-  progressBar: { height: 6, backgroundColor: Colors.healthGreen, borderRadius: 3 },
-  progressText: { ...Typography.caption, color: Colors.light.textSecondary },
-  comingSoon: { ...Typography.body, color: Colors.light.textMuted, paddingVertical: Spacing.xs },
-  retailerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs },
-  retailerImage: { width: 36, height: 36, borderRadius: 6 },
-  retailerName: { ...Typography.bodyLarge, color: Colors.warmCharcoal, flex: 1 },
-  connectedBadge: { backgroundColor: `${Colors.healthGreen}20`, paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.pill },
-  connectedText: { ...Typography.caption, color: Colors.healthGreen },
-  comingSoonBadge: { backgroundColor: `${Colors.goldenAmber}20`, paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.pill },
-  comingSoonText: { ...Typography.caption, color: Colors.goldenAmber },
-  version: { ...Typography.caption, color: Colors.light.textMuted, textAlign: 'center', marginTop: Spacing.sm },
-  memberSection: {},
-  memberHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm },
-  memberAvatarBtn: { position: 'relative' },
-  memberAvatarImage: { width: 44, height: 44, borderRadius: 22 },
-  memberAvatarEdit: { position: 'absolute', bottom: -2, right: -2, fontSize: 10 },
-  memberEmoji: { fontSize: 28 },
-  memberName: { ...Typography.bodyLarge, color: Colors.warmCharcoal, fontFamily: Typography.heading3.fontFamily },
-  memberMeta: { ...Typography.caption, color: Colors.light.textSecondary },
-  expandIcon: { fontSize: 12, color: Colors.light.textMuted },
-  memberForm: { gap: Spacing.sm, paddingBottom: Spacing.sm },
-  formRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm },
-  formRowLabel: { ...Typography.body, color: Colors.warmCharcoal, width: 100 },
-  formInput: {
-    flex: 1, backgroundColor: Colors.cream, borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
-    ...Typography.body, color: Colors.warmCharcoal,
-    borderWidth: 1, borderColor: Colors.light.border,
-  },
-  formLabel: { ...Typography.body, color: Colors.warmCharcoal, fontFamily: Typography.heading3.fontFamily, marginTop: Spacing.sm },
-  tagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginTop: Spacing.xs },
-  tag: {
-    paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.pill,
-    backgroundColor: Colors.softMint, borderWidth: 1, borderColor: 'transparent',
-  },
-  tagActive: { backgroundColor: `${Colors.errorRed}20`, borderColor: Colors.errorRed },
-  tagAmber: { backgroundColor: `${Colors.goldenAmber}20`, borderColor: Colors.goldenAmber },
-  tagText: { ...Typography.caption, color: Colors.warmCharcoal },
-  tagTextActive: { color: Colors.errorRed },
-  tagTextAmber: { color: Colors.goldenAmber },
-  inlineEdit: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  inlineInput: {
-    ...Typography.body, color: Colors.warmCharcoal,
-    borderBottomWidth: 1, borderColor: Colors.healthGreen, minWidth: 100,
-  },
-  saveText: { ...Typography.body, color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+    sectionHeader: {
+      ...Typography.overline, color: colors.textSecondary,
+      marginTop: Spacing.md, marginBottom: Spacing.xs, paddingLeft: Spacing.xs,
+    },
+    card: {
+      backgroundColor: colors.surface, borderRadius: BorderRadius.lg,
+      padding: Spacing.md, ...Shadows.card, marginBottom: Spacing.sm,
+    },
+    row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Spacing.xs },
+    label: { ...Typography.bodyLarge, color: colors.text, fontFamily: Typography.heading3.fontFamily },
+    value: { ...Typography.body, color: colors.textSecondary },
+    hint: { ...Typography.caption, color: colors.textMuted, marginTop: 2 },
+    divider: { height: 1, backgroundColor: colors.divider, marginVertical: Spacing.sm },
+    themeRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
+    themeBtn: {
+      flex: 1, alignItems: 'center', paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.md, borderWidth: 1.5, borderColor: colors.border,
+      backgroundColor: colors.background, gap: 4,
+    },
+    themeBtnActive: { borderColor: Colors.healthGreen, backgroundColor: `${Colors.healthGreen}12` },
+    themeEmoji: { fontSize: 22 },
+    themeLabel: { ...Typography.caption, color: colors.textSecondary },
+    themeLabelActive: { color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },
+    familyHeading: { ...Typography.heading3, color: colors.text },
+    addMemberBtn: { alignItems: 'center', paddingVertical: Spacing.sm },
+    addMemberText: { ...Typography.bodyLarge, color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },
+    primaryBtn: {
+      backgroundColor: Colors.healthGreen, borderRadius: BorderRadius.pill,
+      padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.sm,
+    },
+    primaryBtnText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    dangerBtn: {
+      backgroundColor: `${Colors.errorRed}15`, borderRadius: BorderRadius.pill,
+      padding: Spacing.sm, alignItems: 'center', marginTop: Spacing.sm,
+      borderWidth: 1, borderColor: `${Colors.errorRed}40`,
+    },
+    dangerBtnText: { ...Typography.bodyLarge, color: Colors.errorRed },
+    linkBtn: { padding: Spacing.sm, alignItems: 'flex-start' },
+    linkBtnText: { ...Typography.bodyLarge, color: Colors.infoBlue },
+    progressContainer: { marginTop: Spacing.sm, gap: Spacing.xs },
+    progressTrack: { height: 6, backgroundColor: colors.mintSurface, borderRadius: 3 },
+    progressBar: { height: 6, backgroundColor: Colors.healthGreen, borderRadius: 3 },
+    progressText: { ...Typography.caption, color: colors.textSecondary },
+    comingSoon: { ...Typography.body, color: colors.textMuted, paddingVertical: Spacing.xs },
+    retailerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs },
+    retailerImage: { width: 36, height: 36, borderRadius: 6 },
+    retailerName: { ...Typography.bodyLarge, color: colors.text, flex: 1 },
+    connectedBadge: { backgroundColor: `${Colors.healthGreen}20`, paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.pill },
+    connectedText: { ...Typography.caption, color: Colors.healthGreen },
+    comingSoonBadge: { backgroundColor: `${Colors.goldenAmber}20`, paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.pill },
+    comingSoonText: { ...Typography.caption, color: Colors.goldenAmber },
+    version: { ...Typography.caption, color: colors.textMuted, textAlign: 'center', marginTop: Spacing.sm },
+    memberSection: {},
+    memberHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.sm },
+    memberAvatarBtn: { position: 'relative' },
+    memberAvatarImage: { width: 44, height: 44, borderRadius: 22 },
+    memberAvatarEdit: { position: 'absolute', bottom: -2, right: -2, fontSize: 10 },
+    memberEmoji: { fontSize: 28 },
+    memberName: { ...Typography.bodyLarge, color: colors.text, fontFamily: Typography.heading3.fontFamily },
+    memberMeta: { ...Typography.caption, color: colors.textSecondary },
+    expandIcon: { fontSize: 12, color: colors.textMuted },
+    memberForm: { gap: Spacing.sm, paddingBottom: Spacing.sm },
+    formRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.sm },
+    formRowLabel: { ...Typography.body, color: colors.text, width: 100 },
+    formInput: {
+      flex: 1, backgroundColor: colors.background, borderRadius: BorderRadius.sm,
+      paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+      ...Typography.body, color: colors.text,
+      borderWidth: 1, borderColor: colors.border,
+    },
+    formLabel: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily, marginTop: Spacing.sm },
+    tagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginTop: Spacing.xs },
+    tag: {
+      paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.pill,
+      backgroundColor: colors.mintSurface, borderWidth: 1, borderColor: 'transparent',
+    },
+    tagActive: { backgroundColor: `${Colors.errorRed}20`, borderColor: Colors.errorRed },
+    tagAmber: { backgroundColor: `${Colors.goldenAmber}20`, borderColor: Colors.goldenAmber },
+    tagText: { ...Typography.caption, color: colors.text },
+    tagTextActive: { color: Colors.errorRed },
+    tagTextAmber: { color: Colors.goldenAmber },
+    inlineEdit: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    inlineInput: {
+      ...Typography.body, color: colors.text,
+      borderBottomWidth: 1, borderColor: Colors.healthGreen, minWidth: 100,
+    },
+    saveText: { ...Typography.body, color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },
+  })
+}

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, useMemo } from 'react'
 import {
   Alert,
   Animated,
@@ -19,6 +19,7 @@ import { useProfiles } from '../src/modules/profiles/ProfilesContext'
 import { importFamilyFromFile } from '../src/services/familyExport'
 import { FamilyMember, AllergenType, DietPreference, MemberRole } from '../src/types/profiles'
 import { Colors, Typography, Spacing, BorderRadius } from '../src/theme'
+import { useTheme, ThemeColors } from '../src/theme/ThemeContext'
 import { EU_14_ALLERGENS } from '../src/seed/allergen-rules'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -113,6 +114,8 @@ function blankDraft(): MemberDraft {
 
 export default function OnboardingScreen() {
   const { completeOnboarding, importFamily } = useProfiles()
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
 
   const [step, setStep]               = useState<Step>({ kind: 'welcome' })
   const [familyName, setFamilyName]   = useState('')
@@ -240,7 +243,7 @@ export default function OnboardingScreen() {
           value={familyName}
           onChangeText={setFamilyName}
           placeholder="Ej: García, Los Pérez…"
-          placeholderTextColor={Colors.light.textMuted}
+          placeholderTextColor={colors.textMuted}
           autoFocus
           returnKeyType="done"
           onSubmitEditing={() => familyName.trim() && goTo({ kind: 'memberCount' })}
@@ -315,7 +318,7 @@ export default function OnboardingScreen() {
           value={draft.name}
           onChangeText={(v) => updateDraft(index, { name: v })}
           placeholder="Nombre"
-          placeholderTextColor={Colors.light.textMuted}
+          placeholderTextColor={colors.textMuted}
           autoFocus
         />
 
@@ -411,7 +414,7 @@ export default function OnboardingScreen() {
               value={draft.weight > 0 ? String(draft.weight) : ''}
               onChangeText={(v) => updateDraft(index, { weight: parseFloat(v) || 0 })}
               placeholder="kg"
-              placeholderTextColor={Colors.light.textMuted}
+              placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
           </View>
@@ -422,7 +425,7 @@ export default function OnboardingScreen() {
               value={draft.height > 0 ? String(draft.height) : ''}
               onChangeText={(v) => updateDraft(index, { height: parseFloat(v) || 0 })}
               placeholder="cm"
-              placeholderTextColor={Colors.light.textMuted}
+              placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
           </View>
@@ -630,316 +633,318 @@ export default function OnboardingScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.cream,
-  },
-  flex: { flex: 1 },
-  progressTrack: {
-    height: 4,
-    backgroundColor: `${Colors.healthGreen}25`,
-    borderRadius: 2,
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.xs,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: Colors.healthGreen,
-    borderRadius: 2,
-  },
-  backBtn: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-  },
-  backBtnText: {
-    ...Typography.body,
-    color: Colors.light.textSecondary,
-  },
-  scrollStep: {
-    flex: 1,
-  },
-  stepContainer: {
-    flex: 1,
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xl,
-    gap: Spacing.md,
-  },
-  centerContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bigEmoji: {
-    fontSize: 72,
-    textAlign: 'center',
-    marginBottom: Spacing.sm,
-  },
-  welcomeTitle: {
-    ...Typography.display,
-    color: Colors.healthGreen,
-    textAlign: 'center',
-  },
-  welcomeSubtitle: {
-    ...Typography.heading3,
-    color: Colors.warmCharcoal,
-    textAlign: 'center',
-    opacity: 0.7,
-  },
-  welcomeBody: {
-    ...Typography.bodyLarge,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  stepEmoji: {
-    fontSize: 48,
-    textAlign: 'center',
-  },
-  stepTitle: {
-    ...Typography.heading2,
-    color: Colors.warmCharcoal,
-    textAlign: 'center',
-  },
-  stepBody: {
-    ...Typography.bodyLarge,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  memberIndexLabel: {
-    ...Typography.caption,
-    color: Colors.healthGreen,
-    textAlign: 'center',
-    fontFamily: Typography.heading3.fontFamily,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  mainInput: {
-    ...Typography.heading3,
-    color: Colors.warmCharcoal,
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderWidth: 1.5,
-    borderColor: Colors.light.border,
-    textAlign: 'center',
-  },
-  fieldLabel: {
-    ...Typography.body,
-    color: Colors.warmCharcoal,
-    fontFamily: Typography.heading3.fontFamily,
-    marginTop: Spacing.xs,
-  },
-  fieldHint: {
-    ...Typography.caption,
-    color: Colors.light.textMuted,
-    marginTop: -Spacing.xs,
-  },
-  // Stepper
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xl,
-    marginVertical: Spacing.sm,
-  },
-  stepperBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.healthGreen,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperBtnText: {
-    fontSize: 28,
-    color: Colors.white,
-    lineHeight: 32,
-  },
-  stepperValue: {
-    ...Typography.display,
-    color: Colors.warmCharcoal,
-    minWidth: 48,
-    textAlign: 'center',
-  },
-  // Pills
-  pillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-  },
-  pill: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.pill,
-    backgroundColor: Colors.softMint,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-  },
-  pillActive: {
-    backgroundColor: Colors.healthGreen,
-    borderColor: Colors.healthGreen,
-  },
-  pillText: {
-    ...Typography.caption,
-    color: Colors.warmCharcoal,
-    fontFamily: Typography.body.fontFamily,
-  },
-  pillTextActive: {
-    color: Colors.white,
-    fontFamily: Typography.heading3.fontFamily,
-  },
-  // Emoji grid
-  emojiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  emojiBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.softMint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  emojiBtnActive: {
-    borderColor: Colors.healthGreen,
-    backgroundColor: `${Colors.healthGreen}18`,
-  },
-  emojiChar: {
-    fontSize: 26,
-  },
-  // Three-column row for age/weight/height
-  dobRow: {
-    gap: 6,
-    marginBottom: Spacing.sm,
-  },
-  triRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  triField: {
-    flex: 1,
-    gap: 4,
-  },
-  triInput: {
-    ...Typography.bodyLarge,
-    color: Colors.warmCharcoal,
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    borderWidth: 1.5,
-    borderColor: Colors.light.border,
-    textAlign: 'center',
-  },
-  // Tag grid
-  tagGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-  },
-  tag: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 5,
-    borderRadius: BorderRadius.pill,
-    backgroundColor: Colors.softMint,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  tagAllergenActive: {
-    backgroundColor: `${Colors.errorRed}18`,
-    borderColor: Colors.errorRed,
-  },
-  tagConditionActive: {
-    backgroundColor: `${Colors.goldenAmber}18`,
-    borderColor: Colors.goldenAmber,
-  },
-  tagText: {
-    ...Typography.caption,
-    color: Colors.warmCharcoal,
-  },
-  tagAllergenText: {
-    color: Colors.errorRed,
-    fontFamily: Typography.heading3.fontFamily,
-  },
-  tagConditionText: {
-    color: Colors.goldenAmber,
-    fontFamily: Typography.heading3.fontFamily,
-  },
-  // Member done
-  doneEmoji: {
-    fontSize: 88,
-    marginBottom: Spacing.md,
-  },
-  doneTitle: {
-    ...Typography.heading1,
-    color: Colors.warmCharcoal,
-    textAlign: 'center',
-  },
-  doneSubtitle: {
-    ...Typography.bodyLarge,
-    color: Colors.light.textSecondary,
-    textAlign: 'center',
-  },
-  // All done summary
-  membersSummary: {
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.md,
-    gap: Spacing.xs,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingVertical: 2,
-  },
-  summaryEmoji: {
-    fontSize: 22,
-    width: 32,
-    textAlign: 'center',
-  },
-  summaryName: {
-    ...Typography.bodyLarge,
-    color: Colors.warmCharcoal,
-    fontFamily: Typography.heading3.fontFamily,
-    flex: 1,
-  },
-  summaryMeta: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
-  },
-  // Buttons
-  primaryBtn: {
-    backgroundColor: Colors.healthGreen,
-    borderRadius: BorderRadius.pill,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    alignItems: 'center',
-    marginTop: Spacing.sm,
-  },
-  primaryBtnDisabled: {
-    backgroundColor: `${Colors.healthGreen}55`,
-  },
-  primaryBtnText: {
-    ...Typography.bodyLarge,
-    color: Colors.white,
-    fontFamily: Typography.heading3.fontFamily,
-  },
-  linkBtn: {
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-  },
-  linkBtnText: {
-    ...Typography.body,
-    color: Colors.infoBlue,
-    textDecorationLine: 'underline',
-  },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    flex: { flex: 1 },
+    progressTrack: {
+      height: 4,
+      backgroundColor: `${Colors.healthGreen}25`,
+      borderRadius: 2,
+      marginHorizontal: Spacing.lg,
+      marginTop: Spacing.xs,
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      backgroundColor: Colors.healthGreen,
+      borderRadius: 2,
+    },
+    backBtn: {
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm,
+    },
+    backBtnText: {
+      ...Typography.body,
+      color: colors.textSecondary,
+    },
+    scrollStep: {
+      flex: 1,
+    },
+    stepContainer: {
+      flex: 1,
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.xl,
+      gap: Spacing.md,
+    },
+    centerContent: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bigEmoji: {
+      fontSize: 72,
+      textAlign: 'center',
+      marginBottom: Spacing.sm,
+    },
+    welcomeTitle: {
+      ...Typography.display,
+      color: Colors.healthGreen,
+      textAlign: 'center',
+    },
+    welcomeSubtitle: {
+      ...Typography.heading3,
+      color: colors.text,
+      textAlign: 'center',
+      opacity: 0.7,
+    },
+    welcomeBody: {
+      ...Typography.bodyLarge,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 24,
+    },
+    stepEmoji: {
+      fontSize: 48,
+      textAlign: 'center',
+    },
+    stepTitle: {
+      ...Typography.heading2,
+      color: colors.text,
+      textAlign: 'center',
+    },
+    stepBody: {
+      ...Typography.bodyLarge,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 24,
+    },
+    memberIndexLabel: {
+      ...Typography.caption,
+      color: Colors.healthGreen,
+      textAlign: 'center',
+      fontFamily: Typography.heading3.fontFamily,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+    },
+    mainInput: {
+      ...Typography.heading3,
+      color: colors.text,
+      backgroundColor: colors.surface,
+      borderRadius: BorderRadius.md,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      textAlign: 'center',
+    },
+    fieldLabel: {
+      ...Typography.body,
+      color: colors.text,
+      fontFamily: Typography.heading3.fontFamily,
+      marginTop: Spacing.xs,
+    },
+    fieldHint: {
+      ...Typography.caption,
+      color: colors.textMuted,
+      marginTop: -Spacing.xs,
+    },
+    // Stepper
+    stepper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Spacing.xl,
+      marginVertical: Spacing.sm,
+    },
+    stepperBtn: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: Colors.healthGreen,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepperBtnText: {
+      fontSize: 28,
+      color: Colors.white,
+      lineHeight: 32,
+    },
+    stepperValue: {
+      ...Typography.display,
+      color: colors.text,
+      minWidth: 48,
+      textAlign: 'center',
+    },
+    // Pills
+    pillRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.xs,
+    },
+    pill: {
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.pill,
+      backgroundColor: colors.mintSurface,
+      borderWidth: 1.5,
+      borderColor: 'transparent',
+    },
+    pillActive: {
+      backgroundColor: Colors.healthGreen,
+      borderColor: Colors.healthGreen,
+    },
+    pillText: {
+      ...Typography.caption,
+      color: colors.text,
+      fontFamily: Typography.body.fontFamily,
+    },
+    pillTextActive: {
+      color: Colors.white,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    // Emoji grid
+    emojiGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+    },
+    emojiBtn: {
+      width: 52,
+      height: 52,
+      borderRadius: BorderRadius.md,
+      backgroundColor: colors.mintSurface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    emojiBtnActive: {
+      borderColor: Colors.healthGreen,
+      backgroundColor: `${Colors.healthGreen}18`,
+    },
+    emojiChar: {
+      fontSize: 26,
+    },
+    // Three-column row for age/weight/height
+    dobRow: {
+      gap: 6,
+      marginBottom: Spacing.sm,
+    },
+    triRow: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+    },
+    triField: {
+      flex: 1,
+      gap: 4,
+    },
+    triInput: {
+      ...Typography.bodyLarge,
+      color: colors.text,
+      backgroundColor: colors.surface,
+      borderRadius: BorderRadius.sm,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xs,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      textAlign: 'center',
+    },
+    // Tag grid
+    tagGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.xs,
+    },
+    tag: {
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 5,
+      borderRadius: BorderRadius.pill,
+      backgroundColor: colors.mintSurface,
+      borderWidth: 1,
+      borderColor: 'transparent',
+    },
+    tagAllergenActive: {
+      backgroundColor: `${Colors.errorRed}18`,
+      borderColor: Colors.errorRed,
+    },
+    tagConditionActive: {
+      backgroundColor: `${Colors.goldenAmber}18`,
+      borderColor: Colors.goldenAmber,
+    },
+    tagText: {
+      ...Typography.caption,
+      color: colors.text,
+    },
+    tagAllergenText: {
+      color: Colors.errorRed,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    tagConditionText: {
+      color: Colors.goldenAmber,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    // Member done
+    doneEmoji: {
+      fontSize: 88,
+      marginBottom: Spacing.md,
+    },
+    doneTitle: {
+      ...Typography.heading1,
+      color: colors.text,
+      textAlign: 'center',
+    },
+    doneSubtitle: {
+      ...Typography.bodyLarge,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    // All done summary
+    membersSummary: {
+      backgroundColor: colors.surface,
+      borderRadius: BorderRadius.lg,
+      padding: Spacing.md,
+      gap: Spacing.xs,
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingVertical: 2,
+    },
+    summaryEmoji: {
+      fontSize: 22,
+      width: 32,
+      textAlign: 'center',
+    },
+    summaryName: {
+      ...Typography.bodyLarge,
+      color: colors.text,
+      fontFamily: Typography.heading3.fontFamily,
+      flex: 1,
+    },
+    summaryMeta: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+    },
+    // Buttons
+    primaryBtn: {
+      backgroundColor: Colors.healthGreen,
+      borderRadius: BorderRadius.pill,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.xl,
+      alignItems: 'center',
+      marginTop: Spacing.sm,
+    },
+    primaryBtnDisabled: {
+      backgroundColor: `${Colors.healthGreen}55`,
+    },
+    primaryBtnText: {
+      ...Typography.bodyLarge,
+      color: Colors.white,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    linkBtn: {
+      alignItems: 'center',
+      paddingVertical: Spacing.sm,
+    },
+    linkBtnText: {
+      ...Typography.body,
+      color: Colors.infoBlue,
+      textDecorationLine: 'underline',
+    },
+  })
+}

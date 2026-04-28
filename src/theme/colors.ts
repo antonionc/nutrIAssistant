@@ -29,16 +29,16 @@ export const Colors = {
 
   // Semantic dark mode
   dark: {
-    background: '#2C2C2A',
-    surface: '#3A3A38',
-    cardBackground: '#3A3A38',
-    text: '#F1EFE8',
-    textSecondary: '#D1D5DB',
-    textMuted: '#9CA3AF',
-    border: '#4A4A48',
-    divider: '#4A4A48',
-    tabBar: 'rgba(44,44,42,0.95)',
-    tabBarInactive: '#6B7280',
+    background: '#141412',
+    surface: '#1E1E1C',
+    cardBackground: '#252523',
+    text: '#F0EDE6',
+    textSecondary: '#9E9A93',
+    textMuted: '#6B6760',
+    border: '#2A2A28',
+    divider: '#1E1E1C',
+    tabBar: 'rgba(20,20,18,0.97)',
+    tabBarInactive: '#6B6760',
     statusBar: '#1D9E75',
   },
 } as const

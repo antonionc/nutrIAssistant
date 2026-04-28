@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo } from 'react'
 import {
   StyleSheet,
   TextInput,
@@ -7,6 +7,7 @@ import {
   Text,
 } from 'react-native'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
+import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 
 interface SearchBarProps {
   value: string
@@ -21,6 +22,9 @@ export function SearchBar({
   placeholder = 'Search...',
   onClear,
 }: SearchBarProps) {
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
+
   return (
     <View style={styles.container}>
       <Text style={styles.icon}>🔍</Text>
@@ -29,7 +33,7 @@ export function SearchBar({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={Colors.light.textMuted}
+        placeholderTextColor={colors.textMuted}
         returnKeyType="search"
         autoCapitalize="none"
         autoCorrect={false}
@@ -43,31 +47,33 @@ export function SearchBar({
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.xl,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    ...Shadows.subtle,
-    gap: Spacing.sm,
-  },
-  icon: {
-    fontSize: 16,
-  },
-  input: {
-    flex: 1,
-    ...Typography.bodyLarge,
-    color: Colors.warmCharcoal,
-    padding: 0,
-  },
-  clearBtn: {
-    padding: Spacing.xs,
-  },
-  clearIcon: {
-    fontSize: 12,
-    color: Colors.light.textMuted,
-  },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: BorderRadius.xl,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      ...Shadows.subtle,
+      gap: Spacing.sm,
+    },
+    icon: {
+      fontSize: 16,
+    },
+    input: {
+      flex: 1,
+      ...Typography.bodyLarge,
+      color: colors.text,
+      padding: 0,
+    },
+    clearBtn: {
+      padding: Spacing.xs,
+    },
+    clearIcon: {
+      fontSize: 12,
+      color: colors.textMuted,
+    },
+  })
+}

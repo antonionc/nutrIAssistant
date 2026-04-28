@@ -24,7 +24,7 @@ import { isSynced, syncRecipes } from '../src/modules/recipes/syncRecipes'
 import { ensureModelAvailable } from '../src/services/onDeviceLlm'
 
 function AppShell() {
-  const { isDark } = useTheme()
+  const { isDark, colors } = useTheme()
 
   return (
     <ProfilesProvider>
@@ -39,7 +39,7 @@ function AppShell() {
           />
           <Stack.Screen
             name="settings"
-            options={{ title: 'Ajustes', headerBackTitle: 'Volver', headerStyle: { backgroundColor: isDark ? '#1a1a1a' : '#FAFAF5' }, headerTintColor: isDark ? '#FAFAF5' : '#2D2D2D' }}
+            options={{ title: 'Ajustes', headerBackTitle: 'Volver', headerStyle: { backgroundColor: colors.surface }, headerTintColor: colors.text }}
           />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen

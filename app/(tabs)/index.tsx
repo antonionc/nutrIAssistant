@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   Dimensions,
   FlatList,
@@ -19,6 +19,7 @@ import { useInventory } from '../../src/modules/inventory/useInventory'
 import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useRecipeDB } from '../../src/modules/recipes/useRecipeDB'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
+import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
 import { ProgressRing } from '../../src/components/charts/ProgressRing'
 import { MealCard } from '../../src/components/cards/MealCard'
 import { RecipeCard } from '../../src/components/cards/RecipeCard'
@@ -54,6 +55,8 @@ export default function HomeScreen() {
   const { expiryAlerts, getLowStockAlerts } = useInventory()
   const { weekPlans } = usePlanner()
   const { getRandom } = useRecipeDB()
+  const { colors } = useTheme()
+  const styles = useMemo(() => makeStyles(colors), [colors])
   const [featuredRecipes, setFeaturedRecipes] = useState<Recipe[]>([])
   const [activeMemberIndex, setActiveMemberIndex] = useState(0)
   const [activeMealIndex, setActiveMealIndex] = useState(0)
@@ -77,10 +80,10 @@ export default function HomeScreen() {
         {/* ── Cabecera de iconos ───────────────── */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.push('/scanner')} style={styles.iconBtn}>
-            <Ionicons name="camera-outline" size={24} color={Colors.warmCharcoal} style={styles.iconInactive} />
+            <Ionicons name="camera-outline" size={24} color={colors.text} style={styles.iconInactive} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push('/settings')} style={styles.iconBtn}>
-            <Ionicons name="settings-outline" size={24} color={Colors.warmCharcoal} style={styles.iconInactive} />
+            <Ionicons name="settings-outline" size={24} color={colors.text} style={styles.iconInactive} />
           </TouchableOpacity>
         </View>
 
@@ -255,6 +258,8 @@ function MemberCardWide({
   caloriesConsumed?: number
 }) {
   const tr = useTranslation()
+  const { colors } = useTheme()
+  const wide = useMemo(() => makeWideStyles(colors), [colors])
   const target = member.dailyCalorieTarget ?? 2000
 
   return (
@@ -302,130 +307,131 @@ function MemberCardWide({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.cream },
-  scroll: {},
-  header: {
-    flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center',
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm,
-  },
-  iconBtn: { padding: Spacing.xs },
-  iconInactive: { opacity: 0.55 },
-  section: { marginBottom: Spacing.lg },
-  sectionHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: Spacing.sm,
-  },
-  sectionTitle: {
-    ...Typography.heading3, color: Colors.warmCharcoal,
-    paddingLeft: Spacing.md, marginBottom: Spacing.sm,
-  },
-  seeAll: { ...Typography.body, color: Colors.healthGreen, paddingRight: Spacing.md },
-  // Pagination dots
-  dots: {
-    flexDirection: 'row', justifyContent: 'center',
-    gap: 6, marginTop: Spacing.sm,
-  },
-  dot: {
-    width: 7, height: 7, borderRadius: 4,
-    backgroundColor: `${Colors.healthGreen}40`,
-  },
-  dotActive: {
-    width: 20, backgroundColor: Colors.healthGreen,
-  },
-  emptyText: { ...Typography.body, color: Colors.light.textMuted, paddingHorizontal: Spacing.md },
-  noMealCard: {
-    marginHorizontal: Spacing.md, padding: Spacing.lg, backgroundColor: Colors.white,
-    borderRadius: BorderRadius.lg, alignItems: 'center', gap: Spacing.md, ...Shadows.card,
-  },
-  noMealText: { ...Typography.body, color: Colors.light.textSecondary },
-  ctaBtn: { backgroundColor: Colors.healthGreen, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, borderRadius: BorderRadius.pill },
-  ctaBtnText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  // Alerts
-  alertsCard: {
-    marginHorizontal: Spacing.md, backgroundColor: Colors.white,
-    borderRadius: BorderRadius.lg, padding: Spacing.md, gap: Spacing.sm, ...Shadows.card,
-  },
-  alertRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  alertDot: { width: 8, height: 8, borderRadius: 4 },
-  alertText: { ...Typography.body, color: Colors.warmCharcoal, flex: 1 },
-  alertCTA: {
-    backgroundColor: `${Colors.healthGreen}18`, paddingHorizontal: Spacing.sm,
-    paddingVertical: 4, borderRadius: BorderRadius.pill,
-  },
-  alertCTAText: { ...Typography.caption, color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
-  // News
-  newsCard: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
-    marginHorizontal: Spacing.md, backgroundColor: Colors.white,
-    borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm, ...Shadows.subtle,
-  },
-  newsEmoji: { fontSize: 28 },
-  newsContent: { flex: 1, gap: Spacing.xs },
-  newsHeadline: { ...Typography.body, color: Colors.warmCharcoal, fontFamily: Typography.heading3.fontFamily },
-  newsSource: { ...Typography.caption, color: Colors.light.textSecondary },
-})
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    scroll: {},
+    header: {
+      flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center',
+      paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm,
+    },
+    iconBtn: { padding: Spacing.xs },
+    iconInactive: { opacity: 0.55 },
+    section: { marginBottom: Spacing.lg },
+    sectionHeader: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      marginBottom: Spacing.sm,
+    },
+    sectionTitle: {
+      ...Typography.heading3, color: colors.text,
+      paddingLeft: Spacing.md, marginBottom: Spacing.sm,
+    },
+    seeAll: { ...Typography.body, color: Colors.healthGreen, paddingRight: Spacing.md },
+    dots: {
+      flexDirection: 'row', justifyContent: 'center',
+      gap: 6, marginTop: Spacing.sm,
+    },
+    dot: {
+      width: 7, height: 7, borderRadius: 4,
+      backgroundColor: `${Colors.healthGreen}40`,
+    },
+    dotActive: {
+      width: 20, backgroundColor: Colors.healthGreen,
+    },
+    emptyText: { ...Typography.body, color: colors.textMuted, paddingHorizontal: Spacing.md },
+    noMealCard: {
+      marginHorizontal: Spacing.md, padding: Spacing.lg, backgroundColor: colors.surface,
+      borderRadius: BorderRadius.lg, alignItems: 'center', gap: Spacing.md, ...Shadows.card,
+    },
+    noMealText: { ...Typography.body, color: colors.textSecondary },
+    ctaBtn: { backgroundColor: Colors.healthGreen, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, borderRadius: BorderRadius.pill },
+    ctaBtnText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+    alertsCard: {
+      marginHorizontal: Spacing.md, backgroundColor: colors.surface,
+      borderRadius: BorderRadius.lg, padding: Spacing.md, gap: Spacing.sm, ...Shadows.card,
+    },
+    alertRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    alertDot: { width: 8, height: 8, borderRadius: 4 },
+    alertText: { ...Typography.body, color: colors.text, flex: 1 },
+    alertCTA: {
+      backgroundColor: `${Colors.healthGreen}18`, paddingHorizontal: Spacing.sm,
+      paddingVertical: 4, borderRadius: BorderRadius.pill,
+    },
+    alertCTAText: { ...Typography.caption, color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
+    newsCard: {
+      flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
+      marginHorizontal: Spacing.md, backgroundColor: colors.surface,
+      borderRadius: BorderRadius.md, padding: Spacing.md, marginBottom: Spacing.sm, ...Shadows.subtle,
+    },
+    newsEmoji: { fontSize: 28 },
+    newsContent: { flex: 1, gap: Spacing.xs },
+    newsHeadline: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily },
+    newsSource: { ...Typography.caption, color: colors.textSecondary },
+  })
+}
 
-const wide = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.lg,
-    gap: Spacing.lg,
-    ...Shadows.card,
-  },
-  avatarWrap: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-  },
-  avatarEmoji: {
-    fontSize: 36,
-  },
-  info: {
-    flex: 1,
-    gap: 4,
-  },
-  name: {
-    ...Typography.heading2,
-    color: Colors.warmCharcoal,
-  },
-  meta: {
-    ...Typography.caption,
-    color: Colors.light.textSecondary,
-  },
-  calories: {
-    ...Typography.body,
-    color: Colors.warmCharcoal,
-    marginTop: 2,
-  },
-  badges: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-    marginTop: 4,
-  },
-  badge: {
-    backgroundColor: `${Colors.errorRed}18`,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.pill,
-  },
-  badgeText: {
-    ...Typography.caption,
-    color: Colors.errorRed,
-    fontFamily: Typography.heading3.fontFamily,
-  },
-})
+function makeWideStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    card: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      borderRadius: BorderRadius.xl,
+      padding: Spacing.lg,
+      gap: Spacing.lg,
+      ...Shadows.card,
+    },
+    avatarWrap: {
+      position: 'relative',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarImage: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+    },
+    avatarEmoji: {
+      fontSize: 36,
+    },
+    info: {
+      flex: 1,
+      gap: 4,
+    },
+    name: {
+      ...Typography.heading2,
+      color: colors.text,
+    },
+    meta: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+    },
+    calories: {
+      ...Typography.body,
+      color: colors.text,
+      marginTop: 2,
+    },
+    badges: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.xs,
+      marginTop: 4,
+    },
+    badge: {
+      backgroundColor: `${Colors.errorRed}18`,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 3,
+      borderRadius: BorderRadius.pill,
+    },
+    badgeText: {
+      ...Typography.caption,
+      color: Colors.errorRed,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+  })
+}
