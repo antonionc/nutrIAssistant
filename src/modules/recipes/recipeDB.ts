@@ -253,6 +253,22 @@ export async function updateRecipeFullDetail(
   )
 }
 
+export async function updateRecipeTranslation(
+  id: string,
+  update: { nameEs?: string; instructionsEs?: string[] }
+): Promise<void> {
+  const parts: string[] = []
+  const values: (string | null)[] = []
+  if (update.nameEs !== undefined)        { parts.push('name_es = ?');        values.push(update.nameEs) }
+  if (update.instructionsEs !== undefined){ parts.push('instructions_es = ?'); values.push(JSON.stringify(update.instructionsEs)) }
+  if (parts.length === 0) return
+  parts.push('updated_at = ?')
+  values.push(new Date().toISOString())
+  values.push(id)
+  const db = await getDatabase()
+  await db.runAsync(`UPDATE recipes SET ${parts.join(', ')} WHERE id = ?`, values)
+}
+
 export async function getRandomRecipes(
   limit = 6,
   category?: string

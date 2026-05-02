@@ -7,10 +7,13 @@ import React, {
   useState,
 } from 'react'
 import {
+  FlatList,
   Image,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   Animated,
@@ -20,14 +23,29 @@ import {
   PermissionsAndroid,
   Alert,
 } from 'react-native'
-import BottomSheet, { BottomSheetFlatList, BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet'
-import type { BottomSheetFlatListMethods } from '@gorhom/bottom-sheet'
 import * as Speech from 'expo-speech'
 import { VoiceQuality } from 'expo-speech'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
 import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 import { AIMessage } from '../../types/ai'
 import { useAIEngine } from '../../modules/ai-engine/AIContext'
+
+type BottomSheetFlatListMethods = { scrollToEnd: (opts?: { animated?: boolean }) => void }
+
+let BottomSheet: any = null
+let BottomSheetFlatList: any = FlatList
+let BottomSheetScrollView: any = ScrollView
+let BottomSheetTextInput: any = TextInput
+
+try {
+  const bs = require('@gorhom/bottom-sheet')
+  BottomSheet = bs.default
+  BottomSheetFlatList = bs.BottomSheetFlatList
+  BottomSheetScrollView = bs.BottomSheetScrollView
+  BottomSheetTextInput = bs.BottomSheetTextInput
+} catch {
+  console.log('[AIAssistant] @gorhom/bottom-sheet no disponible — rebuild con npx expo run:ios')
+}
 
 // Voice recognition — graceful fallback if native module not available
 let Voice: {
@@ -84,7 +102,7 @@ interface AIAssistantProps {
   onClose?: () => void
 }
 
-export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
+export const AIAssistant = forwardRef<any, AIAssistantProps>(
   function AIAssistant({ onClose }, ref) {
     const { messages, isResponding, sendMessage, clearHistory } = useAIEngine()
     const { colors, isDark } = useTheme()
@@ -332,6 +350,8 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
     }, [isSpeakerOn])
 
     // ── Render ────────────────────────────────────────────────────────────────
+    if (!BottomSheet) return null
+
     const renderMessage = ({ item }: { item: AIMessage }) => {
       const isUser = item.role === 'user'
       return (

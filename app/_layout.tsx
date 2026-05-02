@@ -7,7 +7,6 @@ import {
   useFonts,
 } from '@expo-google-fonts/poppins'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { BottomSheetModalProvider } from '@gorhom/bottom-sheet'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
@@ -103,9 +102,7 @@ export default function RootLayout() {
     <ThemeProvider>
       <GestureHandlerRootView style={styles.root}>
         <SafeAreaProvider>
-          <BottomSheetModalProvider>
-            <AppShell />
-          </BottomSheetModalProvider>
+          <AppShell />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </ThemeProvider>

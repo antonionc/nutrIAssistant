@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons'
-import BottomSheet from '@gorhom/bottom-sheet'
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import React, { useRef } from 'react'
 import {
@@ -29,7 +28,7 @@ const ICON_COLOR_ACTIVE  = Colors.white
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
   const { colors, isDark } = useTheme()
-  const assistantRef = useRef<BottomSheet>(null)
+  const assistantRef = useRef<any>(null)
 
   const openAssistant = () => assistantRef.current?.expand()
 

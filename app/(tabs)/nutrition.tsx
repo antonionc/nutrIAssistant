@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Animated,
   Alert,
   ScrollView,
   StyleSheet,
@@ -50,7 +51,7 @@ export default function NutritionScreen() {
   const dayOptions = getDayOptions()
   const todayStr = new Date().toISOString().split('T')[0]
   const [selectedDay, setSelectedDay] = useState(todayStr)
-  const [uploadingPDF, setUploadingPDF] = useState(false)
+  const [uploadPhase, setUploadPhase] = useState<'idle' | 'analyzing' | 'generating'>('idle')
 
   const selectedPlan = weekPlans.find((p) => p.date === selectedDay)
 
@@ -73,7 +74,7 @@ export default function NutritionScreen() {
     if (result.canceled || !result.assets?.[0]) return
 
     const file = result.assets[0]
-    setUploadingPDF(true)
+    setUploadPhase('analyzing')
     try {
       const base64 = await FileSystem.readAsStringAsync(file.uri, {
         encoding: 'base64',
@@ -83,12 +84,13 @@ export default function NutritionScreen() {
         await uploadSchoolMenu(base64, member.id)
       }
 
-      Alert.alert('¡Menú escolar subido!', 'La IA ha extraído el menú. Tu plan de comidas se regenerará.')
+      setUploadPhase('generating')
       await handleGeneratePlan()
+      Alert.alert('¡Menú escolar subido!', 'La IA ha extraído el menú y ha regenerado tu plan de comidas.')
     } catch (error) {
       Alert.alert('Error al subir', error instanceof Error ? error.message : 'Error desconocido')
     } finally {
-      setUploadingPDF(false)
+      setUploadPhase('idle')
     }
   }, [profiles, uploadSchoolMenu, handleGeneratePlan])
 
@@ -125,10 +127,18 @@ export default function NutritionScreen() {
         <TouchableOpacity
           style={styles.schoolBanner}
           onPress={handleUploadSchoolMenu}
-          disabled={uploadingPDF}
+          disabled={uploadPhase !== 'idle'}
         >
-          {uploadingPDF ? (
-            <ActivityIndicator color={Colors.white} />
+          {uploadPhase !== 'idle' ? (
+            <View style={styles.uploadProgressContainer}>
+              <View style={styles.uploadProgressHeader}>
+                <ActivityIndicator color={Colors.white} size="small" />
+                <Text style={styles.uploadStatusText}>
+                  {uploadPhase === 'analyzing' ? 'Analizando menú escolar...' : 'Generando plan de comidas...'}
+                </Text>
+              </View>
+              <UploadProgressBar phase={uploadPhase} />
+            </View>
           ) : (
             <>
               <Text style={styles.schoolBannerEmoji}>🏫</Text>
@@ -199,6 +209,27 @@ export default function NutritionScreen() {
   )
 }
 
+function UploadProgressBar({ phase }: { phase: 'analyzing' | 'generating' }) {
+  const anim = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: phase === 'analyzing' ? 0.45 : 0.85,
+      duration: 600,
+      useNativeDriver: false,
+    }).start()
+  }, [phase])
+  return (
+    <View style={progressTrackStyle}>
+      <Animated.View
+        style={[progressFillStyle, { width: anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]}
+      />
+    </View>
+  )
+}
+
+const progressTrackStyle = { height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)', marginTop: 8, overflow: 'hidden' as const }
+const progressFillStyle = { height: 3, borderRadius: 2, backgroundColor: Colors.white }
+
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
@@ -226,6 +257,9 @@ function makeStyles(colors: ThemeColors) {
     schoolBannerTitle: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
     schoolBannerSub: { ...Typography.caption, color: `${Colors.white}CC` },
     schoolBannerArrow: { color: Colors.white, fontSize: 20 },
+    uploadProgressContainer: { flex: 1 },
+    uploadProgressHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: Spacing.sm },
+    uploadStatusText: { ...Typography.body, color: Colors.white },
     mealsContainer: { gap: Spacing.md },
     supplementRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginTop: Spacing.xs, paddingHorizontal: Spacing.xs },
     supplementChip: { backgroundColor: `${Colors.goldenAmber}20`, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.pill },

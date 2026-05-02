@@ -4,6 +4,7 @@ import { generateId } from '../../utils/idUtils'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { usePlanner } from '../planner/PlannerContext'
 import { getAllInventoryItems } from '../inventory/inventoryDB'
+import { getSchoolMenuEntries } from '../planner/plannerDB'
 import { routeQuery, isOffline } from '../../services/aiRouter'
 import { streamCompletion } from '../../services/claude'
 import { buildCloudSystemPrompt } from '../../services/prompts/cloud'
@@ -41,12 +42,19 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage = useCallback(
     async (content: string, imageBase64?: string) => {
-      const [offline, inventory] = await Promise.all([isOffline(), getAllInventoryItems()])
+      const schoolAgeIds = profiles.filter((p) => p.isSchoolAge).map((p) => p.id)
+      const [offline, inventory, schoolMenuEntries] = await Promise.all([
+        isOffline(),
+        getAllInventoryItems(),
+        Promise.all(schoolAgeIds.map((id) => getSchoolMenuEntries(id))).then((res) =>
+          res.flat().map((e) => ({ ...e, meal: 'lunch' as const }))
+        ),
+      ])
       const context: AIContextType = {
         familyProfiles: profiles,
         inventory,
         currentMealPlan: weekPlans,
-        schoolMenuEntries: [],
+        schoolMenuEntries,
         isOffline: offline,
         requiresImage: !!imageBase64,
         imageBase64,
@@ -104,7 +112,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
           )
         } else {
           // Use Claude API
-          const systemPrompt = buildCloudSystemPrompt(profiles, inventory, weekPlans, [])
+          const systemPrompt = buildCloudSystemPrompt(profiles, inventory, weekPlans, schoolMenuEntries.length ? schoolMenuEntries : undefined)
 
           await streamCompletion(allMessages, systemPrompt, {
             onDelta: (text) => {

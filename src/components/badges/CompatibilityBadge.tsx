@@ -4,6 +4,7 @@ import { CompatibilityResult } from '../../types/recipes'
 import { FamilyMember } from '../../types/profiles'
 import { Colors, Typography, Spacing } from '../../theme'
 import { useTheme, ThemeColors } from '../../theme/ThemeContext'
+import { resolveAvatarUri } from '../../services/avatarService'
 
 interface CompatibilityBadgeProps {
   result: CompatibilityResult
@@ -34,7 +35,7 @@ export function CompatibilityBadge({ result, member, showName = true }: Compatib
     <View style={styles.container}>
       <View style={[styles.iconCircle, { backgroundColor: `${iconColor}20` }]}>
         {member?.avatarUrl ? (
-          <Image source={{ uri: member.avatarUrl }} style={styles.avatarImage} />
+          <Image source={{ uri: resolveAvatarUri(member.avatarUrl) }} style={styles.avatarImage} />
         ) : member?.avatarEmoji ? (
           <Text style={styles.emoji}>{member.avatarEmoji}</Text>
         ) : (
@@ -105,7 +106,7 @@ function CompactCompatibilityDot({
   return (
     <View style={[styles.dot, { borderColor }]}>
       {member.avatarUrl ? (
-        <Image source={{ uri: member.avatarUrl }} style={styles.dotImage} />
+        <Image source={{ uri: resolveAvatarUri(member.avatarUrl) }} style={styles.dotImage} />
       ) : (
         <Text style={styles.dotEmoji}>{member.avatarEmoji ?? '👤'}</Text>
       )}

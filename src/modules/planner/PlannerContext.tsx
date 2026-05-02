@@ -112,8 +112,13 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
     ) => {
       setIsGenerating(true)
       try {
-        const systemPrompt = buildCloudSystemPrompt(profiles, inventory)
-        const userPrompt = buildMealPlanGenerationPrompt(profiles, inventory, undefined, startDate)
+        const schoolAgeIds = profiles.filter((p) => p.isSchoolAge).map((p) => p.id)
+        const schoolMenuEntries = (
+          await Promise.all(schoolAgeIds.map((id) => getSchoolMenuEntries(id)))
+        ).flat().map((e) => ({ ...e, meal: 'lunch' as const }))
+
+        const systemPrompt = buildCloudSystemPrompt(profiles, inventory, undefined, schoolMenuEntries.length ? schoolMenuEntries : undefined)
+        const userPrompt = buildMealPlanGenerationPrompt(profiles, inventory, schoolMenuEntries.length ? schoolMenuEntries : undefined, startDate)
 
         const response = await complete(
           [{ id: 'req', role: 'user', content: userPrompt, timestamp: new Date().toISOString() }],

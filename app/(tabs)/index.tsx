@@ -24,6 +24,7 @@ import { ProgressRing } from '../../src/components/charts/ProgressRing'
 import { MealCard } from '../../src/components/cards/MealCard'
 import { RecipeCard } from '../../src/components/cards/RecipeCard'
 import { FamilyMember } from '../../src/types/profiles'
+import { resolveAvatarUri } from '../../src/services/avatarService'
 import { Recipe } from '../../src/types/recipes'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -276,7 +277,7 @@ function MemberCardWide({
         />
         <View style={wide.avatarOverlay}>
           {member.avatarUrl ? (
-            <Image source={{ uri: member.avatarUrl }} style={wide.avatarImage} />
+            <Image source={{ uri: resolveAvatarUri(member.avatarUrl) }} style={wide.avatarImage} />
           ) : (
             <Text style={wide.avatarEmoji}>{member.avatarEmoji ?? '👤'}</Text>
           )}

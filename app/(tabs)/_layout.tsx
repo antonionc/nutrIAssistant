@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router'
 import { router } from 'expo-router'
 import React, { useEffect } from 'react'
-import { CustomTabBar } from '../../src/components/layout/CustomTabBar'
+import { LiquidGlassTabBar } from '../../src/components/layout/LiquidGlassTabBar'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
 
 export default function TabLayout() {
@@ -18,7 +18,7 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
       }}
-      tabBar={(props) => <CustomTabBar {...props} />}
+      tabBar={(props) => <LiquidGlassTabBar {...props} />}
     >
       <Tabs.Screen name="index" options={{ title: 'Inicio' }} />
       <Tabs.Screen name="nutrition" options={{ title: 'Nutrición' }} />

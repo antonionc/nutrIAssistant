@@ -2,11 +2,14 @@ import React, { useRef } from 'react'
 import { StyleSheet, TouchableOpacity, View, Image } from 'react-native'
 import { BlurView } from 'expo-blur'
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs'
-import BottomSheet from '@gorhom/bottom-sheet'
+import { NativeModulesProxy } from 'expo-modules-core'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LiquidGlassTabBarViewNative } from '../../../modules/liquid-glass'
 import { AIAssistant } from './AIAssistant'
+import { CustomTabBar } from './CustomTabBar'
 import { Colors, Shadows } from '../../theme'
+
+const isNativeAvailable = !!NativeModulesProxy.LiquidGlass
 
 const SF_SYMBOLS: Record<string, string> = {
   index: 'house',
@@ -22,9 +25,9 @@ const TAB_LABELS: Record<string, string> = {
   groceries: 'Compra',
 }
 
-export function LiquidGlassTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+function LiquidGlassTabBarNative({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
-  const assistantRef = useRef<BottomSheet>(null)
+  const assistantRef = useRef<any>(null)
   const barHeight = 56 + insets.bottom
 
   const tabs = state.routes.map((route) => ({
@@ -72,6 +75,11 @@ export function LiquidGlassTabBar({ state, descriptors, navigation }: BottomTabB
       />
     </>
   )
+}
+
+export function LiquidGlassTabBar(props: BottomTabBarProps) {
+  if (!isNativeAvailable) return <CustomTabBar {...props} />
+  return <LiquidGlassTabBarNative {...props} />
 }
 
 const styles = StyleSheet.create({

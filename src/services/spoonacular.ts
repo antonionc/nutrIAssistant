@@ -4,28 +4,28 @@ import { NutritionalInfo } from '../types/nutrition'
 import { computeNutriScore } from './nutriscore'
 import { detectAllergensInIngredients } from '../modules/profiles/allergenEngine'
 
-const API_KEY = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY ?? ''
+const API_KEY  = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY ?? ''
 const BASE_URL = 'https://api.spoonacular.com'
-export const SPOONACULAR_DAILY_LIMIT = 150
+
+export const SPOONACULAR_DAILY_LIMIT = 10_000
+
+// Max stubs fetched per cuisine during bulk sync.
+const MAX_PER_CUISINE = 1_000
+const PAGE_SIZE = 100  // Spoonacular's maximum per request
+
 const CALLS_STORAGE_KEY = 'sp_daily_calls'
 
 // ─── Daily call tracking ──────────────────────────────────────────────────────
 
-interface DailyCallRecord {
-  date: string  // YYYY-MM-DD
-  count: number
-}
+interface DailyCallRecord { date: string; count: number }
 
-function todayString(): string {
-  return new Date().toISOString().slice(0, 10)
-}
+function todayString(): string { return new Date().toISOString().slice(0, 10) }
 
 export async function getSpoonacularCallsToday(): Promise<number> {
   const raw = await AsyncStorage.getItem(CALLS_STORAGE_KEY)
   if (!raw) return 0
   const record: DailyCallRecord = JSON.parse(raw)
-  if (record.date !== todayString()) return 0
-  return record.count
+  return record.date === todayString() ? record.count : 0
 }
 
 export async function getSpoonacularCallsRemaining(): Promise<number> {
@@ -34,25 +34,21 @@ export async function getSpoonacularCallsRemaining(): Promise<number> {
 
 async function incrementCalls(cost = 1): Promise<void> {
   const today = todayString()
-  const raw = await AsyncStorage.getItem(CALLS_STORAGE_KEY)
-  const record: DailyCallRecord = raw ? JSON.parse(raw) : { date: today, count: 0 }
-  const newCount = record.date === today ? record.count + cost : cost
-  await AsyncStorage.setItem(CALLS_STORAGE_KEY, JSON.stringify({ date: today, count: newCount }))
+  const raw   = await AsyncStorage.getItem(CALLS_STORAGE_KEY)
+  const prev: DailyCallRecord = raw ? JSON.parse(raw) : { date: today, count: 0 }
+  await AsyncStorage.setItem(
+    CALLS_STORAGE_KEY,
+    JSON.stringify({ date: today, count: prev.date === today ? prev.count + cost : cost })
+  )
 }
 
 async function canCall(cost = 1): Promise<boolean> {
-  const used = await getSpoonacularCallsToday()
-  return used + cost <= SPOONACULAR_DAILY_LIMIT
+  return (await getSpoonacularCallsToday()) + cost <= SPOONACULAR_DAILY_LIMIT
 }
 
 // ─── Spoonacular raw types ────────────────────────────────────────────────────
 
-interface SPSearchResult {
-  id: number
-  title: string
-  image?: string
-  imageType?: string
-}
+interface SPSearchResult { id: number; title: string; image?: string; imageType?: string }
 
 interface SPSearchResponse {
   results: SPSearchResult[]
@@ -61,29 +57,13 @@ interface SPSearchResponse {
   totalResults: number
 }
 
-interface SPNutrient {
-  name: string
-  amount: number
-  unit: string
-}
+interface SPNutrient { name: string; amount: number; unit: string }
 
-interface SPIngredient {
-  id?: number
-  name: string
-  amount: number
-  unit: string
-  original?: string
-}
+interface SPIngredient { id?: number; name: string; amount: number; unit: string; original?: string }
 
-interface SPStep {
-  number: number
-  step: string
-}
+interface SPStep { number: number; step: string }
 
-interface SPInstruction {
-  name: string
-  steps: SPStep[]
-}
+interface SPInstruction { name: string; steps: SPStep[] }
 
 interface SPRecipeInfo {
   id: number
@@ -105,7 +85,7 @@ interface SPRecipeInfo {
 const DISH_TYPE_TO_CATEGORY: Record<string, RecipeCategory> = {
   'breakfast': 'breakfast', 'brunch': 'breakfast', 'morning meal': 'breakfast',
   'appetizer': 'lunch', 'salad': 'lunch', 'soup': 'lunch', 'starter': 'lunch',
-  'antipasti': 'lunch', 'antipasto': 'lunch', 'hor d\'oeuvre': 'lunch',
+  'antipasti': 'lunch', 'antipasto': 'lunch', "hor d'oeuvre": 'lunch',
   'main course': 'dinner', 'main dish': 'dinner', 'dinner': 'dinner',
   'dessert': 'dessert', 'sweet': 'dessert',
   'snack': 'snack', 'fingerfood': 'snack', 'drink': 'snack', 'beverage': 'snack',
@@ -120,7 +100,7 @@ function inferCategory(dishTypes?: string[]): RecipeCategory {
   return 'dinner'
 }
 
-// ─── Cuisine flag map ─────────────────────────────────────────────────────────
+// ─── Cuisine catalogue ────────────────────────────────────────────────────────
 
 export const SPOONACULAR_CUISINE_QUERIES: { cuisine: string; flag: string }[] = [
   { cuisine: 'mediterranean', flag: '🌊' },
@@ -133,6 +113,16 @@ export const SPOONACULAR_CUISINE_QUERIES: { cuisine: string; flag: string }[] = 
   { cuisine: 'japanese',      flag: '🇯🇵' },
   { cuisine: 'mexican',       flag: '🇲🇽' },
   { cuisine: 'indian',        flag: '🇮🇳' },
+  { cuisine: 'chinese',       flag: '🇨🇳' },
+  { cuisine: 'thai',          flag: '🇹🇭' },
+  { cuisine: 'korean',        flag: '🇰🇷' },
+  { cuisine: 'american',      flag: '🇺🇸' },
+  { cuisine: 'middle eastern',flag: '🌙' },
+  { cuisine: 'caribbean',     flag: '🏝️' },
+  { cuisine: 'vietnamese',    flag: '🇻🇳' },
+  { cuisine: 'german',        flag: '🇩🇪' },
+  { cuisine: 'latin american',flag: '🌎' },
+  { cuisine: 'african',       flag: '🌍' },
 ]
 
 function capitalise(s: string): string {
@@ -143,18 +133,19 @@ function capitalise(s: string): string {
 
 function mapNutrition(nutrients?: SPNutrient[]): NutritionalInfo {
   if (!nutrients) return { calories: 0, protein: 0, carbs: 0, fat: 0 }
-  const get = (name: string) => nutrients.find((n) => n.name.toLowerCase() === name.toLowerCase())?.amount ?? 0
+  const get = (name: string) =>
+    nutrients.find((n) => n.name.toLowerCase() === name.toLowerCase())?.amount ?? 0
   return {
     calories: Math.round(get('Calories')),
-    protein: get('Protein'),
-    carbs: get('Carbohydrates'),
-    fat: get('Fat'),
-    fiber: get('Fiber') || undefined,
-    sodium: get('Sodium') || undefined,
+    protein:  get('Protein'),
+    carbs:    get('Carbohydrates'),
+    fat:      get('Fat'),
+    fiber:    get('Fiber')  || undefined,
+    sodium:   get('Sodium') || undefined,
   }
 }
 
-// ─── API helpers ──────────────────────────────────────────────────────────────
+// ─── API helper ───────────────────────────────────────────────────────────────
 
 async function spFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const qs = new URLSearchParams({ ...params, apiKey: API_KEY }).toString()
@@ -166,24 +157,11 @@ async function spFetch<T>(path: string, params: Record<string, string> = {}): Pr
   return resp.json() as Promise<T>
 }
 
-// ─── Public: bulk stub search (sync) ─────────────────────────────────────────
+// ─── Stub builder ─────────────────────────────────────────────────────────────
 
-export async function searchSpoonacularByCuisine(
-  cuisine: string,
-  cuisineFlag: string,
-  number = 50
-): Promise<Recipe[]> {
-  if (!(await canCall(1))) throw new Error('Límite diario de Spoonacular alcanzado (150 llamadas).')
-
-  const data = await spFetch<SPSearchResponse>('/recipes/complexSearch', {
-    cuisine,
-    number: String(number),
-    sort: 'popularity',
-  })
-  await incrementCalls(1)
-
+function buildStub(r: SPSearchResult, cuisine: string, cuisineFlag: string): Recipe {
   const now = new Date().toISOString()
-  return data.results.map((r): Recipe => ({
+  return {
     id: `sp-${r.id}`,
     name: r.title,
     category: 'dinner',
@@ -200,11 +178,65 @@ export async function searchSpoonacularByCuisine(
     nutritionalInfo: { calories: 0, protein: 0, carbs: 0, fat: 0 },
     allergens: [],
     tags: [],
-    nutriscore: undefined,
     isFavorite: false,
     createdAt: now,
     updatedAt: now,
-  }))
+  }
+}
+
+// ─── Public: paginated bulk search ───────────────────────────────────────────
+
+export async function searchAllSpoonacularByCuisine(
+  cuisine: string,
+  cuisineFlag: string,
+  onProgress?: (fetched: number, total: number) => void
+): Promise<Recipe[]> {
+  const all: Recipe[] = []
+  let offset = 0
+  let totalResults = Infinity
+
+  while (offset < totalResults && all.length < MAX_PER_CUISINE) {
+    if (!(await canCall(1))) break
+
+    const data = await spFetch<SPSearchResponse>('/recipes/complexSearch', {
+      cuisine,
+      number:  String(Math.min(PAGE_SIZE, MAX_PER_CUISINE - all.length)),
+      offset:  String(offset),
+      sort:    'popularity',
+    })
+    await incrementCalls(1)
+
+    if (offset === 0) totalResults = data.totalResults
+    if (!data.results.length) break
+
+    for (const r of data.results) all.push(buildStub(r, cuisine, cuisineFlag))
+    onProgress?.(all.length, Math.min(totalResults, MAX_PER_CUISINE))
+
+    offset += data.results.length
+    if (offset < totalResults && all.length < MAX_PER_CUISINE) {
+      await new Promise((r) => setTimeout(r, 200))
+    }
+  }
+
+  return all
+}
+
+// Kept for backward compatibility (single-page fetch, used in settings + tests).
+export async function searchSpoonacularByCuisine(
+  cuisine: string,
+  cuisineFlag: string,
+  number = 50
+): Promise<Recipe[]> {
+  if (!(await canCall(1))) throw new Error('Límite diario de Spoonacular alcanzado.')
+
+  const data = await spFetch<SPSearchResponse>('/recipes/complexSearch', {
+    cuisine,
+    number: String(Math.min(number, PAGE_SIZE)),
+    sort:   'popularity',
+  })
+  await incrementCalls(1)
+
+  return data.results.map((r) => buildStub(r, cuisine, cuisineFlag))
 }
 
 // ─── Public: recipe detail (lazy-loaded) ─────────────────────────────────────
@@ -238,34 +270,30 @@ export async function getSpoonacularRecipeDetail(
     const ingredientNames = (data.extendedIngredients ?? []).map((i) => i.name)
     const allergens = detectAllergensInIngredients(ingredientNames)
     const ingredients: RecipeIngredient[] = (data.extendedIngredients ?? []).map((i) => ({
-      name: i.name,
-      quantity: i.amount,
-      unit: i.unit || 'al gusto',
-      isAllergen: allergens.some((a) => i.name.toLowerCase().includes(a.toLowerCase())),
+      name:        i.name,
+      quantity:    i.amount,
+      unit:        i.unit || 'al gusto',
+      isAllergen:  allergens.some((a) => i.name.toLowerCase().includes(a.toLowerCase())),
     }))
 
-    const steps: string[] = (data.analyzedInstructions ?? [])
+    const steps = (data.analyzedInstructions ?? [])
       .flatMap((block) => block.steps)
       .sort((a, b) => a.number - b.number)
       .map((s) => s.step)
       .filter(Boolean)
 
     const nutritionalInfo = mapNutrition(data.nutrition?.nutrients)
-    const nutriscore = computeNutriScore(nutritionalInfo)
-
-    const prepTime = data.preparationMinutes ?? Math.round((data.readyInMinutes ?? 45) * 0.33)
-    const cookTime = data.cookingMinutes ?? Math.round((data.readyInMinutes ?? 45) * 0.67)
 
     return {
-      prepTime: prepTime || 15,
-      cookTime: cookTime || 30,
-      servings: data.servings ?? 4,
-      instructions: steps,
+      prepTime:       (data.preparationMinutes ?? Math.round((data.readyInMinutes ?? 45) * 0.33)) || 15,
+      cookTime:       (data.cookingMinutes     ?? Math.round((data.readyInMinutes ?? 45) * 0.67)) || 30,
+      servings:       data.servings ?? 4,
+      instructions:   steps,
       ingredients,
       nutritionalInfo,
       allergens,
-      category: inferCategory(data.dishTypes),
-      nutriscore,
+      category:       inferCategory(data.dishTypes),
+      nutriscore:     computeNutriScore(nutritionalInfo),
     }
   } catch (e) {
     console.warn('[Spoonacular] getRecipeDetail failed:', e)
