@@ -1,12 +1,51 @@
-import { FamilyMember } from '../../types/profiles'
-import { InventoryItem } from '../../types/inventory'
+import { FamilyMember, SchoolMenuEntry } from '../../types/profiles'
 import { MealPlan } from '../../types/planner'
-import { SchoolMenuEntry } from '../../types/profiles'
 import { getAge } from '../../utils/ageUtils'
+
+// Minimal inventory shape accepted by prompt builders. The full InventoryItem
+// type is a superset, so both callers (AI chat with full DB items, planner with
+// a lightweight snapshot) satisfy this interface without type casts.
+export interface InventoryLite {
+  name: string
+  quantity: number
+  unit: string
+  category?: string
+  expiryDate?: string
+}
+
+// Maps known health conditions to concise nutritional guidance in Spanish.
+const CONDITION_GUIDANCE: Record<string, string> = {
+  hypertension: 'limitar sodio a menos de 1500mg/día, evitar alimentos procesados',
+  osteoporosis: 'incluir alimentos ricos en calcio y vitamina D al menos una vez al día',
+  diabetes_type1: 'controlar índice glucémico, limitar azúcares simples y carbohidratos refinados',
+  diabetes_type2: 'controlar índice glucémico, limitar azúcares simples y carbohidratos refinados',
+  celiac: 'evitar completamente el gluten (trigo, cebada, centeno)',
+  lactose_intolerance: 'evitar lácteos o usar alternativas sin lactosa',
+  high_cholesterol: 'limitar grasas saturadas, incluir fibra soluble (avena, legumbres)',
+  ibs: 'evitar alimentos FODMAP altos, comidas grasas y picantes',
+}
+
+function buildConditionDirectives(profiles: FamilyMember[]): string {
+  const lines: string[] = []
+  for (const m of profiles) {
+    for (const condition of m.conditions) {
+      const guidance = CONDITION_GUIDANCE[condition]
+      if (guidance) lines.push(`- ${m.name} (${condition}): ${guidance}`)
+    }
+  }
+  return lines.join('\n')
+}
+
+function buildAllergenSummary(profiles: FamilyMember[]): string {
+  return profiles
+    .filter((m) => m.allergies.length > 0)
+    .map((m) => `${m.name}=${m.allergies.join(',')}`)
+    .join('; ')
+}
 
 export function buildCloudSystemPrompt(
   profiles: FamilyMember[],
-  inventory: InventoryItem[],
+  inventory: InventoryLite[],
   mealPlans?: MealPlan[],
   schoolMenuEntries?: SchoolMenuEntry[]
 ): string {
@@ -45,6 +84,8 @@ export function buildCloudSystemPrompt(
     isLocked: p.isLocked,
   }))
 
+  const conditionDirectives = buildConditionDirectives(profiles)
+
   return `Eres NutriBot, el asistente experto en nutrición familiar de NutrIAssistant. La fecha de hoy es ${today}.
 
 Responde SIEMPRE en español de España, de forma cercana y natural, como un amigo nutricionista.
@@ -60,9 +101,7 @@ ${schoolMenuEntries?.length ? `MENÚ ESCOLAR:\n${JSON.stringify(schoolMenuEntrie
 
 DIRECTRICES:
 - Respetar SIEMPRE las alergias de todos los miembros de la familia
-- Harry tiene hipertensión: limitar sodio a menos de 1500mg/día, evitar alimentos procesados
-- Ginny tiene osteoporosis: incluir alimentos ricos en calcio y vitamina D
-- Usar la dieta mediterránea como base
+${conditionDirectives ? conditionDirectives + '\n' : ''}- Usar la dieta mediterránea como base
 - En planes de comidas: no repetir la misma proteína principal más de 2 veces por semana
 - Dar respuestas prácticas, concretas y adaptadas a la despensa disponible
 - Si no hay ingredientes suficientes, sugerir qué comprar`
@@ -70,23 +109,27 @@ DIRECTRICES:
 
 export function buildMealPlanGenerationPrompt(
   profiles: FamilyMember[],
-  inventory: InventoryItem[],
+  inventory: InventoryLite[],
   schoolMenuEntries?: SchoolMenuEntry[],
   startDate?: string
 ): string {
   const start = startDate ?? new Date().toISOString().split('T')[0]
+  const allergenSummary = buildAllergenSummary(profiles)
+  const conditionLines = buildConditionDirectives(profiles)
+  const pantryItems = inventory
+    .filter((i) => i.quantity > 0)
+    .map((i) => `${i.name} (${i.quantity} ${i.unit})`)
+    .join(', ')
 
-  return `Generate a 7-day meal plan starting from ${start} for the Potter family.
+  return `Generate a 7-day meal plan starting from ${start}.
 
 Requirements:
-- All meals must be safe for ALL family members (respect allergies: Ginny=peanuts, James=tree nuts, Lily=dairy)
-- Use ingredients from the pantry when possible
-- Harry (hypertension): keep sodium < 1500mg/day, no processed foods
-- Ginny (osteoporosis): include calcium-rich foods at least once per day
+- All meals must be safe for ALL family members${allergenSummary ? ` (allergies: ${allergenSummary})` : ''}
+${pantryItems ? `- Use pantry ingredients when possible: ${pantryItems}` : '- No pantry items on hand; suggest what to buy'}
+${conditionLines || ''}
 - No protein source (chicken, beef, fish, legumes) repeated more than twice per week
 - Mediterranean diet emphasis
 - Variety in cuisines across the week
-- Each meal should include: recipe name, brief description, estimated macros, key allergen warnings
 
 ${schoolMenuEntries?.length ? `School menu context for this period:\n${JSON.stringify(schoolMenuEntries, null, 2)}\nLock school lunch days and plan breakfast/dinner to complement.` : ''}
 

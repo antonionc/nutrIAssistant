@@ -4,7 +4,7 @@ import { NutritionalInfo } from '../types/nutrition'
 import { computeNutriScore } from './nutriscore'
 import { detectAllergensInIngredients } from '../modules/profiles/allergenEngine'
 
-const API_KEY = '83f4d7c0a6d74973837e06fcaa706d65'
+const API_KEY = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY ?? ''
 const BASE_URL = 'https://api.spoonacular.com'
 export const SPOONACULAR_DAILY_LIMIT = 150
 const CALLS_STORAGE_KEY = 'sp_daily_calls'

@@ -1,9 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { AIContext as AIContextType, AIMessage, AIRoute, OnDeviceLLMStatus } from '../../types/ai'
+import { AIContext as AIContextType, AIMessage, OnDeviceLLMStatus } from '../../types/ai'
 import { generateId } from '../../utils/idUtils'
 import { useProfiles } from '../profiles/ProfilesContext'
+import { usePlanner } from '../planner/PlannerContext'
+import { getAllInventoryItems } from '../inventory/inventoryDB'
 import { routeQuery, isOffline } from '../../services/aiRouter'
-import { streamCompletion, complete } from '../../services/claude'
+import { streamCompletion } from '../../services/claude'
 import { buildCloudSystemPrompt } from '../../services/prompts/cloud'
 import { buildOnDeviceSystemPrompt } from '../../services/prompts/onDevice'
 import {
@@ -22,6 +24,7 @@ const AIEngineContext = createContext<AIEngineContextValue | null>(null)
 
 export function AIEngineProvider({ children }: { children: React.ReactNode }) {
   const { profiles } = useProfiles()
+  const { weekPlans } = usePlanner()
   const [messages, setMessages] = useState<AIMessage[]>([])
   const [isResponding, setIsResponding] = useState(false)
   const [llmStatus, setLlmStatus] = useState<OnDeviceLLMStatus>({
@@ -38,11 +41,11 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage = useCallback(
     async (content: string, imageBase64?: string) => {
-      const offline = await isOffline()
+      const [offline, inventory] = await Promise.all([isOffline(), getAllInventoryItems()])
       const context: AIContextType = {
         familyProfiles: profiles,
-        inventory: [],
-        currentMealPlan: [],
+        inventory,
+        currentMealPlan: weekPlans,
         schoolMenuEntries: [],
         isOffline: offline,
         requiresImage: !!imageBase64,
@@ -64,7 +67,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
       const preferOnDevice = await getPreferOnDevice()
 
       // Assistant placeholder for streaming
-      const assistantId = `msg-${Date.now() + 1}`
+      const assistantId = generateId('msg')
       const assistantMessage: AIMessage = {
         id: assistantId,
         role: 'assistant',
@@ -80,7 +83,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
 
         if (route === 'on_device' && preferOnDevice && llmStatus.isLoaded) {
           // Use on-device LLM
-          const systemPrompt = buildOnDeviceSystemPrompt(profiles, [])
+          const systemPrompt = buildOnDeviceSystemPrompt(profiles, inventory)
           let fullText = ''
           await generateOnDevice(content, systemPrompt, (token) => {
             fullText += token
@@ -101,7 +104,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
           )
         } else {
           // Use Claude API
-          const systemPrompt = buildCloudSystemPrompt(profiles, [], [], [])
+          const systemPrompt = buildCloudSystemPrompt(profiles, inventory, weekPlans, [])
 
           await streamCompletion(allMessages, systemPrompt, {
             onDelta: (text) => {
@@ -150,7 +153,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
         setIsResponding(false)
       }
     },
-    [profiles, messages, llmStatus.isLoaded]
+    [profiles, weekPlans, messages, llmStatus.isLoaded]
   )
 
   const clearHistory = useCallback(() => {

@@ -557,11 +557,16 @@ export default function SettingsScreen() {
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>Compartir datos anónimos</Text>
-              <Text style={styles.hint}>Ayuda a mejorar NutrIAssistant</Text>
+              <Text style={styles.hint}>Ayuda a mejorar NutrIAssistant · Próximamente</Text>
             </View>
-            <Switch value={false} trackColor={{ true: Colors.healthGreen, false: colors.border }} />
+            <Switch
+              value={false}
+              disabled
+              trackColor={{ true: Colors.healthGreen, false: colors.border }}
+            />
           </View>
           <View style={styles.divider} />
+          {/* TODO: implement full data deletion (profiles, meal plans, inventory, DB reset) */}
           <TouchableOpacity style={styles.dangerBtn} onPress={() =>
             Alert.alert('Eliminar todos los datos', 'Esto eliminará permanentemente todos tus perfiles, planes de comidas e inventario. Esta acción no se puede deshacer.', [
               { text: 'Cancelar', style: 'cancel' },

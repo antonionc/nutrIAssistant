@@ -15,7 +15,7 @@ import {
   getSchoolMenuEntries,
 } from './plannerDB'
 import { complete, analyzePDF } from '../../services/claude'
-import { buildMealPlanGenerationPrompt, buildCloudSystemPrompt } from '../../services/prompts/cloud'
+import { buildMealPlanGenerationPrompt, buildCloudSystemPrompt, InventoryLite } from '../../services/prompts/cloud'
 import { SCHOOL_MENU_EXTRACTION_PROMPT } from '../../services/prompts/schoolMenuExtraction'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { getRandomRecipes, searchVerifiedByCategory } from '../recipes/recipeDB'
@@ -38,7 +38,7 @@ interface PlannerContextValue {
   isGenerating: boolean
   loadWeek: (startDate?: string) => Promise<void>
   generateWeekPlan: (
-    inventory: { name: string; quantity: number; unit: string; category: string }[],
+    inventory: InventoryLite[],
     startDate?: string
   ) => Promise<void>
   setMealForDate: (date: string, mealType: MealSlot, recipe: Recipe) => Promise<void>
@@ -107,13 +107,13 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
 
   const generateWeekPlan = useCallback(
     async (
-      inventory: { name: string; quantity: number; unit: string; category: string }[],
+      inventory: InventoryLite[],
       startDate?: string
     ) => {
       setIsGenerating(true)
       try {
-        const systemPrompt = buildCloudSystemPrompt(profiles, inventory as never)
-        const userPrompt = buildMealPlanGenerationPrompt(profiles, inventory as never, undefined, startDate)
+        const systemPrompt = buildCloudSystemPrompt(profiles, inventory)
+        const userPrompt = buildMealPlanGenerationPrompt(profiles, inventory, undefined, startDate)
 
         const response = await complete(
           [{ id: 'req', role: 'user', content: userPrompt, timestamp: new Date().toISOString() }],
