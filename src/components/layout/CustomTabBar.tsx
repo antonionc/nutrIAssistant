@@ -1,160 +1,123 @@
 import { Ionicons } from '@expo/vector-icons'
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs'
-import React, { useRef } from 'react'
-import {
-  Image,
-  Platform,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import React from 'react'
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Colors, Shadows, Spacing } from '../../theme'
+import { Colors, Spacing, BorderRadius, Typography } from '../../theme'
 import { useTheme } from '../../theme/ThemeContext'
-import { AIAssistant } from './AIAssistant'
+import { t } from '../../i18n'
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name']
 
 const TAB_ICONS: Record<string, { default: IoniconsName; active: IoniconsName }> = {
-  index:      { default: 'home-outline',       active: 'home' },
-  nutrition:  { default: 'calendar-outline',   active: 'calendar' },
-  recipes:    { default: 'book-outline',       active: 'book' },
-  groceries:  { default: 'cart-outline',       active: 'cart' },
+  index:     { default: 'home-outline',     active: 'home' },
+  nutrition: { default: 'calendar-outline', active: 'calendar' },
+  recipes:   { default: 'book-outline',     active: 'book' },
+  groceries: { default: 'cart-outline',     active: 'cart' },
 }
 
-const ICON_COLOR_DEFAULT = 'rgba(255,255,255,0.55)'
-const ICON_COLOR_ACTIVE  = Colors.white
+const TAB_LABEL_KEYS: Record<string, keyof typeof t.tabs> = {
+  index: 'home',
+  nutrition: 'nutrition',
+  recipes: 'recipes',
+  groceries: 'groceries',
+}
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
-  const { colors, isDark } = useTheme()
-  const assistantRef = useRef<any>(null)
-
-  const openAssistant = () => assistantRef.current?.expand()
-
-  const renderTab = (route: typeof state.routes[0], index: number) => {
-    const isFocused = state.index === index
-    const icons = TAB_ICONS[route.name]
-    return (
-      <TabButton
-        key={route.key}
-        iconName={isFocused ? icons?.active ?? 'ellipse' : icons?.default ?? 'ellipse-outline'}
-        isFocused={isFocused}
-        onPress={() => { if (!isFocused) navigation.navigate(route.name) }}
-      />
-    )
-  }
+  const { colors } = useTheme()
 
   return (
-    <>
-      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-        <View style={styles.tabBar}>
-          {state.routes.slice(0, 2).map((route, index) => renderTab(route, index))}
-
-          {/* Center AI button */}
-          <View style={styles.centerContainer}>
-            <TouchableOpacity
-              style={[styles.aiButton, { backgroundColor: isDark ? Colors.white : colors.background }]}
-              onPress={openAssistant}
-              activeOpacity={0.85}
-            >
-              <Image
-                source={
-                  isDark
-                    ? require('../../../assets/images/android-icon-foreground.png')
-                    : require('../../../assets/images/icon.png')
-                }
-                style={isDark ? styles.aiLogoForeground : styles.aiLogo}
-                resizeMode="contain"
-              />
-            </TouchableOpacity>
-          </View>
-
-          {state.routes.slice(2).map((route, index) => renderTab(route, index + 2))}
-        </View>
-      </View>
-
-      <AIAssistant
-        ref={assistantRef}
-        onClose={() => assistantRef.current?.close()}
-      />
-    </>
-  )
-}
-
-function TabButton({
-  iconName,
-  isFocused,
-  onPress,
-}: {
-  iconName: IoniconsName
-  isFocused: boolean
-  onPress: () => void
-}) {
-  return (
-    <TouchableOpacity
-      style={styles.tabButton}
-      onPress={onPress}
-      activeOpacity={0.7}
+    <View
+      pointerEvents="box-none"
+      style={[
+        styles.container,
+        { paddingBottom: insets.bottom + 12, backgroundColor: colors.background },
+      ]}
     >
-      <Ionicons
-        name={iconName}
-        size={23}
-        color={isFocused ? ICON_COLOR_ACTIVE : ICON_COLOR_DEFAULT}
-      />
-    </TouchableOpacity>
+      <View style={[styles.pill, { backgroundColor: colors.surface }]}>
+        {state.routes.map((route, index) => {
+          const isFocused = state.index === index
+          const icons = TAB_ICONS[route.name]
+          const labelKey = TAB_LABEL_KEYS[route.name]
+          const label = descriptors[route.key].options.title ?? (labelKey ? t.tabs[labelKey] : route.name)
+
+          return (
+            <TouchableOpacity
+              key={route.key}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              accessibilityState={isFocused ? { selected: true } : {}}
+              onPress={() => {
+                if (!isFocused) navigation.navigate(route.name)
+              }}
+              activeOpacity={0.7}
+              style={styles.tabButton}
+            >
+              <View style={[styles.tabInner, isFocused && styles.tabInnerActive]}>
+                <Ionicons
+                  name={isFocused ? icons?.active ?? 'ellipse' : icons?.default ?? 'ellipse-outline'}
+                  size={24}
+                  color={isFocused ? Colors.forestGreen : colors.textSecondary}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.label,
+                    { color: isFocused ? Colors.forestGreen : colors.textSecondary },
+                    isFocused && styles.labelActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.healthGreen,
+    paddingHorizontal: Spacing.md,
+    paddingTop: Spacing.sm,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderRadius: BorderRadius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    minHeight: 64,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.12,
-        shadowRadius: 8,
+        shadowRadius: 14,
       },
       android: { elevation: 8 },
     }),
   },
-  tabBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 46,
-    paddingHorizontal: Spacing.sm,
-  },
-  tabButton: {
+  tabButton: { flex: 1 },
+  tabInner: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: Spacing.xs,
+    borderRadius: BorderRadius.pill,
+    gap: 3,
   },
-  centerContainer: {
-    width: 72,
-    alignItems: 'center',
-    justifyContent: 'center',
+  tabInnerActive: {
+    backgroundColor: `${Colors.healthGreen}18`,
   },
-  aiButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    backgroundColor: Colors.cream, // overridden inline
-    alignItems: 'center',
-    justifyContent: 'center',
-    bottom: 10,
-    borderWidth: 2.5,
-    borderColor: Colors.healthGreen,
-    overflow: 'hidden',
-    ...Shadows.elevated,
+  label: {
+    ...Typography.caption,
+    fontSize: 11,
   },
-  aiLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 16,
-  },
-  aiLogoForeground: {
-    width: 42,
-    height: 42,
+  labelActive: {
+    fontFamily: Typography.heading3.fontFamily,
   },
 })
