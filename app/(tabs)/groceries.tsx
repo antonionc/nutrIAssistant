@@ -299,8 +299,9 @@ function makeStyles(colors: ThemeColors) {
       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider,
     },
     checkbox: {
-      width: 26, height: 26, borderRadius: 13, borderWidth: 1.5,
-      borderColor: colors.border, alignItems: 'center', justifyContent: 'center',
+      width: 26, height: 26, borderRadius: 13, borderWidth: 2,
+      borderColor: colors.textMuted, backgroundColor: colors.surface,
+      alignItems: 'center', justifyContent: 'center',
     },
     checkboxChecked: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
     groceryInfo: { flex: 1 },
