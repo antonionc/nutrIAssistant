@@ -14,7 +14,14 @@
       "bundleIdentifier": "com.anonymous.nutrIAssistant",
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "NutrIAssistant uses speech recognition so you can ask the AI assistant questions by voice.",
-        "NSMicrophoneUsageDescription": "NutrIAssistant uses the microphone to capture your voice commands for the AI assistant."
+        "NSMicrophoneUsageDescription": "NutrIAssistant uses the microphone to capture your voice commands for the AI assistant.",
+        "NSHealthShareUsageDescription": "NutrIAssistant uses your steps and active calories to estimate daily energy expenditure.",
+        "NSHealthUpdateUsageDescription": "NutrIAssistant does not write to Apple Health.",
+        "UIBackgroundModes": []
+      },
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": []
       }
     },
     "android": {
@@ -25,7 +32,9 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED"
       ],
       "package": "com.anonymous.nutrIAssistant"
     },

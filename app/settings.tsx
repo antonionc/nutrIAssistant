@@ -3,6 +3,7 @@ import {
   Alert,
   Image,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Switch,
@@ -45,6 +46,8 @@ import {
   SPOONACULAR_DAILY_LIMIT,
 } from '../src/services/spoonacular'
 import { pickAndSaveAvatar, deleteOldAvatar, getDefaultAvatarSource, getMemberAvatarSource } from '../src/services/avatarService'
+import { useHealth } from '../src/modules/health/HealthContext'
+import { HealthProviderId } from '../src/modules/health/types'
 import { exportFamilyToMarkdown, importFamilyFromFile } from '../src/services/familyExport'
 import * as Sharing from 'expo-sharing'
 import { getRecipeCount, cleanDuplicateImageUrls } from '../src/modules/recipes/recipeDB'
@@ -487,8 +490,7 @@ export default function SettingsScreen() {
         {/* ── Integraciones de salud ──────────── */}
         <SectionHeader title={tr.settings.health} colors={colors} />
         <View style={styles.card}>
-          <Text style={styles.comingSoon}>{tr.settings.healthApple}</Text>
-          <Text style={styles.comingSoon}>{tr.settings.healthGarmin}</Text>
+          <HealthProvidersSection colors={colors} styles={styles} tr={tr} />
         </View>
 
         {/* ── Supermercados ───────────────────── */}
@@ -588,6 +590,104 @@ export default function SettingsScreen() {
 function SectionHeader({ title, colors }: { title: string; colors: ThemeColors }) {
   const styles = useMemo(() => makeStyles(colors), [colors])
   return <Text style={styles.sectionHeader}>{title}</Text>
+}
+
+interface HealthProviderInfo {
+  id: HealthProviderId
+  name: string
+  iconName: keyof typeof Ionicons.glyphMap
+  bgColor: string
+  platform: 'iOS' | 'Android'
+}
+
+function HealthProvidersSection({
+  colors,
+  styles,
+  tr,
+}: {
+  colors: ThemeColors
+  styles: ReturnType<typeof makeStyles>
+  tr: ReturnType<typeof useTranslation>
+}) {
+  const { activeId, data, isLoading, activateProvider, deactivateProvider } = useHealth()
+  const [pendingId, setPendingId] = useState<HealthProviderId | null>(null)
+
+  const providers: HealthProviderInfo[] = [
+    { id: 'apple_health',   name: tr.settings.healthApple,   iconName: 'heart',       bgColor: '#FA114F', platform: 'iOS' },
+    { id: 'health_connect', name: tr.settings.healthConnect, iconName: 'fitness',     bgColor: '#3B6BC8', platform: 'Android' },
+  ]
+
+  async function handleToggle(id: HealthProviderId, value: boolean) {
+    setPendingId(id)
+    try {
+      if (value) {
+        const ok = await activateProvider(id)
+        if (!ok) {
+          Alert.alert(tr.settings.health, tr.settings.healthUnavailable(
+            providers.find((p) => p.id === id)!.platform
+          ))
+        }
+      } else {
+        await deactivateProvider()
+      }
+    } finally {
+      setPendingId(null)
+    }
+  }
+
+  return (
+    <>
+      <Text style={styles.healthExclusiveHint}>{tr.settings.healthExclusiveHint}</Text>
+      {providers.map((p, index) => {
+        const isActive = activeId === p.id
+        const platformOk =
+          (p.id === 'apple_health' && Platform.OS === 'ios') ||
+          (p.id === 'health_connect' && Platform.OS === 'android')
+        const disabled = !platformOk || pendingId !== null
+        return (
+          <View key={p.id}>
+            {index > 0 && <View style={styles.divider} />}
+            <View style={styles.healthRow}>
+              <View style={[styles.healthIcon, { backgroundColor: p.bgColor }]}>
+                <Ionicons name={p.iconName} size={20} color={Colors.white} />
+              </View>
+              <View style={styles.healthInfo}>
+                <Text style={styles.healthName}>{p.name}</Text>
+                <Text style={styles.healthStatus}>
+                  {!platformOk
+                    ? tr.settings.healthUnavailable(p.platform)
+                    : isActive
+                    ? tr.settings.healthConnected
+                    : tr.settings.healthNotConnected}
+                </Text>
+              </View>
+              {pendingId === p.id ? (
+                <ActivityIndicator size="small" color={Colors.healthGreen} />
+              ) : (
+                <Switch
+                  value={isActive}
+                  onValueChange={(v) => handleToggle(p.id, v)}
+                  trackColor={{ false: colors.border, true: Colors.healthGreen }}
+                  thumbColor={Colors.white}
+                  ios_backgroundColor={colors.border}
+                  disabled={disabled}
+                />
+              )}
+            </View>
+            {isActive && (
+              <Text style={styles.healthData}>
+                {isLoading
+                  ? tr.app.loading
+                  : data
+                  ? tr.settings.healthSummary(data.steps, data.activeCaloriesBurned)
+                  : '—'}
+              </Text>
+            )}
+          </View>
+        )
+      })}
+    </>
+  )
 }
 
 function ContactRow({ label, value, onPress, colors }: { label: string; value: string; onPress: () => void; colors: ThemeColors }) {
@@ -827,6 +927,37 @@ function makeStyles(colors: ThemeColors) {
     sourceDivider: { height: 1, backgroundColor: colors.divider, marginVertical: Spacing.xs },
     sourceAction: { padding: Spacing.xs },
     sourceActionDisabled: { opacity: 0.4 },
+    healthExclusiveHint: {
+      ...Typography.caption,
+      color: colors.textMuted,
+      marginBottom: Spacing.sm,
+    },
+    healthRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingVertical: Spacing.xs,
+    },
+    healthIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    healthInfo: { flex: 1 },
+    healthName: {
+      ...Typography.body,
+      color: colors.text,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    healthStatus: { ...Typography.caption, color: colors.textMuted, marginTop: 1 },
+    healthData: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+      paddingLeft: 36 + Spacing.sm,
+      marginTop: 2,
+    },
     comingSoon: { ...Typography.body, color: colors.textMuted, paddingVertical: Spacing.xs },
     retailerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs },
     retailerImage: { width: 36, height: 36, borderRadius: 6 },

@@ -3,7 +3,9 @@ import {
   Alert,
   Animated,
   Image,
+  ImageSourcePropType,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,6 +14,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import * as Haptics from 'expo-haptics'
 import { getAge } from '../src/utils/ageUtils'
 import { DateOfBirthInput } from '../src/components/inputs/DateOfBirthInput'
 import { useTranslation } from '../src/i18n'
@@ -19,7 +23,11 @@ import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfiles } from '../src/modules/profiles/ProfilesContext'
 import { importFamilyFromFile } from '../src/services/familyExport'
-import { getDefaultAvatarSource } from '../src/services/avatarService'
+import {
+  getDefaultAvatarSource,
+  pickAndSaveAvatar,
+  resolveAvatarUri,
+} from '../src/services/avatarService'
 import { FamilyMember, AllergenType, DietPreference, MemberRole } from '../src/types/profiles'
 import { Colors, Typography, Spacing, BorderRadius } from '../src/theme'
 import { useTheme, ThemeColors } from '../src/theme/ThemeContext'
@@ -75,6 +83,14 @@ export default function OnboardingScreen() {
   const [familyName, setFamilyName]   = useState('')
   const [memberCount, setMemberCount] = useState(3)
   const [drafts, setDrafts]           = useState<MemberDraft[]>([])
+  // Collapsed by default so the Next button is always reachable on small phones.
+  const [expandedAllergies, setExpandedAllergies]   = useState(false)
+  const [expandedConditions, setExpandedConditions] = useState(false)
+
+  function toggleSection(setter: (v: boolean) => void, current: boolean) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut)
+    setter(!current)
+  }
 
   // Slide/fade animation refs
   const slideAnim   = useRef(new Animated.Value(0)).current
@@ -82,6 +98,9 @@ export default function OnboardingScreen() {
 
   // Bounce scale for memberDone screen
   const bounceAnim = useRef(new Animated.Value(0)).current
+
+  // Spring-animated progress bar fill (0–1).
+  const progressAnim = useRef(new Animated.Value(0)).current
 
   function animateIn() {
     slideAnim.setValue(-260)
@@ -93,6 +112,8 @@ export default function OnboardingScreen() {
   }
 
   function goTo(next: Step, cb?: () => void) {
+    // Light haptic punctuates the advance — gives tactile "I moved forward" feedback.
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
     Animated.parallel([
       Animated.timing(slideAnim,   { toValue: 260, duration: 260, useNativeDriver: true }),
       Animated.timing(opacityAnim, { toValue: 0,   duration: 240, useNativeDriver: true }),
@@ -103,9 +124,10 @@ export default function OnboardingScreen() {
     })
   }
 
-  // Trigger bounce on memberDone
+  // Trigger bounce + success haptic on memberDone
   useEffect(() => {
     if (step.kind !== 'memberDone') return
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
     bounceAnim.setValue(0)
     Animated.spring(bounceAnim, {
       toValue: 1,
@@ -123,6 +145,17 @@ export default function OnboardingScreen() {
   }, [step])
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function getDraftAvatarSource(draft: MemberDraft): ImageSourcePropType {
+    if (draft.avatarUrl) return { uri: resolveAvatarUri(draft.avatarUrl) }
+    return getDefaultAvatarSource(draft.role, draft.dateOfBirth)
+  }
+
+  async function handlePickAvatar(index: number) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    const url = await pickAndSaveAvatar(`onboarding-${index}`)
+    if (url) updateDraft(index, { avatarUrl: url })
+  }
 
   function updateDraft(index: number, patch: Partial<MemberDraft>) {
     setDrafts((prev) => {
@@ -255,11 +288,27 @@ export default function OnboardingScreen() {
         style={styles.scrollStep}
         contentContainerStyle={styles.stepContainer}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.memberIndexLabel}>
           {tr.onboarding.memberOf(index + 1, memberCount)}
         </Text>
+
+        <View style={styles.avatarPickerWrapper}>
+          <TouchableOpacity
+            onPress={() => handlePickAvatar(index)}
+            activeOpacity={0.85}
+            accessibilityLabel={tr.onboarding.avatarPickerHint}
+          >
+            <Image source={getDraftAvatarSource(draft)} style={styles.avatarPickerImage} />
+            <View style={styles.avatarPickerCamera}>
+              <Ionicons name="camera" size={16} color={Colors.white} />
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.avatarPickerHint}>{tr.onboarding.avatarPickerHint}</Text>
+        </View>
+
         <Text style={styles.stepTitle}>{tr.onboarding.memberName}</Text>
 
         <TextInput
@@ -321,8 +370,9 @@ export default function OnboardingScreen() {
     return (
       <ScrollView
         style={styles.scrollStep}
-        contentContainerStyle={[styles.stepContainer, { paddingBottom: 40 }]}
+        contentContainerStyle={[styles.stepContainer, { paddingBottom: 80 }]}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.memberIndexLabel}>
@@ -379,45 +429,89 @@ export default function OnboardingScreen() {
           ))}
         </View>
 
-        <Text style={styles.fieldLabel}>{tr.onboarding.allergiesLabel}</Text>
-        <Text style={styles.fieldHint}>{tr.onboarding.allergiesHint}</Text>
-        <View style={styles.tagGrid}>
-          {EU_14_ALLERGENS.map((a) => {
-            const active = draft.allergies.includes(a)
-            return (
-              <TouchableOpacity
-                key={a}
-                style={[styles.tag, active && styles.tagAllergenActive]}
-                onPress={() => toggleAllergen(a)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.tagText, active && styles.tagAllergenText]}>
-                  {(tr.allergens as Record<string, string>)[a] ?? a}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
+        <TouchableOpacity
+          style={styles.collapsibleHeader}
+          onPress={() => toggleSection(setExpandedAllergies, expandedAllergies)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.collapsibleHeaderLeft}>
+            <Text style={styles.collapsibleTitle}>{tr.onboarding.allergiesLabel}</Text>
+            {draft.allergies.length > 0 && (
+              <View style={styles.collapsibleCountBadge}>
+                <Text style={styles.collapsibleCountText}>{draft.allergies.length}</Text>
+              </View>
+            )}
+          </View>
+          <Ionicons
+            name={expandedAllergies ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+        {expandedAllergies && (
+          <View style={styles.collapsibleBody}>
+            <Text style={styles.fieldHint}>{tr.onboarding.allergiesHint}</Text>
+            <View style={styles.tagGrid}>
+              {EU_14_ALLERGENS.map((a) => {
+                const active = draft.allergies.includes(a)
+                return (
+                  <TouchableOpacity
+                    key={a}
+                    style={[styles.tag, active && styles.tagAllergenActive]}
+                    onPress={() => toggleAllergen(a)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.tagText, active && styles.tagAllergenText]}>
+                      {(tr.allergens as Record<string, string>)[a] ?? a}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+          </View>
+        )}
 
-        <Text style={styles.fieldLabel}>{tr.onboarding.conditionsLabel}</Text>
-        <Text style={styles.fieldHint}>{tr.onboarding.conditionsHint}</Text>
-        <View style={styles.tagGrid}>
-          {CONDITIONS_LIST.map((c) => {
-            const active = draft.conditions.includes(c)
-            return (
-              <TouchableOpacity
-                key={c}
-                style={[styles.tag, active && styles.tagConditionActive]}
-                onPress={() => toggleCondition(c)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.tagText, active && styles.tagConditionText]}>
-                  {(tr.settings.conditions as Record<string, string>)[c] ?? c}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
+        <TouchableOpacity
+          style={styles.collapsibleHeader}
+          onPress={() => toggleSection(setExpandedConditions, expandedConditions)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.collapsibleHeaderLeft}>
+            <Text style={styles.collapsibleTitle}>{tr.onboarding.conditionsLabel}</Text>
+            {draft.conditions.length > 0 && (
+              <View style={styles.collapsibleCountBadge}>
+                <Text style={styles.collapsibleCountText}>{draft.conditions.length}</Text>
+              </View>
+            )}
+          </View>
+          <Ionicons
+            name={expandedConditions ? 'chevron-up' : 'chevron-down'}
+            size={18}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+        {expandedConditions && (
+          <View style={styles.collapsibleBody}>
+            <Text style={styles.fieldHint}>{tr.onboarding.conditionsHint}</Text>
+            <View style={styles.tagGrid}>
+              {CONDITIONS_LIST.map((c) => {
+                const active = draft.conditions.includes(c)
+                return (
+                  <TouchableOpacity
+                    key={c}
+                    style={[styles.tag, active && styles.tagConditionActive]}
+                    onPress={() => toggleCondition(c)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.tagText, active && styles.tagConditionText]}>
+                      {(tr.settings.conditions as Record<string, string>)[c] ?? c}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+          </View>
+        )}
 
         <TouchableOpacity
           style={[styles.primaryBtn, !canAdvance && styles.primaryBtnDisabled]}
@@ -440,7 +534,7 @@ export default function OnboardingScreen() {
       <View style={[styles.stepContainer, styles.centerContent]}>
         <Animated.View style={[styles.doneAvatarWrapper, { transform: [{ scale }] }]}>
           <Image
-            source={getDefaultAvatarSource(draft.role, draft.dateOfBirth)}
+            source={getDraftAvatarSource(draft)}
             style={styles.doneAvatar}
           />
         </Animated.View>
@@ -463,7 +557,7 @@ export default function OnboardingScreen() {
           {drafts.map((d, i) => (
             <View key={i} style={styles.summaryRow}>
               <Image
-                source={getDefaultAvatarSource(d.role, d.dateOfBirth)}
+                source={getDraftAvatarSource(d)}
                 style={styles.summaryAvatar}
               />
               <Text style={styles.summaryName}>{d.name}</Text>
@@ -527,11 +621,27 @@ export default function OnboardingScreen() {
 
   const progress = getProgress()
 
+  // Spring the progress fill toward the new value whenever the step changes.
+  // Fluid fill conveys "I'm advancing" more clearly than instant width snaps.
+  useEffect(() => {
+    Animated.spring(progressAnim, {
+      toValue: progress,
+      friction: 7,
+      tension: 50,
+      useNativeDriver: false,
+    }).start()
+  }, [progress, progressAnim])
+
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  })
+
   return (
     <SafeAreaView style={styles.root}>
       {/* Progress bar */}
       <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+        <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
       </View>
 
       {/* Back button */}
@@ -727,6 +837,78 @@ function makeStyles(colors: ThemeColors) {
     pillTextActive: {
       color: Colors.white,
       fontFamily: Typography.heading3.fontFamily,
+    },
+    // Avatar picker (renderMemberBasic)
+    avatarPickerWrapper: {
+      alignItems: 'center',
+      marginVertical: Spacing.md,
+      gap: Spacing.xs,
+    },
+    avatarPickerImage: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      borderWidth: 2,
+      borderColor: colors.surface,
+    },
+    avatarPickerCamera: {
+      position: 'absolute',
+      right: -2,
+      bottom: -2,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: Colors.healthGreen,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: colors.background,
+    },
+    avatarPickerHint: {
+      ...Typography.caption,
+      color: colors.textMuted,
+    },
+    // Collapsible sections (allergies / conditions)
+    collapsibleHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: BorderRadius.sm,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginTop: Spacing.sm,
+    },
+    collapsibleHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      flex: 1,
+    },
+    collapsibleTitle: {
+      ...Typography.body,
+      color: colors.text,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    collapsibleCountBadge: {
+      minWidth: 22,
+      height: 22,
+      paddingHorizontal: 6,
+      borderRadius: 11,
+      backgroundColor: Colors.healthGreen,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    collapsibleCountText: {
+      ...Typography.caption,
+      color: Colors.white,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    collapsibleBody: {
+      paddingTop: Spacing.sm,
+      gap: Spacing.xs,
     },
     // Three-column row for age/weight/height
     dobRow: {
