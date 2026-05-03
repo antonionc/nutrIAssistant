@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react'
 import {
   Alert,
   Animated,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -18,6 +19,7 @@ import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfiles } from '../src/modules/profiles/ProfilesContext'
 import { importFamilyFromFile } from '../src/services/familyExport'
+import { getDefaultAvatarSource } from '../src/services/avatarService'
 import { FamilyMember, AllergenType, DietPreference, MemberRole } from '../src/types/profiles'
 import { Colors, Typography, Spacing, BorderRadius } from '../src/theme'
 import { useTheme, ThemeColors } from '../src/theme/ThemeContext'
@@ -40,14 +42,6 @@ type MemberDraft = Omit<FamilyMember, 'id' | 'createdAt' | 'updatedAt'>
 
 const ROLES: MemberRole[] = ['father', 'mother', 'son', 'daughter', 'other']
 
-const EMOJI_BY_ROLE: Record<MemberRole, string[]> = {
-  father:   ['👨', '👨‍🦳', '👨‍🦱', '👨‍🦲', '🧔', '🧔‍♂️'],
-  mother:   ['👩', '👩‍🦳', '👩‍🦱', '👩‍🦰', '👱‍♀️', '🧕'],
-  son:      ['👦', '🧒', '🧑', '👱', '👨', '🧑‍🦱'],
-  daughter: ['👧', '🧒', '🧑', '👱‍♀️', '👩', '🧑‍🦰'],
-  other:    ['🧑', '👤', '👴', '👵', '🧓', '🧑‍🦽'],
-}
-
 const DIET_VALUES: DietPreference[] = ['none', 'mediterranean', 'vegetarian', 'vegan', 'pescatarian', 'keto']
 
 const CONDITIONS_LIST = [
@@ -65,7 +59,6 @@ function blankDraft(): MemberDraft {
     allergies: [],
     conditions: [],
     dietPreference: 'none',
-    avatarEmoji: '👤',
     isSchoolAge: false,
   }
 }
@@ -256,7 +249,6 @@ export default function OnboardingScreen() {
 
   function renderMemberBasic(index: number) {
     const draft = drafts[index] ?? blankDraft()
-    const emojis = EMOJI_BY_ROLE[draft.role] ?? EMOJI_BY_ROLE.other
 
     return (
       <ScrollView
@@ -285,29 +277,12 @@ export default function OnboardingScreen() {
             <TouchableOpacity
               key={r}
               style={[styles.pill, draft.role === r && styles.pillActive]}
-              onPress={() => updateDraft(index, {
-                role: r,
-                avatarEmoji: EMOJI_BY_ROLE[r][0],
-              })}
+              onPress={() => updateDraft(index, { role: r })}
               activeOpacity={0.8}
             >
               <Text style={[styles.pillText, draft.role === r && styles.pillTextActive]}>
                 {tr.settings.memberRoles[r]}
               </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.fieldLabel}>{tr.onboarding.avatarLabel}</Text>
-        <View style={styles.emojiGrid}>
-          {emojis.map((e) => (
-            <TouchableOpacity
-              key={e}
-              style={[styles.emojiBtn, draft.avatarEmoji === e && styles.emojiBtnActive]}
-              onPress={() => updateDraft(index, { avatarEmoji: e })}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.emojiChar}>{e}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -351,7 +326,7 @@ export default function OnboardingScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.memberIndexLabel}>
-          {draft.avatarEmoji} {draft.name} — {tr.onboarding.memberOf(index + 1, memberCount)}
+          {draft.name} — {tr.onboarding.memberOf(index + 1, memberCount)}
         </Text>
         <Text style={styles.stepTitle}>{tr.onboarding.healthTitle}</Text>
 
@@ -463,9 +438,12 @@ export default function OnboardingScreen() {
 
     return (
       <View style={[styles.stepContainer, styles.centerContent]}>
-        <Animated.Text style={[styles.doneEmoji, { transform: [{ scale }] }]}>
-          {draft.avatarEmoji ?? '👤'}
-        </Animated.Text>
+        <Animated.View style={[styles.doneAvatarWrapper, { transform: [{ scale }] }]}>
+          <Image
+            source={getDefaultAvatarSource(draft.role, draft.dateOfBirth)}
+            style={styles.doneAvatar}
+          />
+        </Animated.View>
         <Text style={styles.doneTitle}>{tr.onboarding.memberAdded(draft.name)}</Text>
         {remaining > 0 && (
           <Text style={styles.doneSubtitle}>{tr.onboarding.membersRemaining(remaining)}</Text>
@@ -484,7 +462,10 @@ export default function OnboardingScreen() {
         <View style={styles.membersSummary}>
           {drafts.map((d, i) => (
             <View key={i} style={styles.summaryRow}>
-              <Text style={styles.summaryEmoji}>{d.avatarEmoji ?? '👤'}</Text>
+              <Image
+                source={getDefaultAvatarSource(d.role, d.dateOfBirth)}
+                style={styles.summaryAvatar}
+              />
               <Text style={styles.summaryName}>{d.name}</Text>
               <Text style={styles.summaryMeta}>{tr.settings.memberRoles[d.role]} · {tr.onboarding.summaryAge(getAge(d.dateOfBirth))}</Text>
             </View>
@@ -747,29 +728,6 @@ function makeStyles(colors: ThemeColors) {
       color: Colors.white,
       fontFamily: Typography.heading3.fontFamily,
     },
-    // Emoji grid
-    emojiGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Spacing.sm,
-    },
-    emojiBtn: {
-      width: 52,
-      height: 52,
-      borderRadius: BorderRadius.md,
-      backgroundColor: colors.mintSurface,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 2,
-      borderColor: 'transparent',
-    },
-    emojiBtnActive: {
-      borderColor: Colors.healthGreen,
-      backgroundColor: `${Colors.healthGreen}18`,
-    },
-    emojiChar: {
-      fontSize: 26,
-    },
     // Three-column row for age/weight/height
     dobRow: {
       gap: 6,
@@ -829,9 +787,13 @@ function makeStyles(colors: ThemeColors) {
       fontFamily: Typography.heading3.fontFamily,
     },
     // Member done
-    doneEmoji: {
-      fontSize: 88,
+    doneAvatarWrapper: {
       marginBottom: Spacing.md,
+    },
+    doneAvatar: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
     },
     doneTitle: {
       ...Typography.heading1,
@@ -856,10 +818,10 @@ function makeStyles(colors: ThemeColors) {
       gap: Spacing.sm,
       paddingVertical: 2,
     },
-    summaryEmoji: {
-      fontSize: 22,
+    summaryAvatar: {
       width: 32,
-      textAlign: 'center',
+      height: 32,
+      borderRadius: 16,
     },
     summaryName: {
       ...Typography.bodyLarge,

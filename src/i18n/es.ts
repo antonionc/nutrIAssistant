@@ -33,27 +33,6 @@ export const ES = {
     assistant: 'Asistente',
   },
 
-  // Home Screen
-  home: {
-    greeting: (name: string) => `¡Hola, familia ${name}! 👋`,
-    today: 'Hoy',
-    dailyScore: 'Puntuación nutricional',
-    familyCalories: 'Calorías familiares',
-    todayMeals: 'Menú de hoy',
-    featuredRecipes: 'Recetas destacadas',
-    pantryAlerts: 'Alertas de despensa',
-    healthTips: 'Consejos de salud',
-    syncingRecipes: 'Sincronizando recetas...',
-    syncComplete: 'Recetas actualizadas',
-    noMealsPlanned: 'Sin menú planificado',
-    generatePlan: 'Generar plan',
-    viewAll: 'Ver todas',
-    caloriesGoal: (current: number, goal: number) => `${current} / ${goal} kcal`,
-    expiresSoon: 'Caducidad próxima',
-    lowStock: 'Bajo en stock',
-    daysLeft: (n: number) => `${n} día${n !== 1 ? 's' : ''}`,
-  },
-
   // Nutrition Planning
   nutrition: {
     title: 'Plan Nutricional',
@@ -96,10 +75,10 @@ export const ES = {
     worldCuisines: 'Cocinas del mundo',
     categories: {
       all: 'Todas',
-      breakfast: '🌅 Desayuno',
-      lunch: '☀️ Comida',
-      dinner: '🌙 Cena',
-      dessert: '🍰 Postre',
+      breakfast: 'Desayuno',
+      lunch: 'Comida',
+      dinner: 'Cena',
+      dessert: 'Postre',
     },
     prepTime: 'Preparación',
     totalTime: (min: number) => `${min} min`,
@@ -569,7 +548,6 @@ export const ES = {
     memberName: '¿Cómo se llama?',
     memberNamePlaceholder: 'Nombre',
     roleLabel: 'Rol en la familia',
-    avatarLabel: 'Elige un avatar',
     healthTitle: 'Datos físicos y salud',
     weightPlaceholder: 'kg',
     heightPlaceholder: 'cm',

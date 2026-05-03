@@ -1,7 +1,9 @@
 import * as FileSystem from 'expo-file-system/legacy'
 import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
-import { ActionSheetIOS, Alert, Linking, Platform } from 'react-native'
+import { ActionSheetIOS, Alert, ImageSourcePropType, Linking, Platform } from 'react-native'
+import { FamilyMember, MemberRole } from '../types/profiles'
+import { getAge } from '../utils/ageUtils'
 
 const AVATARS_PREFIX = 'avatars/'
 const AVATARS_DIR = `${FileSystem.documentDirectory}${AVATARS_PREFIX}`
@@ -11,6 +13,39 @@ const AVATARS_DIR = `${FileSystem.documentDirectory}${AVATARS_PREFIX}`
 export function resolveAvatarUri(avatarUrl: string): string {
   if (avatarUrl.startsWith('file://') || avatarUrl.startsWith('/')) return avatarUrl
   return `${FileSystem.documentDirectory ?? ''}${avatarUrl}`
+}
+
+const ADULT_AGE = 18
+
+// Bundled fallback avatars by inferred sex + age bracket.
+// 'other' role (or any role we can't classify) returns the neutral avatar.
+export function getDefaultAvatarSource(
+  role: MemberRole,
+  dateOfBirth: string
+): ImageSourcePropType {
+  const isFemale = role === 'mother' || role === 'daughter'
+  const isMale = role === 'father' || role === 'son'
+  if (!isFemale && !isMale) {
+    return require('../../assets/images/avatars/neutral.png')
+  }
+  const isChild = getAge(dateOfBirth) < ADULT_AGE
+  if (isFemale) {
+    return isChild
+      ? require('../../assets/images/avatars/child-female.png')
+      : require('../../assets/images/avatars/adult-female.png')
+  }
+  return isChild
+    ? require('../../assets/images/avatars/child-male.png')
+    : require('../../assets/images/avatars/adult-male.png')
+}
+
+// Returns the source to render for a member: their uploaded avatar if set,
+// otherwise a bundled default based on role + age (or neutral for 'other').
+export function getMemberAvatarSource(member: FamilyMember): ImageSourcePropType {
+  if (member.avatarUrl) {
+    return { uri: resolveAvatarUri(member.avatarUrl) }
+  }
+  return getDefaultAvatarSource(member.role, member.dateOfBirth)
 }
 
 async function ensureAvatarsDir(): Promise<void> {

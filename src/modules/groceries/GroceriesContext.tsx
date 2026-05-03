@@ -130,7 +130,7 @@ export function GroceriesProvider({ children }: { children: React.ReactNode }) {
               ingredientMap.set(key, { ...prev, quantity: prev.quantity + ing.quantity })
             } else {
               ingredientMap.set(key, {
-                id: `groc-plan-${Date.now()}-${Math.random()}`,
+                id: generateId('groc-plan'),
                 name: translatedName,
                 quantity: ing.quantity,
                 unit: translateUnit(ing.unit),

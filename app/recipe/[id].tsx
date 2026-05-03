@@ -16,7 +16,7 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { useRecipeDB } from '../../src/modules/recipes/useRecipeDB'
-import { useInventory } from '../../src/modules/inventory/useInventory'
+import { useInventory } from '../../src/modules/inventory/InventoryContext'
 import { useGroceries } from '../../src/modules/groceries/GroceriesContext'
 import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
@@ -24,7 +24,7 @@ import { useTranslation, t } from '../../src/i18n'
 import { Recipe, RecipeIngredient } from '../../src/types/recipes'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
 import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
-import { MEAL_LABELS, MEAL_EMOJIS } from '../../src/constants/mealTypes'
+import { MEAL_LABELS } from '../../src/constants/mealTypes'
 import { NutriScoreBadge } from '../../src/components/charts/NutriScoreBadge'
 import { MacroBar } from '../../src/components/charts/MacroBar'
 import { FamilyCompatibilityRow } from '../../src/components/badges/CompatibilityBadge'
@@ -529,7 +529,6 @@ export default function RecipeDetailScreen() {
                   style={[styles.mealBtn, selectedMeal === m && styles.mealBtnSelected]}
                   onPress={() => setSelectedMeal(m)}
                 >
-                  <Text style={styles.mealBtnEmoji}>{MEAL_EMOJIS[m]}</Text>
                   <Text style={[styles.mealBtnLabel, selectedMeal === m && styles.mealBtnLabelSelected]}>
                     {MEAL_LABELS[m]}
                   </Text>
@@ -787,8 +786,7 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.surface,
     },
     mealBtnSelected: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
-    mealBtnEmoji: { fontSize: 20, marginBottom: 4 },
-    mealBtnLabel: { ...Typography.caption, color: colors.text },
+    mealBtnLabel: { ...Typography.body, color: colors.text, textAlign: 'center' },
     mealBtnLabelSelected: { color: Colors.white, fontFamily: Typography.heading3.fontFamily },
     modalActions: { flexDirection: 'row', gap: Spacing.sm },
     modalCancelBtn: {

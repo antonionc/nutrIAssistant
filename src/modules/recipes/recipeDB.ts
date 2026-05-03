@@ -46,21 +46,6 @@ function recipeToRow(r: Recipe) {
   ]
 }
 
-export async function upsertRecipe(recipe: Recipe): Promise<void> {
-  const db = await getDatabase()
-  await db.runAsync(
-    `INSERT OR REPLACE INTO recipes (
-      id, name, name_es, category, cuisine, cuisine_flag,
-      instructions, instructions_es, ingredients,
-      prep_time, cook_time, servings,
-      image_url, local_image_path, source_api, source_id,
-      nutritional_info, allergens, tags, family_compatibility,
-      nutriscore, is_favorite, created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    recipeToRow(recipe)
-  )
-}
-
 /**
  * Removes imageUrl from any recipe whose image URL is shared by 2+ recipes
  * with different names in the batch. Stock/placeholder CDN images are often

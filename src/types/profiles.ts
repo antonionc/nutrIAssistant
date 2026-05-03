@@ -47,7 +47,6 @@ export interface FamilyMember {
   conditions: string[]
   dietPreference: DietPreference
   avatarUrl?: string
-  avatarEmoji?: string        // fallback emoji avatar
   isSchoolAge: boolean
   schoolMenuDays?: SchoolMenuEntry[]
   supplements?: SupplementEntry[]

@@ -6,9 +6,3 @@ export const MEAL_LABELS: Record<MealType, string> = {
   lunch: t.nutrition.lunch,
   dinner: t.nutrition.dinner,
 }
-
-export const MEAL_EMOJIS: Record<MealType, string> = {
-  breakfast: '🌅',
-  lunch: '☀️',
-  dinner: '🌙',
-}

@@ -15,7 +15,7 @@ import { useTranslation } from '../../src/i18n'
 import { getAge } from '../../src/utils/ageUtils'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
-import { useInventory } from '../../src/modules/inventory/useInventory'
+import { useInventory } from '../../src/modules/inventory/InventoryContext'
 import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useRecipeDB } from '../../src/modules/recipes/useRecipeDB'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
@@ -24,7 +24,7 @@ import { ProgressRing } from '../../src/components/charts/ProgressRing'
 import { MealCard } from '../../src/components/cards/MealCard'
 import { RecipeCard } from '../../src/components/cards/RecipeCard'
 import { FamilyMember } from '../../src/types/profiles'
-import { resolveAvatarUri } from '../../src/services/avatarService'
+import { getMemberAvatarSource } from '../../src/services/avatarService'
 import { Recipe } from '../../src/types/recipes'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -299,11 +299,7 @@ function MemberCardWide({
           animate
         />
         <View style={wide.avatarOverlay}>
-          {member.avatarUrl ? (
-            <Image source={{ uri: resolveAvatarUri(member.avatarUrl) }} style={wide.avatarImage} />
-          ) : (
-            <Text style={wide.avatarEmoji}>{member.avatarEmoji ?? '👤'}</Text>
-          )}
+          <Image source={getMemberAvatarSource(member)} style={wide.avatarImage} />
         </View>
       </View>
 
@@ -451,9 +447,6 @@ function makeWideStyles(colors: ThemeColors) {
       width: 72,
       height: 72,
       borderRadius: 36,
-    },
-    avatarEmoji: {
-      fontSize: 36,
     },
     info: {
       flex: 1,

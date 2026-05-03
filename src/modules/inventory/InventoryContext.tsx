@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { InventoryItem } from '../../types/inventory'
+import { Recipe } from '../../types/recipes'
 import { generateId } from '../../utils/idUtils'
 import {
   getAllInventoryItems,
@@ -9,9 +10,23 @@ import {
   getItemsByExpiryAlert,
   getExpiredItems,
 } from './inventoryDB'
-import { Recipe } from '../../types/recipes'
 
-export function useInventory() {
+interface InventoryContextValue {
+  items: InventoryItem[]
+  expiryAlerts: InventoryItem[]
+  expiredItems: InventoryItem[]
+  isLoading: boolean
+  reload: () => Promise<void>
+  addItem: (item: Omit<InventoryItem, 'id' | 'addedAt'>) => Promise<void>
+  updateItem: (id: string, updates: Partial<InventoryItem>) => Promise<void>
+  removeItem: (id: string) => Promise<void>
+  decrementIngredients: (recipe: Recipe) => Promise<void>
+  getLowStockAlerts: () => InventoryItem[]
+}
+
+const InventoryContext = createContext<InventoryContextValue | null>(null)
+
+export function InventoryProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [expiryAlerts, setExpiryAlerts] = useState<InventoryItem[]>([])
   const [expiredItems, setExpiredItems] = useState<InventoryItem[]>([])
@@ -92,16 +107,28 @@ export function useInventory() {
     )
   }, [items])
 
-  return {
-    items,
-    expiryAlerts,
-    expiredItems,
-    isLoading,
-    reload,
-    addItem,
-    updateItem,
-    removeItem,
-    decrementIngredients,
-    getLowStockAlerts,
-  }
+  return (
+    <InventoryContext.Provider
+      value={{
+        items,
+        expiryAlerts,
+        expiredItems,
+        isLoading,
+        reload,
+        addItem,
+        updateItem,
+        removeItem,
+        decrementIngredients,
+        getLowStockAlerts,
+      }}
+    >
+      {children}
+    </InventoryContext.Provider>
+  )
+}
+
+export function useInventory(): InventoryContextValue {
+  const ctx = useContext(InventoryContext)
+  if (!ctx) throw new Error('useInventory must be used within an InventoryProvider')
+  return ctx
 }

@@ -44,7 +44,7 @@ import {
   getSpoonacularCallsRemaining,
   SPOONACULAR_DAILY_LIMIT,
 } from '../src/services/spoonacular'
-import { pickAndSaveAvatar, deleteOldAvatar, resolveAvatarUri } from '../src/services/avatarService'
+import { pickAndSaveAvatar, deleteOldAvatar, getDefaultAvatarSource, getMemberAvatarSource } from '../src/services/avatarService'
 import { exportFamilyToMarkdown, importFamilyFromFile } from '../src/services/familyExport'
 import * as Sharing from 'expo-sharing'
 import { getRecipeCount, cleanDuplicateImageUrls } from '../src/modules/recipes/recipeDB'
@@ -328,7 +328,7 @@ export default function SettingsScreen() {
             onPress={() => addProfile({
               name: tr.settings.newMember, role: 'other', dateOfBirth: `${new Date().getFullYear() - 30}-01-01`, weight: 70, height: 170,
               allergies: [], conditions: [], dietPreference: 'none',
-              avatarEmoji: '👤', isSchoolAge: false,
+              isSchoolAge: false,
               dailyCalorieTarget: 2000, macroTargets: { protein: 150, carbs: 225, fat: 67 },
             })}
           >
@@ -412,144 +412,76 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* FatSecret */}
+        {/* Recipe sources — consolidated into one compact card */}
         <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>{SOURCE_LABELS.fatsecret.emoji} {SOURCE_LABELS.fatsecret.name}</Text>
-              <Text style={styles.hint}>{SOURCE_LABELS.fatsecret.description}</Text>
-            </View>
-            <Switch
-              value={sourcesConfig.fatsecret.enabled}
-              onValueChange={(v) => handleToggleSource('fatsecret', v)}
-              trackColor={{ false: colors.border, true: `${Colors.healthGreen}60` }}
-              thumbColor={sourcesConfig.fatsecret.enabled ? Colors.healthGreen : colors.textMuted}
-            />
-          </View>
-          {sourcesConfig.fatsecret.lastSyncedAt && (
-            <Text style={styles.hint}>
-              {tr.settings.lastSync(new Date(sourcesConfig.fatsecret.lastSyncedAt).toLocaleDateString())}
-              {sourcesConfig.fatsecret.syncedCount > 0 ? tr.settings.recipesSynced(sourcesConfig.fatsecret.syncedCount) : ''}
-            </Text>
-          )}
-          {sourcesConfig.fatsecret.enabled && (
-            <>
-              <View style={styles.divider} />
-              {syncingSource === 'fatsecret' ? (
-                <View style={styles.progressContainer}>
-                  <View style={styles.progressTrack}>
-                    <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
-                  </View>
-                  <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || tr.settings.syncing}</Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.primaryBtn, !!syncingSource && styles.primaryBtnDisabled]}
-                  onPress={() => handleSyncSource('fatsecret')}
-                  disabled={!!syncingSource}
-                >
-                  <Text style={styles.primaryBtnText}>{tr.settings.syncSourceBtn(SOURCE_LABELS.fatsecret.name)}</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
-        </View>
+          {(['fatsecret', 'spoonacular', 'themealdb'] as RecipeSourceKey[]).map((key, index) => {
+            const config = sourcesConfig[key]
+            const label = SOURCE_LABELS[key]
+            const isSyncing = syncingSource === key
+            const isOver = key === 'spoonacular' && spCallsRemaining < 10
+            const syncDisabled = !!syncingSource || isOver
+            const lastSyncDate = config.lastSyncedAt
+              ? new Date(config.lastSyncedAt).toLocaleDateString()
+              : null
+            const lastSyncLine = lastSyncDate
+              ? `${tr.settings.lastSync(lastSyncDate)}${config.syncedCount > 0 ? tr.settings.recipesSynced(config.syncedCount) : ''}`
+              : null
+            const callsLine = key === 'spoonacular' && config.enabled
+              ? tr.settings.callsToday(spCallsToday, SPOONACULAR_DAILY_LIMIT)
+              : null
 
-        {/* Spoonacular */}
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>{SOURCE_LABELS.spoonacular.emoji} {SOURCE_LABELS.spoonacular.name}</Text>
-              <Text style={styles.hint}>{SOURCE_LABELS.spoonacular.description}</Text>
-            </View>
-            <Switch
-              value={sourcesConfig.spoonacular.enabled}
-              onValueChange={(v) => handleToggleSource('spoonacular', v)}
-              trackColor={{ false: colors.border, true: `${Colors.healthGreen}60` }}
-              thumbColor={sourcesConfig.spoonacular.enabled ? Colors.healthGreen : colors.textMuted}
-            />
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.hint}>{tr.settings.callsToday(spCallsToday, SPOONACULAR_DAILY_LIMIT)}</Text>
-            <Text style={[styles.hint, { color: spCallsRemaining < 20 ? Colors.errorRed : colors.textMuted }]}>
-              {tr.settings.callsRemaining(spCallsRemaining)}
-            </Text>
-          </View>
-          {sourcesConfig.spoonacular.lastSyncedAt && (
-            <Text style={styles.hint}>
-              {tr.settings.lastSync(new Date(sourcesConfig.spoonacular.lastSyncedAt).toLocaleDateString())}
-              {sourcesConfig.spoonacular.syncedCount > 0 ? tr.settings.recipesSynced(sourcesConfig.spoonacular.syncedCount) : ''}
-            </Text>
-          )}
-          {sourcesConfig.spoonacular.enabled && (
-            <>
-              <View style={styles.divider} />
-              {syncingSource === 'spoonacular' ? (
-                <View style={styles.progressContainer}>
-                  <View style={styles.progressTrack}>
-                    <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
+            return (
+              <View key={key}>
+                {index > 0 && <View style={styles.sourceDivider} />}
+                <View style={styles.sourceRow}>
+                  <Text style={styles.sourceEmoji}>{label.emoji}</Text>
+                  <View style={styles.sourceInfo}>
+                    <Text style={styles.sourceName} numberOfLines={1}>{label.name}</Text>
+                    <Text style={styles.sourceMeta} numberOfLines={1}>{label.description}</Text>
+                    {(callsLine || lastSyncLine) && (
+                      <Text style={styles.sourceMeta} numberOfLines={1}>
+                        {callsLine}{callsLine && lastSyncLine ? ' · ' : ''}{lastSyncLine}
+                      </Text>
+                    )}
                   </View>
-                  <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || tr.settings.syncing}</Text>
+                  {config.enabled && (
+                    isSyncing ? (
+                      <ActivityIndicator size="small" color={Colors.healthGreen} style={styles.sourceAction} />
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => handleSyncSource(key)}
+                        disabled={syncDisabled}
+                        style={[styles.sourceAction, syncDisabled && styles.sourceActionDisabled]}
+                        accessibilityLabel={tr.settings.syncSourceBtn(label.name)}
+                      >
+                        <Ionicons name="sync" size={20} color={syncDisabled ? colors.textMuted : Colors.healthGreen} />
+                      </TouchableOpacity>
+                    )
+                  )}
+                  <Switch
+                    value={config.enabled}
+                    onValueChange={(v) => handleToggleSource(key, v)}
+                    trackColor={{ false: colors.border, true: Colors.healthGreen }}
+                    thumbColor={Colors.white}
+                    ios_backgroundColor={colors.border}
+                  />
                 </View>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.primaryBtn, (!!syncingSource || spCallsRemaining < 10) && styles.primaryBtnDisabled]}
-                  onPress={() => handleSyncSource('spoonacular')}
-                  disabled={!!syncingSource || spCallsRemaining < 10}
-                >
-                  <Text style={styles.primaryBtnText}>{tr.settings.syncSourceBtn(SOURCE_LABELS.spoonacular.name)}</Text>
-                </TouchableOpacity>
-              )}
-              {spCallsRemaining < 10 && (
-                <Text style={[styles.hint, { color: Colors.errorRed, marginTop: 4 }]}>
-                  {tr.settings.dailyLimitReached}
-                </Text>
-              )}
-            </>
-          )}
-        </View>
-
-        {/* TheMealDB */}
-        <View style={styles.card}>
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>{SOURCE_LABELS.themealdb.emoji} {SOURCE_LABELS.themealdb.name}</Text>
-              <Text style={styles.hint}>{SOURCE_LABELS.themealdb.description}</Text>
-            </View>
-            <Switch
-              value={sourcesConfig.themealdb.enabled}
-              onValueChange={(v) => handleToggleSource('themealdb', v)}
-              trackColor={{ false: colors.border, true: `${Colors.healthGreen}60` }}
-              thumbColor={sourcesConfig.themealdb.enabled ? Colors.healthGreen : colors.textMuted}
-            />
-          </View>
-          {sourcesConfig.themealdb.lastSyncedAt && (
-            <Text style={styles.hint}>
-              {tr.settings.lastSync(new Date(sourcesConfig.themealdb.lastSyncedAt).toLocaleDateString())}
-              {sourcesConfig.themealdb.syncedCount > 0 ? tr.settings.recipesSynced(sourcesConfig.themealdb.syncedCount) : ''}
-            </Text>
-          )}
-          {sourcesConfig.themealdb.enabled && (
-            <>
-              <View style={styles.divider} />
-              {syncingSource === 'themealdb' ? (
-                <View style={styles.progressContainer}>
-                  <View style={styles.progressTrack}>
-                    <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
+                {isSyncing && (
+                  <View style={styles.progressContainer}>
+                    <View style={styles.progressTrack}>
+                      <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
+                    </View>
+                    <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || tr.settings.syncing}</Text>
                   </View>
-                  <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || tr.settings.syncing}</Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.primaryBtn, !!syncingSource && styles.primaryBtnDisabled]}
-                  onPress={() => handleSyncSource('themealdb')}
-                  disabled={!!syncingSource}
-                >
-                  <Text style={styles.primaryBtnText}>{tr.settings.syncSourceBtn(SOURCE_LABELS.themealdb.name)}</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
+                )}
+                {isOver && config.enabled && (
+                  <Text style={[styles.hint, { color: Colors.errorRed, marginTop: 4 }]}>
+                    {tr.settings.dailyLimitReached}
+                  </Text>
+                )}
+              </View>
+            )
+          })}
         </View>
 
         {/* ── Integraciones de salud ──────────── */}
@@ -703,15 +635,15 @@ function MemberProfileRow({
     <View style={styles.memberSection}>
       <View style={styles.memberHeader}>
         <TouchableOpacity onPress={handleAvatarPress} style={styles.memberAvatarBtn}>
-          {member.avatarUrl && !avatarError ? (
-            <Image
-              source={{ uri: resolveAvatarUri(member.avatarUrl) }}
-              style={styles.memberAvatarImage}
-              onError={() => setAvatarError(true)}
-            />
-          ) : (
-            <Text style={styles.memberEmoji}>{member.avatarEmoji ?? '👤'}</Text>
-          )}
+          <Image
+            source={
+              avatarError
+                ? getDefaultAvatarSource(member.role, member.dateOfBirth)
+                : getMemberAvatarSource(member)
+            }
+            style={styles.memberAvatarImage}
+            onError={() => setAvatarError(true)}
+          />
           <Text style={styles.memberAvatarEdit}>📷</Text>
         </TouchableOpacity>
         <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }} onPress={onToggle}>
@@ -878,6 +810,23 @@ function makeStyles(colors: ThemeColors) {
     progressTrack: { height: 6, backgroundColor: colors.mintSurface, borderRadius: 3 },
     progressBar: { height: 6, backgroundColor: Colors.healthGreen, borderRadius: 3 },
     progressText: { ...Typography.caption, color: colors.textSecondary },
+    sourceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      paddingVertical: Spacing.xs,
+    },
+    sourceEmoji: { fontSize: 22 },
+    sourceInfo: { flex: 1, minWidth: 0 },
+    sourceName: {
+      ...Typography.body,
+      color: colors.text,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    sourceMeta: { ...Typography.caption, color: colors.textMuted, marginTop: 1 },
+    sourceDivider: { height: 1, backgroundColor: colors.divider, marginVertical: Spacing.xs },
+    sourceAction: { padding: Spacing.xs },
+    sourceActionDisabled: { opacity: 0.4 },
     comingSoon: { ...Typography.body, color: colors.textMuted, paddingVertical: Spacing.xs },
     retailerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs },
     retailerImage: { width: 36, height: 36, borderRadius: 6 },
@@ -892,7 +841,6 @@ function makeStyles(colors: ThemeColors) {
     memberAvatarBtn: { position: 'relative' },
     memberAvatarImage: { width: 44, height: 44, borderRadius: 22 },
     memberAvatarEdit: { position: 'absolute', bottom: -2, right: -2, fontSize: 10 },
-    memberEmoji: { fontSize: 28 },
     memberName: { ...Typography.bodyLarge, color: colors.text, fontFamily: Typography.heading3.fontFamily },
     memberMeta: { ...Typography.caption, color: colors.textSecondary },
     expandIcon: { fontSize: 12, color: colors.textMuted },

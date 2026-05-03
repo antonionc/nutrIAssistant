@@ -3,7 +3,7 @@ import { AIContext as AIContextType, AIMessage, OnDeviceLLMStatus } from '../../
 import { generateId } from '../../utils/idUtils'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { usePlanner } from '../planner/PlannerContext'
-import { getAllInventoryItems } from '../inventory/inventoryDB'
+import { useInventory } from '../inventory/InventoryContext'
 import { getSchoolMenuEntries } from '../planner/plannerDB'
 import { routeQuery, isOffline } from '../../services/aiRouter'
 import { streamCompletion } from '../../services/claude'
@@ -26,6 +26,7 @@ const AIEngineContext = createContext<AIEngineContextValue | null>(null)
 export function AIEngineProvider({ children }: { children: React.ReactNode }) {
   const { profiles } = useProfiles()
   const { weekPlans } = usePlanner()
+  const { items: inventory } = useInventory()
   const [messages, setMessages] = useState<AIMessage[]>([])
   const [isResponding, setIsResponding] = useState(false)
   const [llmStatus, setLlmStatus] = useState<OnDeviceLLMStatus>({
@@ -43,9 +44,8 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
   const sendMessage = useCallback(
     async (content: string, imageBase64?: string) => {
       const schoolAgeIds = profiles.filter((p) => p.isSchoolAge).map((p) => p.id)
-      const [offline, inventory, schoolMenuEntries] = await Promise.all([
+      const [offline, schoolMenuEntries] = await Promise.all([
         isOffline(),
-        getAllInventoryItems(),
         Promise.all(schoolAgeIds.map((id) => getSchoolMenuEntries(id))).then((res) =>
           res.flat().map((e) => ({ ...e, meal: 'lunch' as const }))
         ),
@@ -161,7 +161,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
         setIsResponding(false)
       }
     },
-    [profiles, weekPlans, messages, llmStatus.isLoaded]
+    [profiles, weekPlans, inventory, messages, llmStatus.isLoaded]
   )
 
   const clearHistory = useCallback(() => {

@@ -4,7 +4,7 @@ import { CompatibilityResult } from '../../types/recipes'
 import { FamilyMember } from '../../types/profiles'
 import { Colors, Typography, Spacing } from '../../theme'
 import { useTheme, ThemeColors } from '../../theme/ThemeContext'
-import { resolveAvatarUri } from '../../services/avatarService'
+import { getMemberAvatarSource } from '../../services/avatarService'
 
 interface CompatibilityBadgeProps {
   result: CompatibilityResult
@@ -29,15 +29,13 @@ export function CompatibilityBadge({ result, member, showName = true }: Compatib
       ? Colors.warningOrange
       : Colors.healthGreen
 
-  const hasAvatar = member?.avatarUrl || member?.avatarEmoji
+  const avatarSource = member ? getMemberAvatarSource(member) : null
 
   return (
     <View style={styles.container}>
       <View style={[styles.iconCircle, { backgroundColor: `${iconColor}20` }]}>
-        {member?.avatarUrl ? (
-          <Image source={{ uri: resolveAvatarUri(member.avatarUrl) }} style={styles.avatarImage} />
-        ) : member?.avatarEmoji ? (
-          <Text style={styles.emoji}>{member.avatarEmoji}</Text>
+        {avatarSource ? (
+          <Image source={avatarSource} style={styles.avatarImage} />
         ) : (
           <Text style={[styles.icon, { color: iconColor }]}>{icon}</Text>
         )}
@@ -52,7 +50,7 @@ export function CompatibilityBadge({ result, member, showName = true }: Compatib
           ) : null}
         </View>
       )}
-      {hasAvatar && (
+      {avatarSource && (
         <Text style={[styles.statusIcon, { color: iconColor }]}>{icon}</Text>
       )}
     </View>
@@ -105,11 +103,7 @@ function CompactCompatibilityDot({
 
   return (
     <View style={[styles.dot, { borderColor }]}>
-      {member.avatarUrl ? (
-        <Image source={{ uri: resolveAvatarUri(member.avatarUrl) }} style={styles.dotImage} />
-      ) : (
-        <Text style={styles.dotEmoji}>{member.avatarEmoji ?? '👤'}</Text>
-      )}
+      <Image source={getMemberAvatarSource(member)} style={styles.dotImage} />
     </View>
   )
 }
@@ -132,9 +126,6 @@ function makeStyles(colors: ThemeColors) {
       width: 32,
       height: 32,
       borderRadius: 16,
-    },
-    emoji: {
-      fontSize: 16,
     },
     icon: {
       fontSize: 14,
@@ -174,9 +165,6 @@ function makeStyles(colors: ThemeColors) {
       width: 28,
       height: 28,
       borderRadius: 14,
-    },
-    dotEmoji: {
-      fontSize: 14,
     },
   })
 }

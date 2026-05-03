@@ -18,7 +18,7 @@ import { analyzePDF } from '../../services/claude'
 import { InventoryLite } from '../../services/prompts/cloud'
 import { SCHOOL_MENU_EXTRACTION_PROMPT } from '../../services/prompts/schoolMenuExtraction'
 import { useProfiles } from '../profiles/ProfilesContext'
-import { getRandomRecipes } from '../recipes/recipeDB'
+import { selectWeekRecipes } from './mealPlanGenerator'
 
 function getWeekDates(startDate?: string): string[] {
   const start = startDate ? new Date(startDate) : new Date()
@@ -28,16 +28,6 @@ function getWeekDates(startDate?: string): string[] {
     d.setDate(d.getDate() + i)
     return d.toISOString().split('T')[0]
   })
-}
-
-// Shuffle an array in place (Fisher-Yates)
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
 }
 
 type MealSlot = 'breakfast' | 'lunch' | 'dinner'
@@ -79,50 +69,26 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
   }, [loadWeek])
 
   /**
-   * Generates a 7-day meal plan by selecting verified recipes (FatSecret /
-   * Spoonacular) directly from the local DB. No cloud AI call is made here —
-   * the plan is assembled locally with allergen-aware filtering and shuffle-
-   * based variety. School-menu lunch entries are respected for school-age kids.
+   * Generates a 7-day meal plan from locally-stored recipes. Uses the on-device
+   * LLM (Llama 3.2 1B) when available to curate cuisine/variety; otherwise
+   * falls back to a deterministic algorithmic picker that guarantees no
+   * within-week repeats and rotates cuisines. School-menu lunch entries are
+   * respected for school-age kids. No cloud AI calls.
    */
   const generateWeekPlan = useCallback(
-    async (inventory: InventoryLite[], startDate?: string) => {
+    async (_inventory: InventoryLite[], startDate?: string) => {
       setIsGenerating(true)
       try {
         const dates = getWeekDates(startDate)
 
-        // Collect school menu dates so we can skip AI-assigned lunches
+        // Collect school menu dates so we can skip lunches for those days
         const schoolAgeIds = profiles.filter((p) => p.isSchoolAge).map((p) => p.id)
         const schoolMenuEntries = (
           await Promise.all(schoolAgeIds.map((id) => getSchoolMenuEntries(id)))
         ).flat()
         const schoolMenuDates = new Set(schoolMenuEntries.map((e) => e.date))
 
-        // Collect all family allergens for safe-recipe filtering
-        const familyAllergens = new Set(
-          profiles.flatMap((p) => (p.allergies ?? []) as string[])
-        )
-
-        const isSafe = (r: Recipe) =>
-          familyAllergens.size === 0 ||
-          !(r.allergens ?? []).some((a) => familyAllergens.has(a))
-
-        // Fetch a larger pool per category for variety across the week
-        const POOL = 14
-        const [rawBreakfasts, rawLunches, rawDinners] = await Promise.all([
-          getRandomRecipes(POOL, 'breakfast'),
-          getRandomRecipes(POOL, 'lunch'),
-          getRandomRecipes(POOL, 'dinner'),
-        ])
-
-        // Prefer allergen-safe recipes; fall back to full pool if none pass
-        const safePick = (pool: Recipe[]) => {
-          const safe = pool.filter(isSafe)
-          return shuffle(safe.length ? safe : pool)
-        }
-
-        const breakfasts = safePick(rawBreakfasts)
-        const lunches = safePick(rawLunches)
-        const dinners = safePick(rawDinners)
+        const { breakfasts, lunches, dinners } = await selectWeekRecipes(profiles)
 
         const now = new Date().toISOString()
         const newPlans: MealPlan[] = []
@@ -138,11 +104,11 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
             id: `plan-${date}`,
             date,
             meals: {
-              breakfast: breakfasts[i % breakfasts.length],
+              breakfast: breakfasts[i],
               // If there is a school menu for this day, leave lunch undefined
               // so it doesn't compete with what the child eats at school
-              lunch: schoolMenuDates.has(date) ? undefined : lunches[i % lunches.length],
-              dinner: dinners[i % dinners.length],
+              lunch: schoolMenuDates.has(date) ? undefined : lunches[i],
+              dinner: dinners[i],
             },
             memberTargets: {},
             isLocked: false,

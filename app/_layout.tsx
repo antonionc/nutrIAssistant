@@ -15,6 +15,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ProfilesProvider } from '../src/modules/profiles/ProfilesContext'
 import { PlannerProvider } from '../src/modules/planner/PlannerContext'
 import { GroceriesProvider } from '../src/modules/groceries/GroceriesContext'
+import { InventoryProvider } from '../src/modules/inventory/InventoryContext'
 import { AIEngineProvider } from '../src/modules/ai-engine/AIContext'
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext'
 import { runMigrations } from '../src/db/database'
@@ -30,6 +31,7 @@ function AppShell() {
     <ProfilesProvider>
       <GroceriesProvider>
       <PlannerProvider>
+      <InventoryProvider>
       <AIEngineProvider>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -49,6 +51,7 @@ function AppShell() {
         </Stack>
         <StatusBar style={isDark ? 'light' : 'dark'} />
       </AIEngineProvider>
+      </InventoryProvider>
       </PlannerProvider>
       </GroceriesProvider>
     </ProfilesProvider>

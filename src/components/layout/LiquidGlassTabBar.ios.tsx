@@ -8,6 +8,7 @@ import { LiquidGlassTabBarViewNative } from '../../../modules/liquid-glass'
 import { AIAssistant } from './AIAssistant'
 import { CustomTabBar } from './CustomTabBar'
 import { Colors, Shadows } from '../../theme'
+import { t } from '../../i18n'
 
 const isNativeAvailable = !!NativeModulesProxy.LiquidGlass
 
@@ -18,11 +19,11 @@ const SF_SYMBOLS: Record<string, string> = {
   groceries: 'cart',
 }
 
-const TAB_LABELS: Record<string, string> = {
-  index: 'Inicio',
-  nutrition: 'Nutrición',
-  recipes: 'Recetas',
-  groceries: 'Compra',
+const TAB_LABEL_KEYS: Record<string, keyof typeof t.tabs> = {
+  index: 'home',
+  nutrition: 'nutrition',
+  recipes: 'recipes',
+  groceries: 'groceries',
 }
 
 function LiquidGlassTabBarNative({ state, descriptors, navigation }: BottomTabBarProps) {
@@ -30,10 +31,13 @@ function LiquidGlassTabBarNative({ state, descriptors, navigation }: BottomTabBa
   const assistantRef = useRef<any>(null)
   const barHeight = 56 + insets.bottom
 
-  const tabs = state.routes.map((route) => ({
-    sfSymbol: SF_SYMBOLS[route.name] ?? 'circle',
-    label: descriptors[route.key].options.title ?? TAB_LABELS[route.name] ?? route.name,
-  }))
+  const tabs = state.routes.map((route) => {
+    const labelKey = TAB_LABEL_KEYS[route.name]
+    return {
+      sfSymbol: SF_SYMBOLS[route.name] ?? 'circle',
+      label: descriptors[route.key].options.title ?? (labelKey ? t.tabs[labelKey] : route.name),
+    }
+  })
 
   return (
     <>
