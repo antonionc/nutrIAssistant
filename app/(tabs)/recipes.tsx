@@ -12,43 +12,46 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRecipeDB } from '../../src/modules/recipes/useRecipeDB'
 import { Colors, Typography, Spacing, BorderRadius } from '../../src/theme'
 import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
+import { useTranslation } from '../../src/i18n'
 import { SearchBar } from '../../src/components/inputs/SearchBar'
 import { RecipeCard } from '../../src/components/cards/RecipeCard'
 import { EmptyState } from '../../src/components/layout/EmptyState'
 import { RecipeCategory } from '../../src/types/recipes'
 
-const CUISINE_OPTIONS = [
-  { key: 'All', flag: '🌍', label: 'Todas' },
-  { key: 'Spanish', flag: '🇪🇸', label: 'Española' },
-  { key: 'French', flag: '🇫🇷', label: 'Francesa' },
-  { key: 'Greek', flag: '🇬🇷', label: 'Griega' },
-  { key: 'Italian', flag: '🇮🇹', label: 'Italiana' },
-  { key: 'Japanese', flag: '🇯🇵', label: 'Japonesa' },
-  { key: 'Chinese', flag: '🇨🇳', label: 'China' },
-  { key: 'Indian', flag: '🇮🇳', label: 'India' },
-  { key: 'Thai', flag: '🇹🇭', label: 'Tailandesa' },
-  { key: 'Mexican', flag: '🇲🇽', label: 'Mexicana' },
-  { key: 'American', flag: '🇺🇸', label: 'Americana' },
-  { key: 'British', flag: '🇬🇧', label: 'Británica' },
-  { key: 'Moroccan', flag: '🇲🇦', label: 'Marroquí' },
-  { key: 'Turkish', flag: '🇹🇷', label: 'Turca' },
-  { key: 'Vietnamese', flag: '🇻🇳', label: 'Vietnamita' },
+const CUISINE_ENTRIES: { key: string; flag: string; i18nKey: keyof ReturnType<typeof useTranslation>['recipes']['cuisines'] }[] = [
+  { key: 'All',        flag: '🌍', i18nKey: 'all' },
+  { key: 'Spanish',    flag: '🇪🇸', i18nKey: 'spanish' },
+  { key: 'French',     flag: '🇫🇷', i18nKey: 'french' },
+  { key: 'Greek',      flag: '🇬🇷', i18nKey: 'greek' },
+  { key: 'Italian',    flag: '🇮🇹', i18nKey: 'italian' },
+  { key: 'Japanese',   flag: '🇯🇵', i18nKey: 'japanese' },
+  { key: 'Chinese',    flag: '🇨🇳', i18nKey: 'chinese' },
+  { key: 'Indian',     flag: '🇮🇳', i18nKey: 'indian' },
+  { key: 'Thai',       flag: '🇹🇭', i18nKey: 'thai' },
+  { key: 'Mexican',    flag: '🇲🇽', i18nKey: 'mexican' },
+  { key: 'American',   flag: '🇺🇸', i18nKey: 'american' },
+  { key: 'British',    flag: '🇬🇧', i18nKey: 'british' },
+  { key: 'Moroccan',   flag: '🇲🇦', i18nKey: 'moroccan' },
+  { key: 'Turkish',    flag: '🇹🇷', i18nKey: 'turkish' },
+  { key: 'Vietnamese', flag: '🇻🇳', i18nKey: 'vietnamese' },
 ]
 
-const CATEGORY_FILTERS: { key: RecipeCategory | 'all'; label: string }[] = [
-  { key: 'all', label: 'Todas' },
-  { key: 'breakfast', label: 'Desayuno' },
-  { key: 'lunch', label: 'Comida' },
-  { key: 'dinner', label: 'Cena' },
-]
+const CATEGORY_KEYS: (RecipeCategory | 'all')[] = ['all', 'breakfast', 'lunch', 'dinner']
 
 export default function RecipesScreen() {
   const { recipes, isLoading, load, search, filterByCategory, filterByCuisine } = useRecipeDB()
   const { colors } = useTheme()
+  const tr = useTranslation()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [query, setQuery] = useState('')
   const [selectedCuisine, setSelectedCuisine] = useState('All')
   const [selectedCategory, setSelectedCategory] = useState<RecipeCategory | 'all'>('all')
+
+  const CUISINE_OPTIONS = CUISINE_ENTRIES.map((c) => ({ ...c, label: tr.recipes.cuisines[c.i18nKey] }))
+  const CATEGORY_FILTERS = CATEGORY_KEYS.map((key) => ({
+    key,
+    label: key === 'all' ? tr.recipes.categories.all : tr.recipes.categories[key as keyof typeof tr.recipes.categories],
+  }))
 
   useEffect(() => {
     load(40)
@@ -88,7 +91,7 @@ export default function RecipesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Recetas</Text>
+        <Text style={styles.title}>{tr.recipes.title}</Text>
       </View>
 
       {/* Buscador */}
@@ -96,7 +99,7 @@ export default function RecipesScreen() {
         <SearchBar
           value={query}
           onChangeText={handleSearch}
-          placeholder="Buscar recetas, ingredientes..."
+          placeholder={tr.recipes.search}
           onClear={() => handleSearch('')}
         />
       </View>
@@ -118,7 +121,7 @@ export default function RecipesScreen() {
 
       {/* Cocinas del mundo */}
       <View style={styles.cuisineSection}>
-        <Text style={styles.cuisineLabel}>Cocinas del mundo</Text>
+        <Text style={styles.cuisineLabel}>{tr.recipes.worldCuisines}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cuisineStrip}>
           {CUISINE_OPTIONS.map((c) => (
             <TouchableOpacity
@@ -138,22 +141,24 @@ export default function RecipesScreen() {
       {/* Cuadrícula de recetas */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Cargando recetas...</Text>
+          <Text style={styles.loadingText}>{tr.recipes.loading}</Text>
         </View>
       ) : recipes.length === 0 ? (
         <EmptyState
-          emoji="🍽️"
-          title="Sin recetas"
-          description="Prueba un filtro diferente o una búsqueda distinta."
-          actionLabel="Mostrar todas"
+          emoji={tr.empty.recipes.emoji}
+          title={tr.empty.recipes.title}
+          description={tr.empty.recipes.desc}
+          actionLabel={tr.empty.recipes.action}
           onAction={() => { setQuery(''); setSelectedCuisine('All'); setSelectedCategory('all'); load(40) }}
         />
       ) : (
         <FlatList
           data={recipes}
           keyExtractor={(r) => r.id}
+          numColumns={2}
           style={styles.recipeList}
           contentContainerStyle={styles.grid}
+          columnWrapperStyle={styles.gridRow}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
             <RecipeCard
@@ -171,8 +176,8 @@ export default function RecipesScreen() {
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
-    title: { ...Typography.heading1, color: colors.text },
+    header: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.xs },
+    title: { ...Typography.displaySerif, color: colors.text },
     searchContainer: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
     filterRow: {
       flexDirection: 'row',
@@ -203,7 +208,8 @@ function makeStyles(colors: ThemeColors) {
     cuisineText: { ...Typography.caption, color: colors.text },
     cuisineTextActive: { color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
     recipeList: { flex: 1 },
-    grid: { paddingTop: Spacing.md },
+    grid: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+    gridRow: { gap: Spacing.sm, marginBottom: Spacing.sm },
     loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     loadingText: { ...Typography.body, color: colors.textSecondary },
   })

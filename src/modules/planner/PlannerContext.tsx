@@ -14,11 +14,11 @@ import {
   saveSchoolMenuEntry,
   getSchoolMenuEntries,
 } from './plannerDB'
-import { complete, analyzePDF } from '../../services/claude'
-import { buildMealPlanGenerationPrompt, buildCloudSystemPrompt, InventoryLite } from '../../services/prompts/cloud'
+import { analyzePDF } from '../../services/claude'
+import { InventoryLite } from '../../services/prompts/cloud'
 import { SCHOOL_MENU_EXTRACTION_PROMPT } from '../../services/prompts/schoolMenuExtraction'
 import { useProfiles } from '../profiles/ProfilesContext'
-import { getRandomRecipes, searchVerifiedByCategory } from '../recipes/recipeDB'
+import { getRandomRecipes } from '../recipes/recipeDB'
 
 function getWeekDates(startDate?: string): string[] {
   const start = startDate ? new Date(startDate) : new Date()
@@ -28,6 +28,16 @@ function getWeekDates(startDate?: string): string[] {
     d.setDate(d.getDate() + i)
     return d.toISOString().split('T')[0]
   })
+}
+
+// Shuffle an array in place (Fisher-Yates)
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
 }
 
 type MealSlot = 'breakfast' | 'lunch' | 'dinner'
@@ -68,134 +78,78 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
     loadWeek()
   }, [loadWeek])
 
-  const generateFallbackPlan = useCallback(async (startDate?: string) => {
-    const dates = getWeekDates(startDate)
-    const now = new Date().toISOString()
-    const newPlans: MealPlan[] = []
-
-    for (const date of dates) {
-      const existing = weekPlans.find((p) => p.date === date)
-      if (existing?.isLocked) {
-        newPlans.push(existing)
-        continue
-      }
-
-      const [breakfastRecs, lunchRecs, dinnerRecs] = await Promise.all([
-        getRandomRecipes(1, 'breakfast'),
-        getRandomRecipes(1, 'lunch'),
-        getRandomRecipes(1, 'dinner'),
-      ])
-
-      const plan: MealPlan = {
-        id: `plan-${date}`,
-        date,
-        meals: {
-          breakfast: breakfastRecs[0],
-          lunch: lunchRecs[0],
-          dinner: dinnerRecs[0],
-        },
-        memberTargets: {},
-        isLocked: false,
-        generatedAt: now,
-        updatedAt: now,
-      }
-      await upsertMealPlan(plan)
-      newPlans.push(plan)
-    }
-    setWeekPlans(newPlans)
-  }, [weekPlans])
-
+  /**
+   * Generates a 7-day meal plan by selecting verified recipes (FatSecret /
+   * Spoonacular) directly from the local DB. No cloud AI call is made here —
+   * the plan is assembled locally with allergen-aware filtering and shuffle-
+   * based variety. School-menu lunch entries are respected for school-age kids.
+   */
   const generateWeekPlan = useCallback(
-    async (
-      inventory: InventoryLite[],
-      startDate?: string
-    ) => {
+    async (inventory: InventoryLite[], startDate?: string) => {
       setIsGenerating(true)
       try {
+        const dates = getWeekDates(startDate)
+
+        // Collect school menu dates so we can skip AI-assigned lunches
         const schoolAgeIds = profiles.filter((p) => p.isSchoolAge).map((p) => p.id)
         const schoolMenuEntries = (
           await Promise.all(schoolAgeIds.map((id) => getSchoolMenuEntries(id)))
-        ).flat().map((e) => ({ ...e, meal: 'lunch' as const }))
+        ).flat()
+        const schoolMenuDates = new Set(schoolMenuEntries.map((e) => e.date))
 
-        const systemPrompt = buildCloudSystemPrompt(profiles, inventory, undefined, schoolMenuEntries.length ? schoolMenuEntries : undefined)
-        const userPrompt = buildMealPlanGenerationPrompt(profiles, inventory, schoolMenuEntries.length ? schoolMenuEntries : undefined, startDate)
-
-        const response = await complete(
-          [{ id: 'req', role: 'user', content: userPrompt, timestamp: new Date().toISOString() }],
-          systemPrompt
+        // Collect all family allergens for safe-recipe filtering
+        const familyAllergens = new Set(
+          profiles.flatMap((p) => (p.allergies ?? []) as string[])
         )
 
-        const jsonStart = response.indexOf('[')
-        if (jsonStart === -1) throw new Error('No JSON array in response')
-        let jsonStr = response.slice(jsonStart)
-        const jsonEnd = jsonStr.lastIndexOf(']')
-        if (jsonEnd !== -1) jsonStr = jsonStr.slice(0, jsonEnd + 1)
+        const isSafe = (r: Recipe) =>
+          familyAllergens.size === 0 ||
+          !(r.allergens ?? []).some((a) => familyAllergens.has(a))
 
-        type MealEntry = {
-          name: string
-          calories: number
-          protein: number
-          carbs: number
-          fat: number
-        }
-        let dayPlans: Array<{
-          date: string
-          breakfast: MealEntry
-          lunch: MealEntry
-          dinner: MealEntry
-        }>
-        try {
-          dayPlans = JSON.parse(jsonStr)
-        } catch {
-          const partial = jsonStr.replace(/,?\s*\{[^{}]*$/, '') + ']'
-          dayPlans = JSON.parse(partial.startsWith('[') ? partial : '[' + partial)
+        // Fetch a larger pool per category for variety across the week
+        const POOL = 14
+        const [rawBreakfasts, rawLunches, rawDinners] = await Promise.all([
+          getRandomRecipes(POOL, 'breakfast'),
+          getRandomRecipes(POOL, 'lunch'),
+          getRandomRecipes(POOL, 'dinner'),
+        ])
+
+        // Prefer allergen-safe recipes; fall back to full pool if none pass
+        const safePick = (pool: Recipe[]) => {
+          const safe = pool.filter(isSafe)
+          return shuffle(safe.length ? safe : pool)
         }
 
-        // Find the best matching verified recipe (FatSecret / seed) for a meal
-        // suggestion from the AI. We never store AI-generated recipe stubs.
-        const findVerifiedRecipe = async (
-          mealName: string,
-          category: Recipe['category']
-        ): Promise<Recipe | undefined> => {
-          // Try the first meaningful keyword from the AI-suggested name
-          const keyword =
-            mealName.split(/\s+/).find((w) => w.length > 3) ?? mealName
-          const results = await searchVerifiedByCategory(keyword, category, 3)
-          if (results.length > 0) return results[0]
-          // Fallback: random verified recipe from the same category
-          const randoms = await getRandomRecipes(1, category)
-          return randoms[0]
-        }
+        const breakfasts = safePick(rawBreakfasts)
+        const lunches = safePick(rawLunches)
+        const dinners = safePick(rawDinners)
 
         const now = new Date().toISOString()
         const newPlans: MealPlan[] = []
 
-        for (const dayPlan of dayPlans) {
-          const existing = weekPlans.find((p) => p.date === dayPlan.date)
+        for (const [i, date] of dates.entries()) {
+          const existing = weekPlans.find((p) => p.date === date)
           if (existing?.isLocked) {
             newPlans.push(existing)
             continue
           }
 
-          const [breakfastRecipe, lunchRecipe, dinnerRecipe] = await Promise.all([
-            findVerifiedRecipe(dayPlan.breakfast.name, 'breakfast'),
-            findVerifiedRecipe(dayPlan.lunch.name, 'lunch'),
-            findVerifiedRecipe(dayPlan.dinner.name, 'dinner'),
-          ])
-
           const plan: MealPlan = {
-            id: `plan-${dayPlan.date}`,
-            date: dayPlan.date,
+            id: `plan-${date}`,
+            date,
             meals: {
-              breakfast: breakfastRecipe,
-              lunch: lunchRecipe,
-              dinner: dinnerRecipe,
+              breakfast: breakfasts[i % breakfasts.length],
+              // If there is a school menu for this day, leave lunch undefined
+              // so it doesn't compete with what the child eats at school
+              lunch: schoolMenuDates.has(date) ? undefined : lunches[i % lunches.length],
+              dinner: dinners[i % dinners.length],
             },
             memberTargets: {},
             isLocked: false,
             generatedAt: now,
             updatedAt: now,
           }
+
           await upsertMealPlan(plan)
           newPlans.push(plan)
         }
@@ -203,12 +157,11 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
         setWeekPlans(newPlans)
       } catch (error) {
         console.error('[Planner] Generation failed:', error)
-        await generateFallbackPlan(startDate)
       } finally {
         setIsGenerating(false)
       }
     },
-    [profiles, weekPlans, generateFallbackPlan]
+    [profiles, weekPlans]
   )
 
   const setMealForDate = useCallback(async (
@@ -257,6 +210,7 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
     await loadWeek()
   }, [loadWeek])
 
+  // School menu upload stays cloud: needs PDF vision (Anthropic Claude)
   const uploadSchoolMenu = useCallback(
     async (pdfBase64: string, childId: string): Promise<void> => {
       const response = await analyzePDF(pdfBase64, SCHOOL_MENU_EXTRACTION_PROMPT)
@@ -264,8 +218,11 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       if (!jsonMatch) throw new Error('Could not extract school menu data')
 
       const entries: Array<{
-        date: string; description: string; extractedIngredients: string[];
-        extractedAllergens: string[]; nutritionalEstimate?: { calories: number; protein: number; carbs: number; fat: number }
+        date: string
+        description: string
+        extractedIngredients: string[]
+        extractedAllergens: string[]
+        nutritionalEstimate?: { calories: number; protein: number; carbs: number; fat: number }
       }> = JSON.parse(jsonMatch[0])
 
       for (const entry of entries) {

@@ -20,6 +20,7 @@ import { useInventory } from '../../src/modules/inventory/useInventory'
 import { useGroceries } from '../../src/modules/groceries/GroceriesContext'
 import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
+import { useTranslation, t } from '../../src/i18n'
 import { Recipe, RecipeIngredient } from '../../src/types/recipes'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
 import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
@@ -27,6 +28,13 @@ import { MEAL_LABELS, MEAL_EMOJIS } from '../../src/constants/mealTypes'
 import { NutriScoreBadge } from '../../src/components/charts/NutriScoreBadge'
 import { MacroBar } from '../../src/components/charts/MacroBar'
 import { FamilyCompatibilityRow } from '../../src/components/badges/CompatibilityBadge'
+
+const SOURCE_LABEL: Partial<Record<string, string>> = {
+  fatsecret:    'FatSecret',
+  spoonacular:  'Spoonacular',
+  themealdb:    'TheMealDB',
+  ai_generated: '✨ AI',
+}
 
 const PARALLAX_HEIGHT = 280
 const HEADER_HEIGHT = 64
@@ -39,6 +47,7 @@ export default function RecipeDetailScreen() {
   const { setMealForDate, removeMealFromDate } = usePlanner()
   const { profiles } = useProfiles()
   const { colors } = useTheme()
+  const tr = useTranslation()
   const styles = useMemo(() => makeStyles(colors), [colors])
 
   const [recipe, setRecipe] = useState<Recipe | null>(null)
@@ -111,7 +120,7 @@ export default function RecipeDetailScreen() {
     if (!recipe) return
     const missing = recipe.ingredients.filter((i) => !ingredientInPantry(i))
     if (missing.length === 0) {
-      Alert.alert('¡Todo en despensa!', 'Ya tienes todos los ingredientes.')
+      Alert.alert(tr.recipes.allInPantry, tr.recipes.allInPantryDesc)
       return
     }
     for (const ing of missing) {
@@ -119,7 +128,7 @@ export default function RecipeDetailScreen() {
     }
     setAddedToCart(new Set(missing.map((i) => i.name)))
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-    Alert.alert('¡Añadido!', `${missing.length} ingrediente${missing.length > 1 ? 's' : ''} añadido${missing.length > 1 ? 's' : ''} a tu lista de la compra.`)
+    Alert.alert(tr.misc.details, tr.recipes.addedToCartCount(missing.length))
   }
 
   const handleAddToPlan = async () => {
@@ -136,8 +145,8 @@ export default function RecipeDetailScreen() {
     setPlanModalVisible(false)
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     Alert.alert(
-      '¡Añadido al plan!',
-      `${recipe.name} añadida a ${MEAL_LABELS[selectedMeal].toLowerCase()} del ${formatDateLabel(selectedDate, true)}.`
+      tr.recipes.addedToPlanTitle,
+      tr.recipes.addedToPlanFull(recipe.name, MEAL_LABELS[selectedMeal].toLowerCase(), formatDateLabel(selectedDate, true))
     )
   }
 
@@ -149,16 +158,16 @@ export default function RecipeDetailScreen() {
   const handleCookNow = async () => {
     if (!recipe) return
     Alert.alert(
-      'Cocinar ahora',
-      `Se usarán ingredientes de tu despensa para "${recipe.name}". ¿Continuar?`,
+      tr.recipes.cookNowTitle,
+      tr.recipes.cookNowConfirm(recipe.name),
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: tr.app.cancel, style: 'cancel' },
         {
-          text: '¡Cocinar!',
+          text: tr.recipes.cookNowGo,
           onPress: async () => {
             await decrementIngredients(recipe)
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
-            Alert.alert('¡Buen provecho!', 'La despensa ha sido actualizada.')
+            Alert.alert(tr.recipes.cookNowSuccess)
           },
         },
       ]
@@ -192,9 +201,9 @@ export default function RecipeDetailScreen() {
   if (!recipe) {
     return (
       <SafeAreaView style={styles.loadingContainer} edges={['top']}>
-        <Text style={styles.errorText}>Receta no encontrada.</Text>
+        <Text style={styles.errorText}>{tr.recipes.recipeNotFound}</Text>
         <TouchableOpacity style={styles.backBtnFallback} onPress={() => router.back()}>
-          <Text style={styles.backBtnFallbackText}>← Atrás</Text>
+          <Text style={styles.backBtnFallbackText}>{tr.app.back}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     )
@@ -276,6 +285,9 @@ export default function RecipeDetailScreen() {
                   {recipe.cuisineFlag ?? ''} {recipe.cuisine}
                 </Text>
               )}
+              {recipe.sourceApi && SOURCE_LABEL[recipe.sourceApi] && (
+                <Text style={styles.recipeSource}>{SOURCE_LABEL[recipe.sourceApi]}</Text>
+              )}
             </View>
             {recipe.nutriscore && (
               <NutriScoreBadge score={recipe.nutriscore} size="lg" />
@@ -284,22 +296,22 @@ export default function RecipeDetailScreen() {
 
           {/* Quick stats strip */}
           <View style={styles.statsStrip}>
-            <StatChip icon="⏱" label={`${totalTime} min`} sub="Tiempo total" colors={colors} />
+            <StatChip icon="⏱" label={`${totalTime} min`} sub={tr.recipes.totalTimeLabel} colors={colors} />
             <View style={styles.statDivider} />
-            <StatChip icon="👥" label={`${servings}`} sub="Raciones" colors={colors} />
+            <StatChip icon="👥" label={`${servings}`} sub={tr.recipes.servings} colors={colors} />
             <View style={styles.statDivider} />
-            <StatChip icon="🔥" label={`${scaledNutrition(recipe.nutritionalInfo.calories)}`} sub="kcal" colors={colors} />
+            <StatChip icon="🔥" label={`${scaledNutrition(recipe.nutritionalInfo.calories)}`} sub={tr.recipes.kcal} colors={colors} />
             {recipe.tags.length > 0 && (
               <>
                 <View style={styles.statDivider} />
-                <StatChip icon="🏷️" label={recipe.tags[0]} sub="Etiqueta" colors={colors} />
+                <StatChip icon="🏷️" label={recipe.tags[0]} sub={tr.recipes.tag} colors={colors} />
               </>
             )}
           </View>
 
           {/* Serving size selector */}
           <View style={styles.servingSelector}>
-            <Text style={styles.sectionLabel}>Tamaño de ración</Text>
+            <Text style={styles.sectionLabel}>{tr.recipes.servingSize}</Text>
             <View style={styles.servingControl}>
               <TouchableOpacity
                 style={styles.servingBtn}
@@ -319,31 +331,31 @@ export default function RecipeDetailScreen() {
 
           {/* Macro Bar */}
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Info nutricional (por ración)</Text>
+            <Text style={styles.sectionLabel}>{tr.recipes.nutritionalInfo}</Text>
             <MacroBar nutritionalInfo={recipe.nutritionalInfo} height={10} showLabels />
             <View style={styles.nutritionGrid}>
-              <NutritionCell label="Calorías" value={`${scaledNutrition(recipe.nutritionalInfo.calories)}`} unit="kcal" color={Colors.goldenAmber} colors={colors} />
-              <NutritionCell label="Proteínas" value={`${scaledNutrition(recipe.nutritionalInfo.protein)}`} unit="g" color={Colors.healthGreen} colors={colors} />
-              <NutritionCell label="Carbohid." value={`${scaledNutrition(recipe.nutritionalInfo.carbs)}`} unit="g" color={Colors.goldenAmber} colors={colors} />
-              <NutritionCell label="Grasas" value={`${scaledNutrition(recipe.nutritionalInfo.fat)}`} unit="g" color="#FF8C42" colors={colors} />
+              <NutritionCell label={tr.nutrients.calories} value={`${scaledNutrition(recipe.nutritionalInfo.calories)}`} unit="kcal" color={Colors.goldenAmber} colors={colors} />
+              <NutritionCell label={tr.nutrients.protein} value={`${scaledNutrition(recipe.nutritionalInfo.protein)}`} unit="g" color={Colors.healthGreen} colors={colors} />
+              <NutritionCell label={tr.nutrients.carbs} value={`${scaledNutrition(recipe.nutritionalInfo.carbs)}`} unit="g" color={Colors.goldenAmber} colors={colors} />
+              <NutritionCell label={tr.nutrients.fat} value={`${scaledNutrition(recipe.nutritionalInfo.fat)}`} unit="g" color="#FF8C42" colors={colors} />
             </View>
             {(recipe.nutritionalInfo.fiber !== undefined || recipe.nutritionalInfo.sodium !== undefined) && (
               <View style={styles.extraNutrition}>
                 {recipe.nutritionalInfo.fiber !== undefined && (
                   <View style={styles.extraNutritionItem}>
-                    <Text style={styles.extraNutritionLabel}>Fibra</Text>
+                    <Text style={styles.extraNutritionLabel}>{tr.nutrients.fiber}</Text>
                     <Text style={styles.extraNutritionValue}>{scaledNutrition(recipe.nutritionalInfo.fiber)}g</Text>
                   </View>
                 )}
                 {recipe.nutritionalInfo.sodium !== undefined && (
                   <View style={styles.extraNutritionItem}>
-                    <Text style={styles.extraNutritionLabel}>Sodio</Text>
+                    <Text style={styles.extraNutritionLabel}>{tr.nutrients.sodium}</Text>
                     <Text style={styles.extraNutritionValue}>{scaledNutrition(recipe.nutritionalInfo.sodium)}mg</Text>
                   </View>
                 )}
                 {recipe.nutritionalInfo.sugar !== undefined && (
                   <View style={styles.extraNutritionItem}>
-                    <Text style={styles.extraNutritionLabel}>Azúcar</Text>
+                    <Text style={styles.extraNutritionLabel}>{tr.nutrients.sugar}</Text>
                     <Text style={styles.extraNutritionValue}>{scaledNutrition(recipe.nutritionalInfo.sugar)}g</Text>
                   </View>
                 )}
@@ -354,7 +366,7 @@ export default function RecipeDetailScreen() {
           {/* Family Compatibility */}
           {profiles.length > 0 && recipe.familyCompatibility && (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Compatibilidad familiar</Text>
+              <Text style={styles.sectionLabel}>{tr.recipes.familyCompatibility}</Text>
               <FamilyCompatibilityRow
                 compatibility={recipe.familyCompatibility}
                 members={profiles}
@@ -366,7 +378,7 @@ export default function RecipeDetailScreen() {
           {/* Allergen Badges */}
           {recipe.allergens.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Contiene alérgenos</Text>
+              <Text style={styles.sectionLabel}>{tr.recipes.allergens}</Text>
               <View style={styles.allergenRow}>
                 {recipe.allergens.map((a) => (
                   <View key={a} style={styles.allergenBadge}>
@@ -381,20 +393,18 @@ export default function RecipeDetailScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionLabel}>
-                Ingredientes ({recipe.ingredients.length})
+                {tr.recipes.ingredientsCount(recipe.ingredients.length)}
               </Text>
               {recipe.ingredients.length > 0 && (
                 <Text style={styles.pantryStatus}>
-                  {pantryCount}/{recipe.ingredients.length} en despensa
+                  {tr.recipes.inPantryCount(pantryCount, recipe.ingredients.length)}
                 </Text>
               )}
             </View>
 
             {recipe.ingredients.length === 0 && (
               <View style={styles.noIngredientsNote}>
-                <Text style={styles.noIngredientsText}>
-                  Esta receta fue generada por la IA sin lista de ingredientes detallada. Pide a NutriBot los ingredientes necesarios.
-                </Text>
+                <Text style={styles.noIngredientsText}>{tr.recipes.noIngredientsNote}</Text>
               </View>
             )}
 
@@ -413,7 +423,7 @@ export default function RecipeDetailScreen() {
                   <View style={styles.ingredientBadges}>
                     {inPantry && (
                       <View style={styles.pantryBadge}>
-                        <Text style={styles.pantryBadgeText}>✓ Despensa</Text>
+                        <Text style={styles.pantryBadgeText}>{tr.recipes.inPantry}</Text>
                       </View>
                     )}
                     {ingredient.isAllergen && (
@@ -426,7 +436,7 @@ export default function RecipeDetailScreen() {
                         style={styles.addCartBtn}
                         onPress={() => handleAddIngredientToCart(ingredient)}
                       >
-                        <Text style={styles.addCartBtnText}>+ Compra</Text>
+                        <Text style={styles.addCartBtnText}>{tr.recipes.addToCart}</Text>
                       </TouchableOpacity>
                     )}
                     {inCart && (
@@ -441,9 +451,7 @@ export default function RecipeDetailScreen() {
 
             {missingCount > 0 && (
               <TouchableOpacity style={styles.addAllMissingBtn} onPress={handleAddAllMissingToCart}>
-                <Text style={styles.addAllMissingText}>
-                  + Añadir {missingCount} ingrediente{missingCount > 1 ? 's' : ''} que falta{missingCount > 1 ? 'n' : ''} a la compra
-                </Text>
+                <Text style={styles.addAllMissingText}>{tr.recipes.missingToCart(missingCount)}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -455,7 +463,7 @@ export default function RecipeDetailScreen() {
                 style={styles.sectionHeaderRow}
                 onPress={() => setInstructionsExpanded((prev) => !prev)}
               >
-                <Text style={styles.sectionLabel}>Instrucciones ({recipe.instructions.length} pasos)</Text>
+                <Text style={styles.sectionLabel}>{tr.recipes.instructionsCount(recipe.instructions.length)}</Text>
                 <Text style={styles.expandToggle}>{instructionsExpanded ? '▲' : '▼'}</Text>
               </TouchableOpacity>
 
@@ -490,11 +498,11 @@ export default function RecipeDetailScreen() {
       >
         <Pressable style={styles.modalOverlay} onPress={() => setPlanModalVisible(false)}>
           <Pressable style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Añadir al plan semanal</Text>
+            <Text style={styles.modalTitle}>{tr.recipes.addToWeekPlan}</Text>
             <Text style={styles.modalRecipeName} numberOfLines={1}>{recipe.name}</Text>
 
             {/* Day selector */}
-            <Text style={styles.modalSectionLabel}>Día</Text>
+            <Text style={styles.modalSectionLabel}>{tr.recipes.dayLabel}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dayScroll}>
               {nextDays.map((date) => (
                 <TouchableOpacity
@@ -513,7 +521,7 @@ export default function RecipeDetailScreen() {
             </ScrollView>
 
             {/* Meal selector */}
-            <Text style={styles.modalSectionLabel}>Comida</Text>
+            <Text style={styles.modalSectionLabel}>{tr.recipes.mealLabel}</Text>
             <View style={styles.mealRow}>
               {(['breakfast', 'lunch', 'dinner'] as const).map((m) => (
                 <TouchableOpacity
@@ -532,10 +540,10 @@ export default function RecipeDetailScreen() {
             {/* Confirm / Cancel */}
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPlanModalVisible(false)}>
-                <Text style={styles.modalCancelText}>Cancelar</Text>
+                <Text style={styles.modalCancelText}>{tr.app.cancel}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmAddToPlan}>
-                <Text style={styles.modalConfirmText}>Añadir</Text>
+                <Text style={styles.modalConfirmText}>{tr.recipes.addBtn}</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -545,30 +553,26 @@ export default function RecipeDetailScreen() {
       {/* Sticky Action Bar */}
       <View style={styles.actionBar}>
         <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleAddToPlan}>
-          <Text style={styles.actionBtnSecondaryText}>Plan</Text>
+          <Text style={styles.actionBtnSecondaryText}>{tr.recipes.planBtn}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleAddAllMissingToCart}>
-          <Text style={styles.actionBtnSecondaryText}>Compra</Text>
+          <Text style={styles.actionBtnSecondaryText}>{tr.recipes.buyBtn}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtnPrimary} onPress={handleCookNow}>
-          <Text style={styles.actionBtnPrimaryText}>Cocinar</Text>
+          <Text style={styles.actionBtnPrimaryText}>{tr.recipes.cookBtn}</Text>
         </TouchableOpacity>
       </View>
     </View>
   )
 }
 
-const DAY_NAMES_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-
 function formatDateLabel(dateStr: string, long: boolean): string {
   const today = new Date().toISOString().split('T')[0]
   const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
-  if (dateStr === today) return long ? 'hoy' : 'Hoy'
-  if (dateStr === tomorrow) return long ? 'mañana' : 'Mañana'
+  if (dateStr === today) return t.recipes.today
+  if (dateStr === tomorrow) return t.recipes.tomorrow
   const d = new Date(dateStr + 'T12:00:00')
-  return long
-    ? `el ${DAY_NAMES_ES[d.getDay()]} ${d.getDate()}`
-    : DAY_NAMES_ES[d.getDay()]
+  return d.toLocaleDateString(undefined, long ? { weekday: 'short', day: 'numeric' } : { weekday: 'short' })
 }
 
 function StatChip({ icon, label, sub, colors }: { icon: string; label: string; sub: string; colors: ThemeColors }) {
@@ -641,6 +645,7 @@ function makeStyles(colors: ThemeColors) {
     titleBlock: { flex: 1 },
     recipeName: { ...Typography.heading1, color: colors.text, flexWrap: 'wrap' },
     recipeCuisine: { ...Typography.body, color: colors.textSecondary, marginTop: 2 },
+    recipeSource: { fontSize: 11, color: colors.textMuted, letterSpacing: 0.2, marginTop: 2 },
 
     statsStrip: {
       flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,

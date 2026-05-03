@@ -9,6 +9,7 @@ export interface ThemeColors {
   background: string
   surface: string
   cardBackground: string
+  warmSurface: string
   text: string
   textSecondary: string
   textMuted: string
@@ -45,6 +46,7 @@ function buildColors(isDark: boolean): ThemeColors {
     background: semantic.background,
     surface: semantic.surface,
     cardBackground: semantic.cardBackground,
+    warmSurface: semantic.warmSurface,
     text: semantic.text,
     textSecondary: semantic.textSecondary,
     textMuted: semantic.textMuted,

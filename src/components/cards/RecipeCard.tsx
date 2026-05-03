@@ -8,6 +8,13 @@ import {
 } from 'react-native'
 import { Recipe } from '../../types/recipes'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
+
+const SOURCE_LABEL: Partial<Record<string, string>> = {
+  fatsecret:    'FatSecret',
+  spoonacular:  'Spoonacular',
+  themealdb:    'TheMealDB',
+  ai_generated: '✨ AI',
+}
 import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 import { NutriScoreBadge } from '../charts/NutriScoreBadge'
 
@@ -21,34 +28,37 @@ export function RecipeCard({ recipe, onPress, compact = false }: RecipeCardProps
   const { colors } = useTheme()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const totalTime = recipe.prepTime + recipe.cookTime
+  const dietTag = recipe.tags[0] ?? null
 
   if (compact) {
+    // Horizontal carousel card — 160px wide thumbnail
     return (
       <TouchableOpacity style={styles.compactCardShadow} onPress={onPress} activeOpacity={0.8}>
         <View style={styles.compactCard}>
-        <View style={styles.compactImageWrapper}>
-          {recipe.imageUrl ? (
-            <Image source={{ uri: recipe.imageUrl }} style={styles.compactImage} />
-          ) : (
-            <View style={[styles.compactImage, styles.imagePlaceholder]}>
-              <Text style={styles.placeholderEmoji}>🍽️</Text>
-            </View>
-          )}
-          {recipe.nutriscore && (
-            <View style={styles.compactNutriscore}>
-              <NutriScoreBadge score={recipe.nutriscore} size="sm" />
-            </View>
-          )}
-        </View>
-        <View style={styles.compactContent}>
-          <Text style={styles.compactName} numberOfLines={2}>{recipe.name}</Text>
-          <Text style={styles.compactMeta}>⏱ {totalTime}min · 🔥 {recipe.nutritionalInfo.calories} kcal</Text>
-        </View>
+          <View style={styles.compactImageWrapper}>
+            {recipe.imageUrl ? (
+              <Image source={{ uri: recipe.imageUrl }} style={styles.compactImage} />
+            ) : (
+              <View style={[styles.compactImage, styles.imagePlaceholder]}>
+                <Text style={styles.placeholderEmoji}>🍽️</Text>
+              </View>
+            )}
+            {recipe.nutriscore && (
+              <View style={styles.compactNutriscore}>
+                <NutriScoreBadge score={recipe.nutriscore} size="sm" />
+              </View>
+            )}
+          </View>
+          <View style={styles.compactContent}>
+            <Text style={styles.compactName} numberOfLines={2}>{recipe.name}</Text>
+            <Text style={styles.compactMeta}>{totalTime} min · {recipe.nutritionalInfo.calories} kcal</Text>
+          </View>
         </View>
       </TouchableOpacity>
     )
   }
 
+  // Default: vertical card with full-bleed image, for 2-column grid
   return (
     <TouchableOpacity style={styles.cardShadow} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.card}>
@@ -60,6 +70,13 @@ export function RecipeCard({ recipe, onPress, compact = false }: RecipeCardProps
               <Text style={styles.placeholderEmoji}>🍽️</Text>
             </View>
           )}
+          {/* Dietary tag badge — top left overlay */}
+          {dietTag && (
+            <View style={styles.dietBadge}>
+              <Text style={styles.dietBadgeText} numberOfLines={1}>{dietTag}</Text>
+            </View>
+          )}
+          {/* Nutriscore — top right overlay */}
           {recipe.nutriscore && (
             <View style={styles.nutriscoreOverlay}>
               <NutriScoreBadge score={recipe.nutriscore} size="sm" />
@@ -72,27 +89,9 @@ export function RecipeCard({ recipe, onPress, compact = false }: RecipeCardProps
             <Text style={styles.cuisineTag}>{recipe.cuisineFlag} {recipe.cuisine}</Text>
           ) : null}
           <Text style={styles.name} numberOfLines={2}>{recipe.name}</Text>
-
-          <View style={styles.metaRow}>
-            <View style={styles.metaChip}>
-              <Text style={styles.metaChipText}>⏱ {totalTime} min</Text>
-            </View>
-            <View style={styles.metaChip}>
-              <Text style={styles.metaChipText}>🔥 {recipe.nutritionalInfo.calories} kcal</Text>
-            </View>
-            {recipe.nutritionalInfo.protein > 0 && (
-              <View style={[styles.metaChip, styles.metaChipGreen]}>
-                <Text style={[styles.metaChipText, styles.metaChipTextGreen]}>
-                  {recipe.nutritionalInfo.protein}g prot.
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {recipe.tags.length > 0 && (
-            <Text style={styles.tags} numberOfLines={1}>
-              {recipe.tags.slice(0, 3).join(' · ')}
-            </Text>
+          <Text style={styles.meta}>{totalTime} min · {recipe.nutritionalInfo.calories} kcal</Text>
+          {SOURCE_LABEL[recipe.sourceApi ?? ''] && (
+            <Text style={styles.sourceLabel}>{SOURCE_LABEL[recipe.sourceApi ?? '']}</Text>
           )}
         </View>
       </View>
@@ -102,84 +101,83 @@ export function RecipeCard({ recipe, onPress, compact = false }: RecipeCardProps
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    // ── Default vertical card ────────────────────────────────────────────────
     cardShadow: {
-      borderRadius: BorderRadius.xl,
+      borderRadius: BorderRadius.lg,
       ...Shadows.card,
-      marginHorizontal: Spacing.md,
-      marginBottom: Spacing.md,
+      flex: 1,
     },
     card: {
-      flexDirection: 'row',
       backgroundColor: colors.cardBackground,
-      borderRadius: BorderRadius.xl,
+      borderRadius: BorderRadius.lg,
       overflow: 'hidden',
     },
     imageWrapper: {
       position: 'relative',
-      width: 120,
-      height: 120,
+      width: '100%',
+      aspectRatio: 4 / 3,
     },
     image: {
-      width: 120,
-      height: 120,
+      width: '100%',
+      height: '100%',
       resizeMode: 'cover',
     },
     imagePlaceholder: {
-      backgroundColor: colors.mintSurface,
+      backgroundColor: colors.warmSurface,
       alignItems: 'center',
       justifyContent: 'center',
     },
     placeholderEmoji: {
       fontSize: 36,
     },
+    dietBadge: {
+      position: 'absolute',
+      top: Spacing.xs,
+      left: Spacing.xs,
+      backgroundColor: 'rgba(245,243,238,0.92)',
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 4,
+      borderRadius: BorderRadius.pill,
+      maxWidth: '70%',
+    },
+    dietBadgeText: {
+      fontSize: 11,
+      fontFamily: Typography.overline.fontFamily,
+      color: Colors.warmCharcoal,
+      letterSpacing: 0.2,
+    },
     nutriscoreOverlay: {
       position: 'absolute',
-      bottom: Spacing.xs,
-      left: Spacing.xs,
+      top: Spacing.xs,
+      right: Spacing.xs,
     },
     content: {
-      flex: 1,
-      padding: Spacing.md,
-      justifyContent: 'center',
-      gap: Spacing.xs,
+      padding: Spacing.sm,
+      gap: 3,
     },
     cuisineTag: {
       ...Typography.caption,
       color: colors.textSecondary,
     },
     name: {
-      ...Typography.heading3,
-      color: colors.text,
-      lineHeight: 20,
-    },
-    metaRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: Spacing.xs,
-      marginTop: Spacing.xs,
-    },
-    metaChip: {
-      backgroundColor: colors.mintSurface,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 3,
-      borderRadius: BorderRadius.pill,
-    },
-    metaChipGreen: {
-      backgroundColor: `${Colors.healthGreen}18`,
-    },
-    metaChipText: {
-      ...Typography.caption,
+      fontFamily: Typography.heading3.fontFamily,
+      fontSize: 14,
+      lineHeight: 19,
       color: colors.text,
     },
-    metaChipTextGreen: {
-      color: Colors.healthGreen,
-    },
-    tags: {
+    meta: {
       ...Typography.caption,
-      color: colors.textMuted,
+      color: colors.textSecondary,
       marginTop: 2,
     },
+    sourceLabel: {
+      fontSize: 10,
+      color: colors.textMuted,
+      letterSpacing: 0.2,
+      marginTop: 1,
+    },
 
+    // ── Compact carousel card (160px wide) ───────────────────────────────────
     compactCardShadow: {
       width: 160,
       borderRadius: BorderRadius.lg,

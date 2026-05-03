@@ -3,6 +3,11 @@ import {
   ActivityIndicator,
   Animated,
   Alert,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,12 +21,16 @@ import { router } from 'expo-router'
 import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useInventory } from '../../src/modules/inventory/useInventory'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
-import { Colors, Typography, Spacing, BorderRadius } from '../../src/theme'
+import { useTranslation } from '../../src/i18n'
+import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
 import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
 import { MealCard } from '../../src/components/cards/MealCard'
 import { PillSelector, PillOption } from '../../src/components/inputs/PillSelector'
 import { EmptyState } from '../../src/components/layout/EmptyState'
 import { MealType } from '../../src/types/planner'
+import { Recipe } from '../../src/types/recipes'
+import { getRandomRecipes } from '../../src/modules/recipes/recipeDB'
+import { MEAL_LABELS } from '../../src/constants/mealTypes'
 
 function getDayOptions(): PillOption[] {
   return Array.from({ length: 7 }, (_, i) => {
@@ -44,8 +53,10 @@ export default function NutritionScreen() {
     generateWeekPlan,
     lockDay,
     uploadSchoolMenu,
+    setMealForDate,
   } = usePlanner()
   const { colors } = useTheme()
+  const tr = useTranslation()
   const styles = useMemo(() => makeStyles(colors), [colors])
 
   const dayOptions = getDayOptions()
@@ -53,16 +64,43 @@ export default function NutritionScreen() {
   const [selectedDay, setSelectedDay] = useState(todayStr)
   const [uploadPhase, setUploadPhase] = useState<'idle' | 'analyzing' | 'generating'>('idle')
 
+  // Alternative suggestion sheet
+  const [altSheet, setAltSheet] = useState<{
+    visible: boolean
+    mealType: MealType
+    loading: boolean
+    recipes: Recipe[]
+  }>({ visible: false, mealType: 'lunch', loading: false, recipes: [] })
+
   const selectedPlan = weekPlans.find((p) => p.date === selectedDay)
 
   const handleGeneratePlan = useCallback(async () => {
     await generateWeekPlan(inventory)
   }, [generateWeekPlan, inventory])
 
+  const handleSuggestAlternative = useCallback(async (mealType: MealType) => {
+    setAltSheet({ visible: true, mealType, loading: true, recipes: [] })
+    try {
+      const alternatives = await getRandomRecipes(5, mealType)
+      // Exclude the recipe already assigned to this slot
+      const current = selectedPlan?.meals[mealType]
+      const filtered = alternatives.filter((r) => r.id !== current?.id).slice(0, 4)
+      setAltSheet((prev) => ({ ...prev, loading: false, recipes: filtered }))
+    } catch {
+      setAltSheet((prev) => ({ ...prev, loading: false }))
+    }
+  }, [selectedPlan])
+
+  const handlePickAlternative = useCallback(async (recipe: Recipe) => {
+    const mealType = altSheet.mealType
+    setAltSheet((prev) => ({ ...prev, visible: false }))
+    await setMealForDate(selectedDay, mealType, recipe)
+  }, [altSheet.mealType, selectedDay, setMealForDate])
+
   const handleUploadSchoolMenu = useCallback(async () => {
     const schoolAgeMembers = profiles.filter((p) => p.isSchoolAge)
     if (schoolAgeMembers.length === 0) {
-      Alert.alert('Sin miembros en edad escolar', 'Activa la opción de edad escolar para un miembro en Ajustes primero.')
+      Alert.alert(tr.nutrition.noSchoolAgeMembers, tr.nutrition.noSchoolAgeMembersDesc)
       return
     }
 
@@ -86,9 +124,9 @@ export default function NutritionScreen() {
 
       setUploadPhase('generating')
       await handleGeneratePlan()
-      Alert.alert('¡Menú escolar subido!', 'La IA ha extraído el menú y ha regenerado tu plan de comidas.')
+      Alert.alert(tr.nutrition.uploadSuccess, tr.nutrition.uploadSuccessDesc)
     } catch (error) {
-      Alert.alert('Error al subir', error instanceof Error ? error.message : 'Error desconocido')
+      Alert.alert(tr.nutrition.uploadFailed, error instanceof Error ? error.message : tr.app.error)
     } finally {
       setUploadPhase('idle')
     }
@@ -100,7 +138,7 @@ export default function NutritionScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Plan Nutricional</Text>
+        <Text style={styles.title}>{tr.nutrition.title}</Text>
         <TouchableOpacity
           style={[styles.generateBtn, isGenerating && styles.generateBtnDisabled]}
           onPress={handleGeneratePlan}
@@ -109,7 +147,7 @@ export default function NutritionScreen() {
           {isGenerating ? (
             <ActivityIndicator color={Colors.white} size="small" />
           ) : (
-            <Text style={styles.generateBtnText}>✨ Generar</Text>
+            <Text style={styles.generateBtnText}>{tr.nutrition.generate}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -132,9 +170,9 @@ export default function NutritionScreen() {
           {uploadPhase !== 'idle' ? (
             <View style={styles.uploadProgressContainer}>
               <View style={styles.uploadProgressHeader}>
-                <ActivityIndicator color={Colors.white} size="small" />
+                <ActivityIndicator color={Colors.healthGreen} size="small" />
                 <Text style={styles.uploadStatusText}>
-                  {uploadPhase === 'analyzing' ? 'Analizando menú escolar...' : 'Generando plan de comidas...'}
+                  {uploadPhase === 'analyzing' ? tr.nutrition.analyzingMenu : tr.nutrition.generatingPlan}
                 </Text>
               </View>
               <UploadProgressBar phase={uploadPhase} />
@@ -143,11 +181,11 @@ export default function NutritionScreen() {
             <>
               <Text style={styles.schoolBannerEmoji}>🏫</Text>
               <View style={styles.schoolBannerText}>
-                <Text style={styles.schoolBannerTitle}>Subir menú escolar (PDF)</Text>
+                <Text style={styles.schoolBannerTitle}>{tr.nutrition.uploadSchoolMenu}</Text>
                 <Text style={styles.schoolBannerSub}>
                   {hasSchoolAgeMembers
-                    ? 'La IA extraerá e integrará el menú mensual del colegio'
-                    : 'Activa edad escolar en un perfil para usar esta función'}
+                    ? tr.nutrition.uploadSchoolMenuSub
+                    : tr.nutrition.noSchoolEnabledNote}
                 </Text>
               </View>
               <Text style={styles.schoolBannerArrow}>→</Text>
@@ -173,7 +211,7 @@ export default function NutritionScreen() {
                     if (recipe) router.push(`/recipe/${recipe.id}`)
                   }}
                   onLock={() => lockDay(selectedDay)}
-                  onSuggestAlternative={() => {}}
+                  onSuggestAlternative={() => handleSuggestAlternative(mealType)}
                 />
 
                 {/* Supplement reminders */}
@@ -193,10 +231,10 @@ export default function NutritionScreen() {
 
             {!selectedPlan && !isGenerating && (
               <EmptyState
-                emoji="🗓️"
-                title="Sin plan para este día"
-                description="Pulsa Generar para crear un plan de 7 días basado en tu despensa y perfiles familiares."
-                actionLabel="Generar ahora"
+                emoji={tr.empty.mealPlan.emoji}
+                title={tr.empty.mealPlan.title}
+                description={tr.empty.mealPlan.desc}
+                actionLabel={tr.empty.mealPlan.action}
                 onAction={handleGeneratePlan}
               />
             )}
@@ -205,6 +243,69 @@ export default function NutritionScreen() {
 
         <View style={{ height: 120 }} />
       </ScrollView>
+
+      {/* ── Alternative picker bottom sheet ─── */}
+      <Modal
+        visible={altSheet.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAltSheet((p) => ({ ...p, visible: false }))}
+      >
+        <KeyboardAvoidingView
+          style={styles.sheetOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => setAltSheet((p) => ({ ...p, visible: false }))}
+          />
+          <View style={styles.sheet}>
+            {/* Handle */}
+            <View style={styles.sheetHandle} />
+
+            <Text style={styles.sheetTitle}>
+              {tr.nutrition.altTitle(MEAL_LABELS[altSheet.mealType].toLowerCase())}
+            </Text>
+            <Text style={styles.sheetSubtitle}>{tr.nutrition.altSubtitle}</Text>
+
+            {altSheet.loading ? (
+              <ActivityIndicator color={Colors.healthGreen} style={{ marginVertical: Spacing.xl }} />
+            ) : altSheet.recipes.length === 0 ? (
+              <Text style={styles.sheetEmpty}>{tr.nutrition.noAlternatives}</Text>
+            ) : (
+              <FlatList
+                data={altSheet.recipes}
+                keyExtractor={(r) => r.id}
+                scrollEnabled={false}
+                ItemSeparatorComponent={() => <View style={styles.sheetDivider} />}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.altRow}
+                    onPress={() => handlePickAlternative(item)}
+                    activeOpacity={0.7}
+                  >
+                    {item.imageUrl ? (
+                      <Image source={{ uri: item.imageUrl }} style={styles.altThumb} />
+                    ) : (
+                      <View style={[styles.altThumb, styles.altThumbPlaceholder]}>
+                        <Text style={{ fontSize: 20 }}>🍽️</Text>
+                      </View>
+                    )}
+                    <View style={styles.altInfo}>
+                      <Text style={styles.altName} numberOfLines={2}>{item.name}</Text>
+                      <Text style={styles.altMeta}>
+                        ⏱ {item.prepTime + item.cookTime} min · 🔥 {item.nutritionalInfo.calories} kcal
+                      </Text>
+                    </View>
+                    <Text style={styles.altChevron}>›</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -227,17 +328,17 @@ function UploadProgressBar({ phase }: { phase: 'analyzing' | 'generating' }) {
   )
 }
 
-const progressTrackStyle = { height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)', marginTop: 8, overflow: 'hidden' as const }
-const progressFillStyle = { height: 3, borderRadius: 2, backgroundColor: Colors.white }
+const progressTrackStyle = { height: 3, borderRadius: 2, backgroundColor: Colors.softMint, marginTop: 8, overflow: 'hidden' as const }
+const progressFillStyle = { height: 3, borderRadius: 2, backgroundColor: Colors.healthGreen }
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm,
+      paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.xs,
     },
-    title: { ...Typography.heading1, color: colors.text },
+    title: { ...Typography.displaySerif, color: colors.text },
     generateBtn: {
       backgroundColor: Colors.healthGreen, paddingHorizontal: Spacing.md,
       paddingVertical: Spacing.sm, borderRadius: BorderRadius.pill, minWidth: 100, alignItems: 'center',
@@ -245,24 +346,53 @@ function makeStyles(colors: ThemeColors) {
     generateBtnDisabled: { backgroundColor: colors.textMuted },
     generateBtnText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
     pillSelectorContent: { paddingVertical: Spacing.lg },
-    scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+    scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.lg },
     loader: { marginTop: Spacing.xxl },
     schoolBanner: {
       flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-      backgroundColor: Colors.forestGreen, borderRadius: BorderRadius.lg,
-      padding: Spacing.md, marginBottom: Spacing.md,
+      backgroundColor: colors.surface,
+      borderRadius: BorderRadius.md,
+      borderWidth: 1, borderColor: colors.border,
+      paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md,
+      marginBottom: Spacing.md,
     },
-    schoolBannerEmoji: { fontSize: 24 },
+    schoolBannerEmoji: { fontSize: 18 },
     schoolBannerText: { flex: 1 },
-    schoolBannerTitle: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-    schoolBannerSub: { ...Typography.caption, color: `${Colors.white}CC` },
-    schoolBannerArrow: { color: Colors.white, fontSize: 20 },
+    schoolBannerTitle: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily },
+    schoolBannerSub: { ...Typography.caption, color: colors.textSecondary, marginTop: 1 },
+    schoolBannerArrow: { color: colors.textMuted, fontSize: 16 },
     uploadProgressContainer: { flex: 1 },
     uploadProgressHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: Spacing.sm },
-    uploadStatusText: { ...Typography.body, color: Colors.white },
+    uploadStatusText: { ...Typography.body, color: colors.text },
     mealsContainer: { gap: Spacing.md },
     supplementRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginTop: Spacing.xs, paddingHorizontal: Spacing.xs },
     supplementChip: { backgroundColor: `${Colors.goldenAmber}20`, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.pill },
     supplementText: { ...Typography.caption, color: colors.text },
+
+    // Alternative picker sheet
+    sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+    sheet: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl, paddingTop: Spacing.sm,
+    },
+    sheetHandle: {
+      alignSelf: 'center', width: 36, height: 4,
+      borderRadius: 2, backgroundColor: colors.border, marginBottom: Spacing.md,
+    },
+    sheetTitle: { ...Typography.heading2, color: colors.text, marginBottom: 4 },
+    sheetSubtitle: { ...Typography.caption, color: colors.textSecondary, marginBottom: Spacing.md },
+    sheetEmpty: { ...Typography.body, color: colors.textMuted, textAlign: 'center', marginVertical: Spacing.xl },
+    sheetDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.divider },
+    altRow: {
+      flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+      paddingVertical: Spacing.sm,
+    },
+    altThumb: { width: 60, height: 60, borderRadius: BorderRadius.md, resizeMode: 'cover' },
+    altThumbPlaceholder: { backgroundColor: colors.warmSurface, alignItems: 'center', justifyContent: 'center' },
+    altInfo: { flex: 1 },
+    altName: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily, lineHeight: 20 },
+    altMeta: { ...Typography.caption, color: colors.textSecondary, marginTop: 3 },
+    altChevron: { fontSize: 24, color: colors.textMuted, lineHeight: 28 },
   })
 }

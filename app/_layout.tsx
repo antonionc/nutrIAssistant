@@ -18,6 +18,7 @@ import { GroceriesProvider } from '../src/modules/groceries/GroceriesContext'
 import { AIEngineProvider } from '../src/modules/ai-engine/AIContext'
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext'
 import { runMigrations } from '../src/db/database'
+import { t } from '../src/i18n'
 import { seedRecipesIfNeeded } from '../src/modules/recipes/seedRecipes'
 import { isSynced, syncRecipes } from '../src/modules/recipes/syncRecipes'
 import { ensureModelAvailable } from '../src/services/onDeviceLlm'
@@ -38,7 +39,7 @@ function AppShell() {
           />
           <Stack.Screen
             name="settings"
-            options={{ title: 'Ajustes', headerBackTitle: 'Volver', headerStyle: { backgroundColor: colors.surface }, headerTintColor: colors.text }}
+            options={{ title: t.settings.title, headerBackTitle: t.app.backTitle, headerStyle: { backgroundColor: colors.surface }, headerTintColor: colors.text }}
           />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen

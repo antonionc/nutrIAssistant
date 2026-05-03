@@ -209,6 +209,7 @@ export interface FatSecretRecipeDetail {
   ingredients: RecipeIngredient[]
   nutritionalInfo: NutritionalInfo
   allergens: string[]
+  imageUrl?: string
 }
 
 export async function getRecipeDetail(recipeId: string): Promise<FatSecretRecipeDetail | null> {
@@ -234,6 +235,7 @@ export async function getRecipeDetail(recipeId: string): Promise<FatSecretRecipe
       ingredients: markedIngredients,
       nutritionalInfo: nutrition,
       allergens,
+      imageUrl: raw.recipe_image ?? undefined,
     }
   } catch (e) {
     console.warn('[FatSecret] getRecipeDetail failed:', e)

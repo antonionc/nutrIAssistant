@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-export type RecipeSourceKey = 'fatsecret' | 'spoonacular'
+export type RecipeSourceKey = 'fatsecret' | 'spoonacular' | 'themealdb'
 
 export interface RecipeSourceInfo {
   enabled: boolean
@@ -9,13 +9,15 @@ export interface RecipeSourceInfo {
 }
 
 export const SOURCE_LABELS: Record<RecipeSourceKey, { name: string; description: string; emoji: string }> = {
-  fatsecret:   { name: 'FatSecret',    description: 'Recetas mediterráneas y europeas',  emoji: '🥗' },
-  spoonacular: { name: 'Spoonacular',  description: 'Base de datos mundial de recetas',   emoji: '🌍' },
+  fatsecret:   { name: 'FatSecret',    description: 'Recetas mediterráneas y europeas',      emoji: '🥗' },
+  spoonacular: { name: 'Spoonacular',  description: 'Base de datos mundial de recetas',       emoji: '🌍' },
+  themealdb:   { name: 'TheMealDB',    description: 'Recetas internacionales con imágenes',   emoji: '🍽️' },
 }
 
 export const DEFAULT_SOURCES_CONFIG: Record<RecipeSourceKey, RecipeSourceInfo> = {
   fatsecret:   { enabled: true,  lastSyncedAt: null, syncedCount: 0 },
   spoonacular: { enabled: false, lastSyncedAt: null, syncedCount: 0 },
+  themealdb:   { enabled: true,  lastSyncedAt: null, syncedCount: 0 },
 }
 
 const SOURCES_CONFIG_KEY = 'recipe_sources_config'
@@ -27,6 +29,7 @@ export async function getSourcesConfig(): Promise<Record<RecipeSourceKey, Recipe
   return {
     fatsecret:   { ...DEFAULT_SOURCES_CONFIG.fatsecret,   ...(stored.fatsecret   ?? {}) },
     spoonacular: { ...DEFAULT_SOURCES_CONFIG.spoonacular, ...(stored.spoonacular ?? {}) },
+    themealdb:   { ...DEFAULT_SOURCES_CONFIG.themealdb,   ...(stored.themealdb   ?? {}) },
   }
 }
 

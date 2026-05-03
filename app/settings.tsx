@@ -30,7 +30,7 @@ import {
   setPreferOnDevice,
 } from '../src/services/onDeviceLlm'
 import { OnDeviceLLMStatus } from '../src/types/ai'
-import { syncSource, isSynced } from '../src/modules/recipes/syncRecipes'
+import { syncSource, isSynced, wipeAndResetRecipes } from '../src/modules/recipes/syncRecipes'
 import {
   getSourcesConfig,
   setSourceEnabled,
@@ -51,25 +51,7 @@ import { getRecipeCount, cleanDuplicateImageUrls } from '../src/modules/recipes/
 import Constants from 'expo-constants'
 
 const DIET_OPTIONS: DietPreference[] = ['none', 'mediterranean', 'vegetarian', 'vegan', 'pescatarian', 'keto']
-const DIET_LABELS: Record<DietPreference, string> = {
-  none: 'Sin restricción',
-  mediterranean: 'Mediterránea',
-  vegetarian: 'Vegetariana',
-  vegan: 'Vegana',
-  pescatarian: 'Pescetariana',
-  keto: 'Keto',
-}
 const CONDITIONS_LIST = ['hypertension', 'osteoporosis', 'diabetes_type1', 'diabetes_type2', 'celiac', 'lactose_intolerance', 'high_cholesterol', 'ibs']
-const CONDITIONS_LABELS: Record<string, string> = {
-  hypertension: 'Hipertensión',
-  osteoporosis: 'Osteoporosis',
-  diabetes_type1: 'Diabetes tipo 1',
-  diabetes_type2: 'Diabetes tipo 2',
-  celiac: 'Celiaquía',
-  lactose_intolerance: 'Intolerancia lactosa',
-  high_cholesterol: 'Colesterol alto',
-  ibs: 'Síndrome intestino irritable',
-}
 
 export default function SettingsScreen() {
   const tr = useTranslation()
@@ -91,6 +73,7 @@ export default function SettingsScreen() {
   const [spCallsToday, setSpCallsToday] = useState(0)
   const [spCallsRemaining, setSpCallsRemaining] = useState(SPOONACULAR_DAILY_LIMIT)
   const [isCleaningImages, setIsCleaningImages] = useState(false)
+  const [isWipingDB, setIsWipingDB] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
@@ -122,16 +105,16 @@ export default function SettingsScreen() {
       const status = await getLLMStatus()
       setLlmStatus(status)
     } catch (e) {
-      Alert.alert('Error de descarga', e instanceof Error ? e.message : 'Error desconocido')
+      Alert.alert(tr.settings.downloadError, e instanceof Error ? e.message : tr.app.error)
     } finally {
       setIsDownloading(false)
     }
   }
 
   const handleDeleteModel = () => {
-    Alert.alert('Eliminar modelo IA', 'Esto eliminará el modelo de IA local (~800 MB). Todas las consultas usarán la API en la nube.', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: async () => {
+    Alert.alert(tr.settings.deleteModelTitle, tr.settings.deleteModelMsg, [
+      { text: tr.app.cancel, style: 'cancel' },
+      { text: tr.app.delete, style: 'destructive', onPress: async () => {
         await deleteModel()
         setLlmStatus(await getLLMStatus())
       }},
@@ -154,9 +137,9 @@ export default function SettingsScreen() {
         setSyncMessage(message)
       })
       await refreshSourceStats()
-      Alert.alert('¡Sincronización completa!', `${SOURCE_LABELS[key].name}: ${count} recetas descargadas.`)
+      Alert.alert(tr.app.ok, tr.settings.syncComplete(SOURCE_LABELS[key].name, count))
     } catch (e) {
-      Alert.alert('Error de sincronización', e instanceof Error ? e.message : 'Error desconocido')
+      Alert.alert(tr.settings.syncError, e instanceof Error ? e.message : tr.app.error)
     } finally {
       setSyncingSource(null)
       setSyncProgress(0)
@@ -173,19 +156,45 @@ export default function SettingsScreen() {
     setIsCleaningImages(true)
     try {
       const removed = await cleanDuplicateImageUrls()
-      Alert.alert('Imágenes limpiadas', removed > 0
-        ? `Se eliminaron ${removed} imágenes incorrectas o duplicadas.`
-        : 'No se encontraron imágenes duplicadas.')
+      Alert.alert(tr.settings.cleanImagesTitle, removed > 0
+        ? tr.settings.cleanImagesRemoved(removed)
+        : tr.settings.cleanImagesNone)
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Error desconocido')
+      Alert.alert(tr.app.error, e instanceof Error ? e.message : tr.app.error)
     } finally {
       setIsCleaningImages(false)
     }
   }
 
+  const handleWipeDB = () => {
+    Alert.alert(
+      tr.settings.wipeDbTitle,
+      tr.settings.wipeDbMsg(recipeCount),
+      [
+        { text: tr.app.cancel, style: 'cancel' },
+        {
+          text: tr.settings.wipeDbConfirm,
+          style: 'destructive',
+          onPress: async () => {
+            setIsWipingDB(true)
+            try {
+              await wipeAndResetRecipes()
+              await refreshSourceStats()
+              Alert.alert(tr.settings.wipeDbDone, tr.settings.wipeDbDoneMsg)
+            } catch (e) {
+              Alert.alert(tr.app.error, e instanceof Error ? e.message : tr.app.error)
+            } finally {
+              setIsWipingDB(false)
+            }
+          },
+        },
+      ]
+    )
+  }
+
   const handleExportFamily = async () => {
     if (profiles.length === 0) {
-      Alert.alert('Sin datos', 'No hay perfiles familiares para exportar.')
+      Alert.alert(tr.settings.noDataTitle, tr.settings.noDataMsg)
       return
     }
     setIsExporting(true)
@@ -195,14 +204,14 @@ export default function SettingsScreen() {
       if (canShare) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'text/markdown',
-          dialogTitle: 'Exportar copia de seguridad familiar',
+          dialogTitle: tr.settings.exportDialogTitle,
           UTI: 'public.plain-text',
         })
       } else {
-        Alert.alert('Archivo guardado', `Copia guardada en:\n${fileUri}`)
+        Alert.alert(tr.settings.fileSavedTitle, tr.settings.fileSavedMsg(fileUri))
       }
     } catch (e) {
-      Alert.alert('Error al exportar', e instanceof Error ? e.message : 'Error desconocido')
+      Alert.alert(tr.settings.exportError, e instanceof Error ? e.message : tr.app.error)
     } finally {
       setIsExporting(false)
     }
@@ -213,25 +222,25 @@ export default function SettingsScreen() {
     try {
       const data = await importFamilyFromFile()
       if (!data) {
-        Alert.alert('Archivo no válido', 'No se pudo leer el archivo. Asegúrate de que es una copia de seguridad de NutrIAssistant.')
+        Alert.alert(tr.settings.invalidFileTitle, tr.settings.invalidFileMsg)
         return
       }
       Alert.alert(
-        `Importar familia "${data.familyName}"`,
-        `Se importarán ${data.members.length} miembro${data.members.length !== 1 ? 's' : ''}.\n\nEsto reemplazará todos los perfiles actuales.`,
+        tr.settings.importFamilyTitle(data.familyName),
+        tr.settings.importFamilyMsg(data.members.length),
         [
-          { text: 'Cancelar', style: 'cancel' },
+          { text: tr.app.cancel, style: 'cancel' },
           {
-            text: 'Importar',
+            text: tr.settings.importAlertBtn,
             onPress: async () => {
               await importFamily(data.familyName, data.members)
-              Alert.alert('¡Importación completada!', `Familia "${data.familyName}" restaurada con ${data.members.length} miembros.`)
+              Alert.alert(tr.settings.importDoneTitle, tr.settings.importDoneMsg(data.familyName, data.members.length))
             },
           },
         ]
       )
     } catch (e) {
-      Alert.alert('Error al importar', e instanceof Error ? e.message : 'Error desconocido')
+      Alert.alert(tr.settings.importError, e instanceof Error ? e.message : tr.app.error)
     } finally {
       setIsImporting(false)
     }
@@ -240,9 +249,9 @@ export default function SettingsScreen() {
   const appVersion = Constants.expoConfig?.version ?? '1.0.0'
 
   const THEME_OPTIONS: { value: ThemePreference; label: string; emoji: string }[] = [
-    { value: 'light', label: 'Claro', emoji: '☀️' },
-    { value: 'dark', label: 'Oscuro', emoji: '🌙' },
-    { value: 'auto', label: 'Automático', emoji: '🔄' },
+    { value: 'light', label: tr.settings.themeLight, emoji: '☀️' },
+    { value: 'dark',  label: tr.settings.themeDark,  emoji: '🌙' },
+    { value: 'auto',  label: tr.settings.themeAuto,  emoji: '🔄' },
   ]
 
   return (
@@ -250,9 +259,9 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
         {/* ── Apariencia ──────────────────────── */}
-        <SectionHeader title="Apariencia" colors={colors} />
+        <SectionHeader title={tr.settings.sectAppearance} colors={colors} />
         <View style={styles.card}>
-          <Text style={styles.label}>Modo de color</Text>
+          <Text style={styles.label}>{tr.settings.themeTitle}</Text>
           <View style={styles.themeRow}>
             {THEME_OPTIONS.map((opt) => (
               <TouchableOpacity
@@ -306,9 +315,9 @@ export default function SettingsScreen() {
               onToggle={() => setExpandedMemberId(expandedMemberId === member.id ? null : member.id)}
               onUpdate={(updates) => updateProfile(member.id, updates)}
               onDelete={() => {
-                Alert.alert('Eliminar perfil', `¿Eliminar a ${member.name}?`, [
-                  { text: 'Cancelar', style: 'cancel' },
-                  { text: 'Eliminar', style: 'destructive', onPress: () => deleteProfile(member.id) },
+                Alert.alert(tr.settings.deleteProfileTitle, tr.settings.deleteProfileMsg(member.name), [
+                  { text: tr.app.cancel, style: 'cancel' },
+                  { text: tr.app.delete, style: 'destructive', onPress: () => deleteProfile(member.id) },
                 ])
               }}
             />
@@ -317,21 +326,21 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.addMemberBtn}
             onPress={() => addProfile({
-              name: 'Nuevo miembro', role: 'other', dateOfBirth: `${new Date().getFullYear() - 30}-01-01`, weight: 70, height: 170,
+              name: tr.settings.newMember, role: 'other', dateOfBirth: `${new Date().getFullYear() - 30}-01-01`, weight: 70, height: 170,
               allergies: [], conditions: [], dietPreference: 'none',
               avatarEmoji: '👤', isSchoolAge: false,
               dailyCalorieTarget: 2000, macroTargets: { protein: 150, carbs: 225, fat: 67 },
             })}
           >
-            <Text style={styles.addMemberText}>+ Añadir miembro</Text>
+            <Text style={styles.addMemberText}>+ {tr.settings.addMember}</Text>
           </TouchableOpacity>
         </View>
 
         {/* ── Motor de IA ─────────────────────── */}
-        <SectionHeader title="Motor de IA" colors={colors} />
+        <SectionHeader title={tr.settings.sectAiEngine} colors={colors} />
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.label}>Preferir IA local</Text>
+            <Text style={styles.label}>{tr.settings.preferOnDevice}</Text>
             <Switch
               value={preferOnDevice}
               onValueChange={togglePreferOnDevice}
@@ -339,14 +348,14 @@ export default function SettingsScreen() {
               thumbColor={Colors.white}
             />
           </View>
-          <Text style={styles.hint}>La IA local es más rápida y privada. Usa la API de Claude cuando no esté disponible.</Text>
+          <Text style={styles.hint}>{tr.settings.preferLocalAIHint}</Text>
 
           <View style={styles.divider} />
 
           <View style={styles.row}>
-            <Text style={styles.label}>Modelo local</Text>
+            <Text style={styles.label}>{tr.settings.localModel}</Text>
             <Text style={styles.value}>
-              {llmStatus.isDownloaded ? '✅ Descargado' : '⬜ No descargado'}
+              {llmStatus.isDownloaded ? `✅ ${tr.settings.modelReady}` : `⬜ ${tr.settings.modelNotDownloaded}`}
             </Text>
           </View>
 
@@ -359,29 +368,27 @@ export default function SettingsScreen() {
               <View style={styles.progressTrack}>
                 <View style={[styles.progressBar, { width: `${downloadProgress * 100}%` }]} />
               </View>
-              <Text style={styles.progressText}>{Math.round(downloadProgress * 100)}% — Descargando Llama 3.2 1B...</Text>
+              <Text style={styles.progressText}>{Math.round(downloadProgress * 100)}% — {tr.settings.downloadingModel}</Text>
             </View>
           ) : llmStatus.isDownloaded ? (
             <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteModel}>
-              <Text style={styles.dangerBtnText}>Eliminar modelo IA</Text>
+              <Text style={styles.dangerBtnText}>{tr.settings.deleteModelBtn}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.primaryBtn} onPress={handleDownloadModel}>
-              <Text style={styles.primaryBtnText}>Descargar modelo IA (~800 MB)</Text>
+              <Text style={styles.primaryBtnText}>{tr.settings.downloadModelBtn}</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* ── Fuentes de recetas ─────────────── */}
-        <SectionHeader title="Fuentes de recetas" colors={colors} />
+        <SectionHeader title={tr.settings.sectRecipeSources} colors={colors} />
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.label}>Total en base de datos</Text>
-            <Text style={styles.value}>{recipeCount} recetas</Text>
+            <Text style={styles.label}>{tr.settings.totalInDatabase}</Text>
+            <Text style={styles.value}>{tr.settings.recipesCount(recipeCount)}</Text>
           </View>
-          <Text style={styles.hint}>
-            Las imágenes incorrectas se filtran automáticamente en cada sincronización.
-          </Text>
+          <Text style={styles.hint}>{tr.settings.imagesAutoFiltered}</Text>
           <View style={styles.divider} />
           <TouchableOpacity
             style={[styles.primaryBtn, isCleaningImages && styles.primaryBtnDisabled]}
@@ -390,7 +397,17 @@ export default function SettingsScreen() {
           >
             {isCleaningImages
               ? <ActivityIndicator color={Colors.white} size="small" />
-              : <Text style={styles.primaryBtnText}>🧹 Limpiar imágenes incorrectas</Text>
+              : <Text style={styles.primaryBtnText}>{tr.settings.cleanImagesBtn}</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.dangerBtn, isWipingDB && styles.primaryBtnDisabled]}
+            onPress={handleWipeDB}
+            disabled={isWipingDB || recipeCount === 0}
+          >
+            {isWipingDB
+              ? <ActivityIndicator color={Colors.errorRed} size="small" />
+              : <Text style={styles.dangerBtnText}>{tr.settings.wipeDbBtn}</Text>
             }
           </TouchableOpacity>
         </View>
@@ -411,8 +428,8 @@ export default function SettingsScreen() {
           </View>
           {sourcesConfig.fatsecret.lastSyncedAt && (
             <Text style={styles.hint}>
-              Última sinc.: {new Date(sourcesConfig.fatsecret.lastSyncedAt).toLocaleDateString('es-ES')}
-              {sourcesConfig.fatsecret.syncedCount > 0 ? ` · ${sourcesConfig.fatsecret.syncedCount} recetas` : ''}
+              {tr.settings.lastSync(new Date(sourcesConfig.fatsecret.lastSyncedAt).toLocaleDateString())}
+              {sourcesConfig.fatsecret.syncedCount > 0 ? tr.settings.recipesSynced(sourcesConfig.fatsecret.syncedCount) : ''}
             </Text>
           )}
           {sourcesConfig.fatsecret.enabled && (
@@ -423,7 +440,7 @@ export default function SettingsScreen() {
                   <View style={styles.progressTrack}>
                     <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
                   </View>
-                  <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || 'Sincronizando...'}</Text>
+                  <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || tr.settings.syncing}</Text>
                 </View>
               ) : (
                 <TouchableOpacity
@@ -431,7 +448,7 @@ export default function SettingsScreen() {
                   onPress={() => handleSyncSource('fatsecret')}
                   disabled={!!syncingSource}
                 >
-                  <Text style={styles.primaryBtnText}>🔄 Sincronizar FatSecret</Text>
+                  <Text style={styles.primaryBtnText}>{tr.settings.syncSourceBtn(SOURCE_LABELS.fatsecret.name)}</Text>
                 </TouchableOpacity>
               )}
             </>
@@ -453,15 +470,15 @@ export default function SettingsScreen() {
             />
           </View>
           <View style={styles.row}>
-            <Text style={styles.hint}>Llamadas hoy: {spCallsToday} / {SPOONACULAR_DAILY_LIMIT}</Text>
+            <Text style={styles.hint}>{tr.settings.callsToday(spCallsToday, SPOONACULAR_DAILY_LIMIT)}</Text>
             <Text style={[styles.hint, { color: spCallsRemaining < 20 ? Colors.errorRed : colors.textMuted }]}>
-              {spCallsRemaining} disponibles
+              {tr.settings.callsRemaining(spCallsRemaining)}
             </Text>
           </View>
           {sourcesConfig.spoonacular.lastSyncedAt && (
             <Text style={styles.hint}>
-              Última sinc.: {new Date(sourcesConfig.spoonacular.lastSyncedAt).toLocaleDateString('es-ES')}
-              {sourcesConfig.spoonacular.syncedCount > 0 ? ` · ${sourcesConfig.spoonacular.syncedCount} recetas` : ''}
+              {tr.settings.lastSync(new Date(sourcesConfig.spoonacular.lastSyncedAt).toLocaleDateString())}
+              {sourcesConfig.spoonacular.syncedCount > 0 ? tr.settings.recipesSynced(sourcesConfig.spoonacular.syncedCount) : ''}
             </Text>
           )}
           {sourcesConfig.spoonacular.enabled && (
@@ -472,7 +489,7 @@ export default function SettingsScreen() {
                   <View style={styles.progressTrack}>
                     <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
                   </View>
-                  <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || 'Sincronizando...'}</Text>
+                  <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || tr.settings.syncing}</Text>
                 </View>
               ) : (
                 <TouchableOpacity
@@ -480,27 +497,70 @@ export default function SettingsScreen() {
                   onPress={() => handleSyncSource('spoonacular')}
                   disabled={!!syncingSource || spCallsRemaining < 10}
                 >
-                  <Text style={styles.primaryBtnText}>🔄 Sincronizar Spoonacular</Text>
+                  <Text style={styles.primaryBtnText}>{tr.settings.syncSourceBtn(SOURCE_LABELS.spoonacular.name)}</Text>
                 </TouchableOpacity>
               )}
               {spCallsRemaining < 10 && (
                 <Text style={[styles.hint, { color: Colors.errorRed, marginTop: 4 }]}>
-                  Límite diario casi alcanzado. Vuelve mañana.
+                  {tr.settings.dailyLimitReached}
                 </Text>
               )}
             </>
           )}
         </View>
 
-        {/* ── Integraciones de salud ──────────── */}
-        <SectionHeader title="Integraciones de salud" colors={colors} />
+        {/* TheMealDB */}
         <View style={styles.card}>
-          <Text style={styles.comingSoon}>🏃 Apple Health & Google Fit — próximamente</Text>
-          <Text style={styles.comingSoon}>⌚ Garmin Connect — próximamente</Text>
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>{SOURCE_LABELS.themealdb.emoji} {SOURCE_LABELS.themealdb.name}</Text>
+              <Text style={styles.hint}>{SOURCE_LABELS.themealdb.description}</Text>
+            </View>
+            <Switch
+              value={sourcesConfig.themealdb.enabled}
+              onValueChange={(v) => handleToggleSource('themealdb', v)}
+              trackColor={{ false: colors.border, true: `${Colors.healthGreen}60` }}
+              thumbColor={sourcesConfig.themealdb.enabled ? Colors.healthGreen : colors.textMuted}
+            />
+          </View>
+          {sourcesConfig.themealdb.lastSyncedAt && (
+            <Text style={styles.hint}>
+              {tr.settings.lastSync(new Date(sourcesConfig.themealdb.lastSyncedAt).toLocaleDateString())}
+              {sourcesConfig.themealdb.syncedCount > 0 ? tr.settings.recipesSynced(sourcesConfig.themealdb.syncedCount) : ''}
+            </Text>
+          )}
+          {sourcesConfig.themealdb.enabled && (
+            <>
+              <View style={styles.divider} />
+              {syncingSource === 'themealdb' ? (
+                <View style={styles.progressContainer}>
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
+                  </View>
+                  <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || tr.settings.syncing}</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.primaryBtn, !!syncingSource && styles.primaryBtnDisabled]}
+                  onPress={() => handleSyncSource('themealdb')}
+                  disabled={!!syncingSource}
+                >
+                  <Text style={styles.primaryBtnText}>{tr.settings.syncSourceBtn(SOURCE_LABELS.themealdb.name)}</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+        </View>
+
+        {/* ── Integraciones de salud ──────────── */}
+        <SectionHeader title={tr.settings.health} colors={colors} />
+        <View style={styles.card}>
+          <Text style={styles.comingSoon}>{tr.settings.healthApple}</Text>
+          <Text style={styles.comingSoon}>{tr.settings.healthGarmin}</Text>
         </View>
 
         {/* ── Supermercados ───────────────────── */}
-        <SectionHeader title="Supermercados" colors={colors} />
+        <SectionHeader title={tr.settings.retailers} colors={colors} />
         <View style={styles.card}>
           {([
             { name: 'Amazon',    image: require('../assets/retailers/amazon.png'),    active: true },
@@ -514,18 +574,18 @@ export default function SettingsScreen() {
               <Image source={r.image} style={styles.retailerImage} resizeMode="contain" />
               <Text style={styles.retailerName}>{r.name}</Text>
               {r.active ? (
-                <View style={styles.connectedBadge}><Text style={styles.connectedText}>Activo</Text></View>
+                <View style={styles.connectedBadge}><Text style={styles.connectedText}>{tr.settings.retailerActive}</Text></View>
               ) : (
-                <View style={styles.comingSoonBadge}><Text style={styles.comingSoonText}>Próximamente</Text></View>
+                <View style={styles.comingSoonBadge}><Text style={styles.comingSoonText}>{tr.app.soon}</Text></View>
               )}
             </View>
           ))}
         </View>
 
         {/* ── Copia de seguridad ─────────────── */}
-        <SectionHeader title="Copia de seguridad familiar" colors={colors} />
+        <SectionHeader title={tr.settings.sectBackup} colors={colors} />
         <View style={styles.card}>
-          <Text style={styles.hint}>Exporta los perfiles de tu familia a un archivo Markdown. Guárdalo en iCloud, Google Drive o email para restaurarlos si cambias de dispositivo.</Text>
+          <Text style={styles.hint}>{tr.settings.backupHint}</Text>
           <View style={styles.divider} />
           <TouchableOpacity
             style={[styles.primaryBtn, isExporting && { opacity: 0.7 }]}
@@ -535,7 +595,7 @@ export default function SettingsScreen() {
             {isExporting ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.primaryBtnText}>📤 Exportar copia de seguridad</Text>
+              <Text style={styles.primaryBtnText}>{tr.settings.exportBtn}</Text>
             )}
           </TouchableOpacity>
           <TouchableOpacity
@@ -546,18 +606,18 @@ export default function SettingsScreen() {
             {isImporting ? (
               <ActivityIndicator color={Colors.infoBlue} />
             ) : (
-              <Text style={styles.linkBtnText}>📥 Importar desde archivo</Text>
+              <Text style={styles.linkBtnText}>{tr.settings.importBtn}</Text>
             )}
           </TouchableOpacity>
         </View>
 
         {/* ── Datos y privacidad ──────────────── */}
-        <SectionHeader title="Datos y privacidad" colors={colors} />
+        <SectionHeader title={tr.settings.sectDataPrivacy} colors={colors} />
         <View style={styles.card}>
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>Compartir datos anónimos</Text>
-              <Text style={styles.hint}>Ayuda a mejorar NutrIAssistant · Próximamente</Text>
+              <Text style={styles.label}>{tr.settings.shareAnonymousData}</Text>
+              <Text style={styles.hint}>{tr.settings.shareAnonymousDataHint}</Text>
             </View>
             <Switch
               value={false}
@@ -568,23 +628,23 @@ export default function SettingsScreen() {
           <View style={styles.divider} />
           {/* TODO: implement full data deletion (profiles, meal plans, inventory, DB reset) */}
           <TouchableOpacity style={styles.dangerBtn} onPress={() =>
-            Alert.alert('Eliminar todos los datos', 'Esto eliminará permanentemente todos tus perfiles, planes de comidas e inventario. Esta acción no se puede deshacer.', [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Eliminar todo', style: 'destructive', onPress: () => {} },
+            Alert.alert(tr.settings.deleteAllDataTitle, tr.settings.deleteAllDataMsg, [
+              { text: tr.app.cancel, style: 'cancel' },
+              { text: tr.settings.deleteAllBtn, style: 'destructive', onPress: () => {} },
             ])
           }>
-            <Text style={styles.dangerBtnText}>🗑️ Eliminar todos mis datos</Text>
+            <Text style={styles.dangerBtnText}>{tr.settings.deleteAllDataBtn}</Text>
           </TouchableOpacity>
         </View>
 
         {/* ── Contacto ────────────────────────── */}
-        <SectionHeader title="Contacto" colors={colors} />
+        <SectionHeader title={tr.settings.contact} colors={colors} />
         <View style={styles.card}>
           <ContactRow label="📧 Email" value="hola@nutriassistant.ai" onPress={() => Linking.openURL('mailto:hola@nutriassistant.ai')} colors={colors} />
           <ContactRow label="📸 Instagram" value="@nutriassistant.ai" onPress={() => Linking.openURL('https://instagram.com/nutriassistant.ai')} colors={colors} />
           <ContactRow label="🌐 Web" value="nutriassistant.ai" onPress={() => Linking.openURL('https://www.nutriassistant.ai')} colors={colors} />
           <View style={styles.divider} />
-          <Text style={styles.version}>Versión {appVersion}</Text>
+          <Text style={styles.version}>{tr.settings.version(appVersion)}</Text>
         </View>
 
         <View style={{ height: 120 }} />
@@ -635,7 +695,7 @@ function MemberProfileRow({
       await updateProfile(member.id, { avatarUrl: newUri })
       if (member.avatarUrl) await deleteOldAvatar(member.avatarUrl)
     } catch {
-      Alert.alert('Error', 'No se pudo guardar la foto. Inténtalo de nuevo.')
+      Alert.alert(tr.app.error, tr.settings.avatarError)
     }
   }
 
@@ -665,20 +725,20 @@ function MemberProfileRow({
 
       {isExpanded && (
         <View style={styles.memberForm}>
-          <FormRow label="Nombre" colors={colors}>
+          <FormRow label={tr.settings.memberFields.name} colors={colors}>
             <TextInput
               style={styles.formInput}
               value={member.name}
               onChangeText={(v) => onUpdate({ name: v })}
             />
           </FormRow>
-          <FormRow label="Fecha de nacimiento" colors={colors}>
+          <FormRow label={tr.settings.memberFields.dateOfBirth} colors={colors}>
             <DateOfBirthInput
               value={member.dateOfBirth ?? ''}
               onChange={(iso) => onUpdate({ dateOfBirth: iso })}
             />
           </FormRow>
-          <FormRow label="Peso (kg)" colors={colors}>
+          <FormRow label={tr.settings.memberFields.weight} colors={colors}>
             <TextInput
               style={styles.formInput}
               value={String(member.weight)}
@@ -686,7 +746,7 @@ function MemberProfileRow({
               keyboardType="numeric"
             />
           </FormRow>
-          <FormRow label="Altura (cm)" colors={colors}>
+          <FormRow label={tr.settings.memberFields.height} colors={colors}>
             <TextInput
               style={styles.formInput}
               value={String(member.height)}
@@ -695,7 +755,7 @@ function MemberProfileRow({
             />
           </FormRow>
 
-          <Text style={styles.formLabel}>Alergias</Text>
+          <Text style={styles.formLabel}>{tr.settings.memberFields.allergies}</Text>
           <View style={styles.tagGrid}>
             {EU_14_ALLERGENS.map((a) => {
               const active = member.allergies.includes(a)
@@ -718,7 +778,7 @@ function MemberProfileRow({
             })}
           </View>
 
-          <Text style={styles.formLabel}>Condiciones</Text>
+          <Text style={styles.formLabel}>{tr.settings.memberFields.conditions}</Text>
           <View style={styles.tagGrid}>
             {CONDITIONS_LIST.map((c) => {
               const active = member.conditions.includes(c)
@@ -734,7 +794,7 @@ function MemberProfileRow({
                   }}
                 >
                   <Text style={[styles.tagText, active && styles.tagTextAmber]}>
-                    {CONDITIONS_LABELS[c] ?? c.replace(/_/g, ' ')}
+                    {(tr.settings.conditions as Record<string, string>)[c] ?? c.replace(/_/g, ' ')}
                   </Text>
                 </TouchableOpacity>
               )
@@ -742,7 +802,7 @@ function MemberProfileRow({
           </View>
 
           <View style={styles.row}>
-            <Text style={styles.formLabel}>Edad escolar</Text>
+            <Text style={styles.formLabel}>{tr.settings.memberFields.schoolAge}</Text>
             <Switch
               value={member.isSchoolAge}
               onValueChange={(v) => onUpdate({ isSchoolAge: v })}
@@ -751,7 +811,7 @@ function MemberProfileRow({
           </View>
 
           <TouchableOpacity style={[styles.dangerBtn, { marginTop: Spacing.sm }]} onPress={onDelete}>
-            <Text style={styles.dangerBtnText}>Eliminar a {member.name}</Text>
+            <Text style={styles.dangerBtnText}>{tr.settings.deleteProfileMsg(member.name)}</Text>
           </TouchableOpacity>
         </View>
       )}

@@ -13,6 +13,7 @@ import {
 } from 'react-native'
 import { getAge } from '../src/utils/ageUtils'
 import { DateOfBirthInput } from '../src/components/inputs/DateOfBirthInput'
+import { useTranslation } from '../src/i18n'
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfiles } from '../src/modules/profiles/ProfilesContext'
@@ -37,13 +38,6 @@ type MemberDraft = Omit<FamilyMember, 'id' | 'createdAt' | 'updatedAt'>
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const ROLE_LABELS: Record<MemberRole, string> = {
-  father: 'Padre',
-  mother: 'Madre',
-  son: 'Hijo',
-  daughter: 'Hija',
-  other: 'Otro',
-}
 const ROLES: MemberRole[] = ['father', 'mother', 'son', 'daughter', 'other']
 
 const EMOJI_BY_ROLE: Record<MemberRole, string[]> = {
@@ -54,46 +48,12 @@ const EMOJI_BY_ROLE: Record<MemberRole, string[]> = {
   other:    ['🧑', '👤', '👴', '👵', '🧓', '🧑‍🦽'],
 }
 
-const DIET_OPTIONS: { value: DietPreference; label: string }[] = [
-  { value: 'none',          label: 'Sin restricción' },
-  { value: 'mediterranean', label: 'Mediterránea' },
-  { value: 'vegetarian',    label: 'Vegetariana' },
-  { value: 'vegan',         label: 'Vegana' },
-  { value: 'pescatarian',   label: 'Pescetariana' },
-  { value: 'keto',          label: 'Keto' },
-]
-
-const ALLERGEN_ES: Record<AllergenType, string> = {
-  gluten:       'Gluten',
-  dairy:        'Lácteos',
-  eggs:         'Huevos',
-  peanuts:      'Cacahuetes',
-  'tree nuts':  'Frutos secos',
-  soy:          'Soja',
-  fish:         'Pescado',
-  shellfish:    'Mariscos',
-  sesame:       'Sésamo',
-  celery:       'Apio',
-  mustard:      'Mostaza',
-  lupin:        'Altramuces',
-  mollusks:     'Moluscos',
-  sulfites:     'Sulfitos',
-}
+const DIET_VALUES: DietPreference[] = ['none', 'mediterranean', 'vegetarian', 'vegan', 'pescatarian', 'keto']
 
 const CONDITIONS_LIST = [
   'hypertension', 'osteoporosis', 'diabetes_type1', 'diabetes_type2',
   'celiac', 'lactose_intolerance', 'high_cholesterol', 'ibs',
 ]
-const CONDITIONS_ES: Record<string, string> = {
-  hypertension:        'Hipertensión',
-  osteoporosis:        'Osteoporosis',
-  diabetes_type1:      'Diabetes tipo 1',
-  diabetes_type2:      'Diabetes tipo 2',
-  celiac:              'Celiaquía',
-  lactose_intolerance: 'Intolerancia a lactosa',
-  high_cholesterol:    'Colesterol alto',
-  ibs:                 'Intestino irritable',
-}
 
 function blankDraft(): MemberDraft {
   return {
@@ -115,6 +75,7 @@ function blankDraft(): MemberDraft {
 export default function OnboardingScreen() {
   const { completeOnboarding, importFamily } = useProfiles()
   const { colors } = useTheme()
+  const tr = useTranslation()
   const styles = useMemo(() => makeStyles(colors), [colors])
 
   const [step, setStep]               = useState<Step>({ kind: 'welcome' })
@@ -181,16 +142,16 @@ export default function OnboardingScreen() {
   function handleImportBackup() {
     importFamilyFromFile().then((data) => {
       if (!data) {
-        Alert.alert('Archivo no válido', 'No se pudo leer el archivo de copia de seguridad.')
+        Alert.alert(tr.settings.invalidFileTitle, tr.onboarding.invalidFileMsg)
         return
       }
       Alert.alert(
-        `Importar familia "${data.familyName}"`,
-        `Se importarán ${data.members.length} miembro${data.members.length !== 1 ? 's' : ''}. Los datos actuales se reemplazarán.`,
+        tr.settings.importFamilyTitle(data.familyName),
+        tr.onboarding.importFamilyMsg(data.members.length),
         [
-          { text: 'Cancelar', style: 'cancel' },
+          { text: tr.app.cancel, style: 'cancel' },
           {
-            text: 'Importar',
+            text: tr.settings.importAlertBtn,
             onPress: async () => {
               await importFamily(data.familyName, data.members)
               router.replace('/(tabs)')
@@ -207,26 +168,22 @@ export default function OnboardingScreen() {
     return (
       <View style={styles.stepContainer}>
         <Text style={styles.bigEmoji}>🥗</Text>
-        <Text style={styles.welcomeTitle}>NutrIAssistant</Text>
-        <Text style={styles.welcomeSubtitle}>
-          Tu asistente de nutrición familiar
-        </Text>
-        <Text style={styles.welcomeBody}>
-          Vamos a configurar los perfiles de tu familia para personalizar recetas, menús y consejos nutricionales.
-        </Text>
+        <Text style={styles.welcomeTitle}>{tr.app.name}</Text>
+        <Text style={styles.welcomeSubtitle}>{tr.onboarding.welcomeSubtitle}</Text>
+        <Text style={styles.welcomeBody}>{tr.onboarding.welcomeBody}</Text>
         <TouchableOpacity
           style={styles.primaryBtn}
           onPress={() => goTo({ kind: 'familyName' })}
           activeOpacity={0.85}
         >
-          <Text style={styles.primaryBtnText}>Comenzar</Text>
+          <Text style={styles.primaryBtnText}>{tr.onboarding.start}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.linkBtn}
           onPress={handleImportBackup}
           activeOpacity={0.7}
         >
-          <Text style={styles.linkBtnText}>¿Ya tienes una copia de seguridad? Importar</Text>
+          <Text style={styles.linkBtnText}>{tr.onboarding.hasBackup}</Text>
         </TouchableOpacity>
       </View>
     )
@@ -236,13 +193,13 @@ export default function OnboardingScreen() {
     return (
       <View style={styles.stepContainer}>
         <Text style={styles.stepEmoji}>🏠</Text>
-        <Text style={styles.stepTitle}>¿Cómo se llama vuestra familia?</Text>
-        <Text style={styles.stepBody}>Escribe el apellido o un nombre para identificar a tu grupo familiar.</Text>
+        <Text style={styles.stepTitle}>{tr.onboarding.familyNameTitle}</Text>
+        <Text style={styles.stepBody}>{tr.onboarding.familyNameBody}</Text>
         <TextInput
           style={styles.mainInput}
           value={familyName}
           onChangeText={setFamilyName}
-          placeholder="Ej: García, Los Pérez…"
+          placeholder={tr.onboarding.familyNamePlaceholder}
           placeholderTextColor={colors.textMuted}
           autoFocus
           returnKeyType="done"
@@ -254,7 +211,7 @@ export default function OnboardingScreen() {
           activeOpacity={0.85}
           disabled={!familyName.trim()}
         >
-          <Text style={styles.primaryBtnText}>Siguiente</Text>
+          <Text style={styles.primaryBtnText}>{tr.onboarding.next}</Text>
         </TouchableOpacity>
       </View>
     )
@@ -264,8 +221,8 @@ export default function OnboardingScreen() {
     return (
       <View style={styles.stepContainer}>
         <Text style={styles.stepEmoji}>👨‍👩‍👧‍👦</Text>
-        <Text style={styles.stepTitle}>¿Cuántos sois en la familia?</Text>
-        <Text style={styles.stepBody}>Incluye a todos los que quieras gestionar en la app.</Text>
+        <Text style={styles.stepTitle}>{tr.onboarding.memberCountTitle}</Text>
+        <Text style={styles.stepBody}>{tr.onboarding.memberCountBody}</Text>
         <View style={styles.stepper}>
           <TouchableOpacity
             style={styles.stepperBtn}
@@ -291,7 +248,7 @@ export default function OnboardingScreen() {
           }}
           activeOpacity={0.85}
         >
-          <Text style={styles.primaryBtnText}>Siguiente</Text>
+          <Text style={styles.primaryBtnText}>{tr.onboarding.next}</Text>
         </TouchableOpacity>
       </View>
     )
@@ -309,20 +266,20 @@ export default function OnboardingScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.memberIndexLabel}>
-          Miembro {index + 1} de {memberCount}
+          {tr.onboarding.memberOf(index + 1, memberCount)}
         </Text>
-        <Text style={styles.stepTitle}>¿Cómo se llama?</Text>
+        <Text style={styles.stepTitle}>{tr.onboarding.memberName}</Text>
 
         <TextInput
           style={styles.mainInput}
           value={draft.name}
           onChangeText={(v) => updateDraft(index, { name: v })}
-          placeholder="Nombre"
+          placeholder={tr.onboarding.memberNamePlaceholder}
           placeholderTextColor={colors.textMuted}
           autoFocus
         />
 
-        <Text style={styles.fieldLabel}>Rol en la familia</Text>
+        <Text style={styles.fieldLabel}>{tr.onboarding.roleLabel}</Text>
         <View style={styles.pillRow}>
           {ROLES.map((r) => (
             <TouchableOpacity
@@ -335,13 +292,13 @@ export default function OnboardingScreen() {
               activeOpacity={0.8}
             >
               <Text style={[styles.pillText, draft.role === r && styles.pillTextActive]}>
-                {ROLE_LABELS[r]}
+                {tr.settings.memberRoles[r]}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.fieldLabel}>Elige un avatar</Text>
+        <Text style={styles.fieldLabel}>{tr.onboarding.avatarLabel}</Text>
         <View style={styles.emojiGrid}>
           {emojis.map((e) => (
             <TouchableOpacity
@@ -361,7 +318,7 @@ export default function OnboardingScreen() {
           activeOpacity={0.85}
           disabled={!draft.name.trim()}
         >
-          <Text style={styles.primaryBtnText}>Siguiente</Text>
+          <Text style={styles.primaryBtnText}>{tr.onboarding.next}</Text>
         </TouchableOpacity>
       </ScrollView>
     )
@@ -394,12 +351,12 @@ export default function OnboardingScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.memberIndexLabel}>
-          {draft.avatarEmoji} {draft.name} — Miembro {index + 1} de {memberCount}
+          {draft.avatarEmoji} {draft.name} — {tr.onboarding.memberOf(index + 1, memberCount)}
         </Text>
-        <Text style={styles.stepTitle}>Datos físicos y salud</Text>
+        <Text style={styles.stepTitle}>{tr.onboarding.healthTitle}</Text>
 
         <View style={styles.dobRow}>
-          <Text style={styles.fieldLabel}>Fecha de nacimiento</Text>
+          <Text style={styles.fieldLabel}>{tr.settings.memberFields.dateOfBirth}</Text>
           <DateOfBirthInput
             value={draft.dateOfBirth}
             onChange={(iso) => updateDraft(index, { dateOfBirth: iso })}
@@ -408,32 +365,32 @@ export default function OnboardingScreen() {
 
         <View style={styles.triRow}>
           <View style={styles.triField}>
-            <Text style={styles.fieldLabel}>Peso (kg)</Text>
+            <Text style={styles.fieldLabel}>{tr.settings.memberFields.weight}</Text>
             <TextInput
               style={styles.triInput}
               value={draft.weight > 0 ? String(draft.weight) : ''}
               onChangeText={(v) => updateDraft(index, { weight: parseFloat(v) || 0 })}
-              placeholder="kg"
+              placeholder={tr.onboarding.weightPlaceholder}
               placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
           </View>
           <View style={styles.triField}>
-            <Text style={styles.fieldLabel}>Altura (cm)</Text>
+            <Text style={styles.fieldLabel}>{tr.settings.memberFields.height}</Text>
             <TextInput
               style={styles.triInput}
               value={draft.height > 0 ? String(draft.height) : ''}
               onChangeText={(v) => updateDraft(index, { height: parseFloat(v) || 0 })}
-              placeholder="cm"
+              placeholder={tr.onboarding.heightPlaceholder}
               placeholderTextColor={colors.textMuted}
               keyboardType="numeric"
             />
           </View>
         </View>
 
-        <Text style={styles.fieldLabel}>Preferencia alimentaria</Text>
+        <Text style={styles.fieldLabel}>{tr.onboarding.dietLabel}</Text>
         <View style={styles.pillRow}>
-          {DIET_OPTIONS.map(({ value, label }) => (
+          {DIET_VALUES.map((value) => (
             <TouchableOpacity
               key={value}
               style={[styles.pill, draft.dietPreference === value && styles.pillActive]}
@@ -441,14 +398,14 @@ export default function OnboardingScreen() {
               activeOpacity={0.8}
             >
               <Text style={[styles.pillText, draft.dietPreference === value && styles.pillTextActive]}>
-                {label}
+                {tr.diets[value]}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.fieldLabel}>Alergias alimentarias</Text>
-        <Text style={styles.fieldHint}>Toca las que apliquen (puedes dejarlo vacío)</Text>
+        <Text style={styles.fieldLabel}>{tr.onboarding.allergiesLabel}</Text>
+        <Text style={styles.fieldHint}>{tr.onboarding.allergiesHint}</Text>
         <View style={styles.tagGrid}>
           {EU_14_ALLERGENS.map((a) => {
             const active = draft.allergies.includes(a)
@@ -460,15 +417,15 @@ export default function OnboardingScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.tagText, active && styles.tagAllergenText]}>
-                  {ALLERGEN_ES[a]}
+                  {(tr.allergens as Record<string, string>)[a] ?? a}
                 </Text>
               </TouchableOpacity>
             )
           })}
         </View>
 
-        <Text style={styles.fieldLabel}>Condiciones e intolerancias</Text>
-        <Text style={styles.fieldHint}>Enfermedades crónicas o intolerancias digestivas</Text>
+        <Text style={styles.fieldLabel}>{tr.onboarding.conditionsLabel}</Text>
+        <Text style={styles.fieldHint}>{tr.onboarding.conditionsHint}</Text>
         <View style={styles.tagGrid}>
           {CONDITIONS_LIST.map((c) => {
             const active = draft.conditions.includes(c)
@@ -480,7 +437,7 @@ export default function OnboardingScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={[styles.tagText, active && styles.tagConditionText]}>
-                  {CONDITIONS_ES[c]}
+                  {(tr.settings.conditions as Record<string, string>)[c] ?? c}
                 </Text>
               </TouchableOpacity>
             )
@@ -493,9 +450,7 @@ export default function OnboardingScreen() {
           activeOpacity={0.85}
           disabled={!canAdvance}
         >
-          <Text style={styles.primaryBtnText}>
-            {index + 1 < memberCount ? `Añadir a ${draft.name}` : `Añadir a ${draft.name}`}
-          </Text>
+          <Text style={styles.primaryBtnText}>{tr.onboarding.addMemberBtn(draft.name)}</Text>
         </TouchableOpacity>
       </ScrollView>
     )
@@ -511,11 +466,9 @@ export default function OnboardingScreen() {
         <Animated.Text style={[styles.doneEmoji, { transform: [{ scale }] }]}>
           {draft.avatarEmoji ?? '👤'}
         </Animated.Text>
-        <Text style={styles.doneTitle}>¡{draft.name} añadido!</Text>
+        <Text style={styles.doneTitle}>{tr.onboarding.memberAdded(draft.name)}</Text>
         {remaining > 0 && (
-          <Text style={styles.doneSubtitle}>
-            {remaining === 1 ? 'Queda 1 miembro más' : `Quedan ${remaining} miembros más`}
-          </Text>
+          <Text style={styles.doneSubtitle}>{tr.onboarding.membersRemaining(remaining)}</Text>
         )}
       </View>
     )
@@ -525,17 +478,15 @@ export default function OnboardingScreen() {
     return (
       <View style={styles.stepContainer}>
         <Text style={styles.bigEmoji}>🎉</Text>
-        <Text style={styles.stepTitle}>¡Familia lista!</Text>
-        <Text style={styles.stepBody}>
-          Hemos configurado los perfiles de {familyName}. NutrIAssistant ya puede personalizar recetas y menús para todos.
-        </Text>
+        <Text style={styles.stepTitle}>{tr.onboarding.allDoneTitle}</Text>
+        <Text style={styles.stepBody}>{tr.onboarding.allDoneBody(familyName)}</Text>
 
         <View style={styles.membersSummary}>
           {drafts.map((d, i) => (
             <View key={i} style={styles.summaryRow}>
               <Text style={styles.summaryEmoji}>{d.avatarEmoji ?? '👤'}</Text>
               <Text style={styles.summaryName}>{d.name}</Text>
-              <Text style={styles.summaryMeta}>{ROLE_LABELS[d.role]} · {getAge(d.dateOfBirth)} años</Text>
+              <Text style={styles.summaryMeta}>{tr.settings.memberRoles[d.role]} · {tr.onboarding.summaryAge(getAge(d.dateOfBirth))}</Text>
             </View>
           ))}
         </View>
@@ -548,7 +499,7 @@ export default function OnboardingScreen() {
           }}
           activeOpacity={0.85}
         >
-          <Text style={styles.primaryBtnText}>Empezar a usar NutrIAssistant</Text>
+          <Text style={styles.primaryBtnText}>{tr.onboarding.startBtn}</Text>
         </TouchableOpacity>
       </View>
     )
@@ -605,7 +556,7 @@ export default function OnboardingScreen() {
       {/* Back button */}
       {canGoBack() && (
         <TouchableOpacity style={styles.backBtn} onPress={goBack} activeOpacity={0.7}>
-          <Text style={styles.backBtnText}>← Volver</Text>
+          <Text style={styles.backBtnText}>{tr.onboarding.back}</Text>
         </TouchableOpacity>
       )}
 

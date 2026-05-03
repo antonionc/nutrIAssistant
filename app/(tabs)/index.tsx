@@ -78,13 +78,48 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* ── Cabecera de iconos ───────────────── */}
+        {/* ── Cabecera: avatar + iconos ────────── */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.push('/scanner')} style={styles.iconBtn}>
-            <Ionicons name="camera-outline" size={24} color={colors.text} style={styles.iconInactive} />
-          </TouchableOpacity>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity onPress={() => router.push('/scanner')} style={styles.iconBtn}>
+              <Ionicons name="camera-outline" size={22} color={colors.text} style={styles.iconInactive} />
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity onPress={() => router.push('/settings')} style={styles.iconBtn}>
-            <Ionicons name="settings-outline" size={24} color={colors.text} style={styles.iconInactive} />
+            <Ionicons name="settings-outline" size={22} color={colors.text} style={styles.iconInactive} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Saludo familiar ───────────────────── */}
+        <View style={styles.greetingSection}>
+          <Text style={styles.greetingTitle}>
+            {familyName ? tr.home_screen.greetingWithName(familyName) : tr.home_screen.greetingEmpty}
+          </Text>
+          <Text style={styles.greetingSubtitle}>
+            {todayPlan ? tr.home_screen.menuReady : tr.home_screen.addRecipesToWeek}
+          </Text>
+        </View>
+
+        {/* ── Accesos rápidos (2 tiles) ─────────── */}
+        <View style={styles.tilesRow}>
+          <TouchableOpacity style={styles.tile} onPress={() => router.push('/(tabs)/nutrition')} activeOpacity={0.8}>
+            <View style={styles.tileContent}>
+              <Text style={styles.tileTitle}>{tr.home_screen.todayMenu}</Text>
+              <Text style={styles.tileSubtitle}>
+                {todayPlan ? tr.home_screen.viewTodayMeals : tr.home_screen.planYourWeek}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.tile} onPress={() => router.push('/(tabs)/groceries')} activeOpacity={0.8}>
+            <View style={styles.tileContent}>
+              <Text style={styles.tileTitle}>{tr.home_screen.shoppingList}</Text>
+              <Text style={styles.tileSubtitle}>
+                {allAlerts.length > 0 ? tr.home_screen.pantryAlertsCount(allAlerts.length) : tr.home_screen.manageIngredients}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
 
@@ -123,57 +158,45 @@ export default function HomeScreen() {
         </View>
 
         {/* ── Menú de hoy ──────────────────────── */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{tr.home_screen.todayMenu}</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/nutrition')}>
-              <Text style={styles.seeAll}>{tr.home_screen.viewAll}</Text>
-            </TouchableOpacity>
-          </View>
-          {todayPlan ? (
-            <>
-              <FlatList
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                data={(['breakfast', 'lunch', 'dinner'] as const)}
-                keyExtractor={(m) => m}
-                onMomentumScrollEnd={(e) => {
-                  const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH)
-                  setActiveMealIndex(Math.max(0, Math.min(idx, 2)))
-                }}
-                renderItem={({ item: mealType }) => (
-                  <View style={{ width: SCREEN_WIDTH, paddingHorizontal: Spacing.md }}>
-                    <MealCard
-                      mealType={mealType}
-                      recipe={todayPlan.meals[mealType]}
-                      members={profiles}
-                      onPress={() => {
-                        const recipe = todayPlan.meals[mealType]
-                        if (recipe) router.push(`/recipe/${recipe.id}`)
-                      }}
-                    />
-                  </View>
-                )}
-              />
-              <View style={styles.dots}>
-                {(['breakfast', 'lunch', 'dinner'] as const).map((_, i) => (
-                  <View key={i} style={[styles.dot, i === activeMealIndex && styles.dotActive]} />
-                ))}
-              </View>
-            </>
-          ) : (
-            <View style={styles.noMealCard}>
-              <Text style={styles.noMealText}>{tr.home_screen.noMealToday}</Text>
-              <TouchableOpacity
-                style={styles.ctaBtn}
-                onPress={() => router.push('/(tabs)/nutrition')}
-              >
-                <Text style={styles.ctaBtnText}>{tr.home_screen.generatePlan}</Text>
+        {todayPlan && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{tr.home_screen.todayMenu}</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/nutrition')}>
+                <Text style={styles.seeAll}>{tr.home_screen.viewAll}</Text>
               </TouchableOpacity>
             </View>
-          )}
-        </View>
+            <FlatList
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              data={(['breakfast', 'lunch', 'dinner'] as const)}
+              keyExtractor={(m) => m}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH)
+                setActiveMealIndex(Math.max(0, Math.min(idx, 2)))
+              }}
+              renderItem={({ item: mealType }) => (
+                <View style={{ width: SCREEN_WIDTH, paddingHorizontal: Spacing.md }}>
+                  <MealCard
+                    mealType={mealType}
+                    recipe={todayPlan.meals[mealType]}
+                    members={profiles}
+                    onPress={() => {
+                      const recipe = todayPlan.meals[mealType]
+                      if (recipe) router.push(`/recipe/${recipe.id}`)
+                    }}
+                  />
+                </View>
+              )}
+            />
+            <View style={styles.dots}>
+              {(['breakfast', 'lunch', 'dinner'] as const).map((_, i) => (
+                <View key={i} style={[styles.dot, i === activeMealIndex && styles.dotActive]} />
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* ── Recetas recomendadas ─────────────── */}
         {featuredRecipes.length > 0 && (
@@ -189,15 +212,15 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               data={featuredRecipes}
               keyExtractor={(r) => r.id}
-              snapToInterval={SCREEN_WIDTH}
+              contentContainerStyle={styles.carouselContent}
+              snapToInterval={176}
               decelerationRate="fast"
               renderItem={({ item }) => (
-                <View style={{ width: SCREEN_WIDTH }}>
-                  <RecipeCard
-                    recipe={item}
-                    onPress={() => router.push(`/recipe/${item.id}`)}
-                  />
-                </View>
+                <RecipeCard
+                  recipe={item}
+                  compact
+                  onPress={() => router.push(`/recipe/${item.id}`)}
+                />
               )}
             />
           </View>
@@ -312,22 +335,56 @@ function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     scroll: {},
+
+    // Header row
     header: {
-      flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center',
-      paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm,
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
     },
+    headerLeft: { flexDirection: 'row', alignItems: 'center' },
     iconBtn: { padding: Spacing.xs },
-    iconInactive: { opacity: 0.55 },
+    iconInactive: { opacity: 0.5 },
+
+    // Greeting
+    greetingSection: {
+      paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.lg,
+    },
+    greetingTitle: {
+      ...Typography.displaySerif, color: colors.text, marginBottom: 4,
+    },
+    greetingSubtitle: {
+      ...Typography.bodyLarge, color: colors.textSecondary,
+    },
+
+    // Quick-access tiles
+    tilesRow: {
+      flexDirection: 'row', gap: Spacing.sm,
+      paddingHorizontal: Spacing.md, marginBottom: Spacing.lg,
+    },
+    tile: {
+      flex: 1, flexDirection: 'row', alignItems: 'center',
+      backgroundColor: colors.warmSurface, borderRadius: BorderRadius.lg,
+      paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm,
+      gap: Spacing.xs,
+    },
+    tileContent: { flex: 1 },
+    tileTitle: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily },
+    tileSubtitle: { ...Typography.caption, color: colors.textSecondary, marginTop: 2 },
+
+    // Sections
     section: { marginBottom: Spacing.lg },
     sectionHeader: {
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      marginBottom: Spacing.sm,
+      paddingRight: Spacing.md, marginBottom: Spacing.sm,
     },
     sectionTitle: {
       ...Typography.heading3, color: colors.text,
       paddingLeft: Spacing.md, marginBottom: Spacing.sm,
     },
-    seeAll: { ...Typography.body, color: Colors.healthGreen, paddingRight: Spacing.md },
+    seeAll: { ...Typography.body, color: Colors.healthGreen },
+    carouselContent: { paddingHorizontal: Spacing.md, gap: Spacing.sm },
+
+    // Pagination dots
     dots: {
       flexDirection: 'row', justifyContent: 'center',
       gap: 6, marginTop: Spacing.sm,
@@ -339,14 +396,10 @@ function makeStyles(colors: ThemeColors) {
     dotActive: {
       width: 20, backgroundColor: Colors.healthGreen,
     },
+
     emptyText: { ...Typography.body, color: colors.textMuted, paddingHorizontal: Spacing.md },
-    noMealCard: {
-      marginHorizontal: Spacing.md, padding: Spacing.lg, backgroundColor: colors.surface,
-      borderRadius: BorderRadius.lg, alignItems: 'center', gap: Spacing.md, ...Shadows.card,
-    },
-    noMealText: { ...Typography.body, color: colors.textSecondary },
-    ctaBtn: { backgroundColor: Colors.healthGreen, paddingHorizontal: Spacing.xl, paddingVertical: Spacing.sm, borderRadius: BorderRadius.pill },
-    ctaBtnText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+
+    // Alerts
     alertsCard: {
       marginHorizontal: Spacing.md, backgroundColor: colors.surface,
       borderRadius: BorderRadius.lg, padding: Spacing.md, gap: Spacing.sm, ...Shadows.card,
@@ -359,6 +412,8 @@ function makeStyles(colors: ThemeColors) {
       paddingVertical: 4, borderRadius: BorderRadius.pill,
     },
     alertCTAText: { ...Typography.caption, color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
+
+    // News cards
     newsCard: {
       flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,
       marginHorizontal: Spacing.md, backgroundColor: colors.surface,

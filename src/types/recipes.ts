@@ -35,7 +35,7 @@ export interface Recipe {
   servings: number
   imageUrl?: string
   localImagePath?: string       // cached local path
-  sourceApi?: 'fatsecret' | 'spoonacular' | 'ai_generated' | 'user_created'
+  sourceApi?: 'fatsecret' | 'spoonacular' | 'themealdb' | 'ai_generated' | 'user_created'
   sourceId?: string
   nutritionalInfo: NutritionalInfo
   allergens: string[]

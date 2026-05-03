@@ -161,6 +161,13 @@ async function spFetch<T>(path: string, params: Record<string, string> = {}): Pr
 
 function buildStub(r: SPSearchResult, cuisine: string, cuisineFlag: string): Recipe {
   const now = new Date().toISOString()
+  // Spoonacular image URLs follow a predictable pattern based on the recipe ID.
+  // Use the returned URL if present, otherwise construct it to guarantee images
+  // are available for display before the lazy-load detail fetch runs.
+  const imageUrl =
+    r.image ??
+    (r.imageType ? `https://spoonacular.com/recipeImages/${r.id}-636x393.${r.imageType}` : undefined)
+
   return {
     id: `sp-${r.id}`,
     name: r.title,
@@ -172,7 +179,7 @@ function buildStub(r: SPSearchResult, cuisine: string, cuisineFlag: string): Rec
     prepTime: 15,
     cookTime: 30,
     servings: 4,
-    imageUrl: r.image,
+    imageUrl,
     sourceApi: 'spoonacular',
     sourceId: String(r.id),
     nutritionalInfo: { calories: 0, protein: 0, carbs: 0, fat: 0 },
@@ -251,6 +258,7 @@ export interface SpoonacularRecipeDetail {
   allergens: string[]
   category: RecipeCategory
   nutriscore: ReturnType<typeof computeNutriScore>
+  imageUrl?: string
 }
 
 export async function getSpoonacularRecipeDetail(
@@ -294,6 +302,7 @@ export async function getSpoonacularRecipeDetail(
       allergens,
       category:       inferCategory(data.dishTypes),
       nutriscore:     computeNutriScore(nutritionalInfo),
+      imageUrl:       data.image ?? undefined,
     }
   } catch (e) {
     console.warn('[Spoonacular] getRecipeDetail failed:', e)

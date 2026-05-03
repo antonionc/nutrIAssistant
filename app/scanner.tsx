@@ -32,6 +32,7 @@ import { FamilyCompatibilityRow } from '../src/components/badges/CompatibilityBa
 import { ScanResult } from '../src/types/scanner'
 import { NutritionalInfo } from '../src/types/nutrition'
 import { generateId } from '../src/utils/idUtils'
+import { useTranslation } from '../src/i18n'
 
 type ScanMode = 'barcode' | 'photo'
 
@@ -40,6 +41,7 @@ export default function ScannerScreen() {
   const { profiles } = useProfiles()
   const { addItem } = useInventory()
   const { colors } = useTheme()
+  const tr = useTranslation()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [permission, requestPermission] = useCameraPermissions()
   const [mode, setMode] = useState<ScanMode>('barcode')
@@ -59,7 +61,7 @@ export default function ScannerScreen() {
     try {
       const product = await getProductByBarcode(data)
       if (!product) {
-        Alert.alert('Producto no encontrado', 'Este código de barras no se encontró en Open Food Facts. Prueba el modo foto para escanear la etiqueta.')
+        Alert.alert(tr.scanner.notFound, tr.scanner.notFoundDesc)
         scannedRef.current = false
         setIsLoading(false)
         return
@@ -92,7 +94,7 @@ export default function ScannerScreen() {
       await saveScanResult(result)
       setScannedResult(result)
     } catch (error) {
-      Alert.alert('Error al escanear', error instanceof Error ? error.message : 'Error desconocido')
+      Alert.alert(tr.scanner.scanFailed, error instanceof Error ? error.message : tr.app.error)
       scannedRef.current = false
     } finally {
       setIsLoading(false)
@@ -109,7 +111,7 @@ export default function ScannerScreen() {
       nutritionalInfo: scannedResult.nutritionalInfo,
       barcode: scannedResult.barcode,
     })
-    Alert.alert('¡Añadido!', `${scannedResult.productName} añadido a tu despensa.`)
+    Alert.alert(tr.app.ok, tr.scanner.addedToPantry(scannedResult.productName))
   }
 
   const loadHistory = async () => {
@@ -124,13 +126,13 @@ export default function ScannerScreen() {
     return (
       <SafeAreaView style={styles.permissionScreen} edges={['top']}>
         <View style={styles.permissionContainer}>
-          <Text style={styles.permissionTitle}>Acceso a cámara requerido</Text>
-          <Text style={styles.permissionText}>NutrIAssistant necesita acceso a la cámara para escanear códigos de barras y etiquetas.</Text>
+          <Text style={styles.permissionTitle}>{tr.scanner.permissionTitle}</Text>
+          <Text style={styles.permissionText}>{tr.scanner.permissionText}</Text>
           <TouchableOpacity style={styles.permissionBtn} onPress={requestPermission}>
-            <Text style={styles.permissionBtnText}>Conceder permiso</Text>
+            <Text style={styles.permissionBtnText}>{tr.scanner.grantPermission}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Text style={styles.backBtnText}>← Atrás</Text>
+            <Text style={styles.backBtnText}>{tr.scanner.back}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -160,7 +162,7 @@ export default function ScannerScreen() {
         <SafeAreaView style={styles.overlay} edges={['top']}>
           <View style={styles.topBar}>
             <View style={{ width: 44 }} />
-            <Text style={styles.scanTitle}>Escáner de alimentos</Text>
+            <Text style={styles.scanTitle}>{tr.scanner.title}</Text>
             <TouchableOpacity onPress={() => setFlashOn(!flashOn)} style={styles.overlayBtn}>
               <Text style={styles.overlayBtnText}>{flashOn ? '⚡' : '○'}</Text>
             </TouchableOpacity>
@@ -175,7 +177,7 @@ export default function ScannerScreen() {
                 onPress={() => { setMode(m); setScannedResult(null); scannedRef.current = false }}
               >
                 <Text style={[styles.modeBtnText, mode === m && styles.modeBtnTextActive]}>
-                  {m === 'barcode' ? '▦ Código de barras' : '📷 Foto'}
+                  {m === 'barcode' ? tr.scanner.barcode : tr.scanner.photo}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -187,7 +189,7 @@ export default function ScannerScreen() {
               {isLoading && <ActivityIndicator color={Colors.healthGreen} size="large" />}
               {!isLoading && !scannedResult && (
                 <Text style={styles.frameHint}>
-                  {mode === 'barcode' ? 'Apunta al código de barras' : 'Fotografía el producto'}
+                  {mode === 'barcode' ? tr.scanner.pointAtBarcode : tr.scanner.photographProduct}
                 </Text>
               )}
             </View>
@@ -196,14 +198,14 @@ export default function ScannerScreen() {
           {/* Bottom actions */}
           <View style={styles.bottomBar}>
             <TouchableOpacity style={styles.historyBtn} onPress={loadHistory}>
-              <Text style={styles.historyBtnText}>📋 Historial</Text>
+              <Text style={styles.historyBtnText}>{tr.scanner.history}</Text>
             </TouchableOpacity>
             {mode === 'barcode' && scannedResult && (
               <TouchableOpacity
                 style={styles.rescanBtn}
                 onPress={() => { setScannedResult(null); scannedRef.current = false }}
               >
-                <Text style={styles.rescanBtnText}>↺ Escanear de nuevo</Text>
+                <Text style={styles.rescanBtnText}>{tr.scanner.scanAgain}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -233,19 +235,19 @@ export default function ScannerScreen() {
 
             {scannedResult.nutritionalInfo && (
               <View style={styles.nutritionSection}>
-                <Text style={styles.sectionLabel}>Info nutricional (por 100g)</Text>
+                <Text style={styles.sectionLabel}>{tr.scanner.nutritionPer100g}</Text>
                 <MacroBar nutritionalInfo={scannedResult.nutritionalInfo} height={8} showLabels />
                 <View style={styles.nutritionGrid}>
-                  <NutritionCell label="Calorías" value={`${scannedResult.nutritionalInfo.calories} kcal`} colors={colors} />
-                  <NutritionCell label="Proteínas" value={`${scannedResult.nutritionalInfo.protein}g`} colors={colors} />
-                  <NutritionCell label="Carbohid." value={`${scannedResult.nutritionalInfo.carbs}g`} colors={colors} />
-                  <NutritionCell label="Grasas" value={`${scannedResult.nutritionalInfo.fat}g`} colors={colors} />
+                  <NutritionCell label={tr.nutrients.calories} value={`${scannedResult.nutritionalInfo.calories} kcal`} colors={colors} />
+                  <NutritionCell label={tr.nutrients.protein} value={`${scannedResult.nutritionalInfo.protein}g`} colors={colors} />
+                  <NutritionCell label={tr.nutrients.carbs} value={`${scannedResult.nutritionalInfo.carbs}g`} colors={colors} />
+                  <NutritionCell label={tr.nutrients.fat} value={`${scannedResult.nutritionalInfo.fat}g`} colors={colors} />
                 </View>
               </View>
             )}
 
             <View style={styles.compatSection}>
-              <Text style={styles.sectionLabel}>Compatibilidad familiar</Text>
+              <Text style={styles.sectionLabel}>{tr.scanner.familyCompatibility}</Text>
               <FamilyCompatibilityRow
                 compatibility={scannedResult.familyCompatibility}
                 members={profiles}
@@ -255,10 +257,10 @@ export default function ScannerScreen() {
 
             <View style={styles.resultActions}>
               <TouchableOpacity style={styles.actionBtn} onPress={handleAddToInventory}>
-                <Text style={styles.actionBtnText}>+ Añadir a despensa</Text>
+                <Text style={styles.actionBtnText}>{tr.scanner.addToPantry}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSecondary]}>
-                <Text style={styles.actionBtnTextSecondary}>+ Añadir a compra</Text>
+                <Text style={styles.actionBtnTextSecondary}>{tr.scanner.addToCart}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>

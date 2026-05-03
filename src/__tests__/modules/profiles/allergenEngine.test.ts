@@ -86,7 +86,7 @@ describe('checkFamilyCompatibility', () => {
       baseMember({ id: 'a', name: 'A' }),
       baseMember({ id: 'b', name: 'B', allergies: ['eggs'] }),
     ]
-    const recipe = { ingredients: [{ name: 'egg', quantity: 2, unit: 'pcs' }], allergens: [] }
+    const recipe = { ingredients: [{ name: 'egg', quantity: 2, unit: 'pcs', isAllergen: false }], allergens: [] }
     const result = checkFamilyCompatibility(recipe, profiles)
     expect(Object.keys(result)).toHaveLength(2)
     expect(result['a'].isCompatible).toBe(true)
@@ -94,7 +94,7 @@ describe('checkFamilyCompatibility', () => {
   })
 
   it('returns empty object for empty profiles', () => {
-    const recipe = { ingredients: [{ name: 'chicken', quantity: 1, unit: 'kg' }], allergens: [] }
+    const recipe = { ingredients: [{ name: 'chicken', quantity: 1, unit: 'kg', isAllergen: false }], allergens: [] }
     expect(checkFamilyCompatibility(recipe, [])).toEqual({})
   })
 
@@ -102,7 +102,7 @@ describe('checkFamilyCompatibility', () => {
     const member = baseMember({ id: 'x', allergies: ['fish'] })
     // allergen listed in recipe.allergens but not in ingredient names
     const recipe = {
-      ingredients: [{ name: 'worcestershire sauce', quantity: 1, unit: 'tbsp' }],
+      ingredients: [{ name: 'worcestershire sauce', quantity: 1, unit: 'tbsp', isAllergen: false }],
       allergens: ['fish'],
     }
     const result = checkFamilyCompatibility(recipe, [member])

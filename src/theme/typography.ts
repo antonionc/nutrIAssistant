@@ -9,6 +9,7 @@ const FontFamily = {
 } as const
 
 export interface TypographyScale {
+  displaySerif: TextStyle
   display: TextStyle
   heading1: TextStyle
   heading2: TextStyle
@@ -20,10 +21,17 @@ export interface TypographyScale {
 }
 
 export const Typography: TypographyScale = {
+  displaySerif: {
+    fontFamily: FontFamily.bold,
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.3,
+  },
   display: {
     fontFamily: FontFamily.bold,
     fontSize: 28,
     lineHeight: 36,
+    letterSpacing: -0.3,
   },
   heading1: {
     fontFamily: FontFamily.bold,

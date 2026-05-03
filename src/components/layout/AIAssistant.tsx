@@ -29,6 +29,7 @@ import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
 import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 import { AIMessage } from '../../types/ai'
 import { useAIEngine } from '../../modules/ai-engine/AIContext'
+import { useTranslation } from '../../i18n'
 
 type BottomSheetFlatListMethods = { scrollToEnd: (opts?: { animated?: boolean }) => void }
 
@@ -73,30 +74,6 @@ const VOICE_QUALITY_RANK: Record<VoiceQuality, number> = {
   [VoiceQuality.Default]: 1,
 }
 
-// Friendly Spanish error messages for known voice recognition error codes
-function voiceErrorMessage(code?: string): string {
-  switch (code) {
-    case 'not_allowed':
-    case 'permissions':
-      return 'Permiso de micrófono denegado. Actívalo en Ajustes.'
-    case 'recognizer_unavailable':
-    case 'recognizer-unavailable':
-      return 'Reconocimiento de voz no disponible en este dispositivo.'
-    case 'network':
-    case 'network-error':
-      return 'Se necesita conexión a internet para el reconocimiento de voz.'
-    case 'no-speech':
-    case 'speech_timeout':
-      return 'No se detectó voz. Habla más cerca del micrófono.'
-    case 'audio':
-    case 'audio-capture':
-      return 'Error de audio. Cierra otras apps que usen el micrófono.'
-    case 'aborted':
-      return ''   // user-initiated stop, no message needed
-    default:
-      return 'Error de reconocimiento de voz. Inténtalo de nuevo.'
-  }
-}
 
 interface AIAssistantProps {
   onClose?: () => void
@@ -106,7 +83,32 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
   function AIAssistant({ onClose }, ref) {
     const { messages, isResponding, sendMessage, clearHistory } = useAIEngine()
     const { colors, isDark } = useTheme()
+    const tr = useTranslation()
     const { vs, ts } = useMemo(() => makeStyles(colors), [colors])
+
+    const voiceErrorMessage = useCallback((code?: string): string => {
+      switch (code) {
+        case 'not_allowed':
+        case 'permissions':
+          return tr.ai.errorPermissionDenied
+        case 'recognizer_unavailable':
+        case 'recognizer-unavailable':
+          return tr.ai.errorRecognizerUnavailable
+        case 'network':
+        case 'network-error':
+          return tr.ai.errorNetwork
+        case 'no-speech':
+        case 'speech_timeout':
+          return tr.ai.errorNoSpeech
+        case 'audio':
+        case 'audio-capture':
+          return tr.ai.errorAudio
+        case 'aborted':
+          return ''
+        default:
+          return tr.ai.errorVoiceGeneric
+      }
+    }, [tr])
     const [input, setInput] = useState('')
     const [isSpeakerOn, setIsSpeakerOn] = useState(false)
     const [isListening, setIsListening] = useState(false)
@@ -269,10 +271,10 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
           const granted = await PermissionsAndroid.request(
             PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
             {
-              title: 'Permiso de micrófono',
-              message: 'NutrIAssistant necesita acceso al micrófono para reconocimiento de voz.',
-              buttonPositive: 'Permitir',
-              buttonNegative: 'Cancelar',
+              title: tr.ai.voicePermissionTitle,
+              message: tr.ai.voicePermissionMsg,
+              buttonPositive: tr.ai.voicePermissionAllow,
+              buttonNegative: tr.app.cancel,
             }
           )
           return granted === PermissionsAndroid.RESULTS.GRANTED
@@ -287,10 +289,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
     // ── Voice input handler ───────────────────────────────────────────────────
     const handleVoiceInput = useCallback(async () => {
       if (!Voice || voiceAvailable === false) {
-        Alert.alert(
-          'Voz no disponible',
-          'El reconocimiento de voz no está disponible en este dispositivo.'
-        )
+        Alert.alert(tr.ai.voiceNotAvailableTitle, tr.ai.voiceNotAvailableMsg)
         return
       }
 
@@ -310,7 +309,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
 
       const hasPermission = await requestMicPermission()
       if (!hasPermission) {
-        setVoiceError('Permiso de micrófono denegado. Actívalo en Ajustes.')
+        setVoiceError(tr.ai.errorPermissionDenied)
         setTimeout(() => setVoiceError(null), 4000)
         return
       }
@@ -324,7 +323,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
         gotResultsRef.current = false
         await Voice.start('es-ES')
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Error al iniciar el micrófono'
+        const msg = e instanceof Error ? e.message : tr.ai.errorStartMic
         setVoiceError(msg)
         setTimeout(() => setVoiceError(null), 4000)
         console.warn('[Voice] start() failed:', e)
@@ -411,7 +410,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
                 <Text>{isSpeakerOn ? '🔊' : '🔇'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={vs.headerBtn} onPress={clearHistory}>
-                <Text style={ts.clearText}>Limpiar</Text>
+                <Text style={ts.clearText}>{tr.ai.clear}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -432,16 +431,14 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
                 keyboardShouldPersistTaps="handled"
               >
                 <Text style={ts.welcomeEmoji}>👋</Text>
-                <Text style={ts.welcomeTitle}>¡Hola, soy NutriBot!</Text>
-                <Text style={ts.welcomeText}>
-                  Tu asistente de nutrición familiar con IA. Pregúntame sobre recetas, ingredientes, planes de comidas o alérgenos.
-                </Text>
+                <Text style={ts.welcomeTitle}>{tr.ai.welcome}</Text>
+                <Text style={ts.welcomeText}>{tr.ai.welcomeDesc}</Text>
               </BottomSheetScrollView>
             ) : (
               <BottomSheetFlatList
                 ref={listRef}
                 data={messages}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item: AIMessage) => item.id}
                 renderItem={renderMessage}
                 contentContainerStyle={vs.messageList}
                 showsVerticalScrollIndicator={true}
@@ -460,7 +457,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
                   style={[vs.micBtn, isListening && vs.micBtnActive]}
                   onPress={handleVoiceInput}
                   disabled={isResponding}
-                  accessibilityLabel={isListening ? 'Detener grabación' : 'Iniciar grabación de voz'}
+                  accessibilityLabel={isListening ? tr.ai.micStopLabel : tr.ai.micStartLabel}
                 >
                   <Text style={ts.micIcon}>{isListening ? '⏹' : '🎙️'}</Text>
                 </TouchableOpacity>
@@ -470,7 +467,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
               style={ts.input}
               value={input}
               onChangeText={setInput}
-              placeholder={isListening ? 'Escuchando...' : 'Pregunta a NutriBot...'}
+              placeholder={isListening ? tr.ai.listening : tr.ai.placeholder}
               placeholderTextColor={colors.textMuted}
               multiline
               maxLength={500}

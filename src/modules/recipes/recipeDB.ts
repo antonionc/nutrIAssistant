@@ -131,7 +131,7 @@ export async function getRecipeById(id: string): Promise<Recipe | null> {
 }
 
 // Only recipes from verified, traceable sources are shown to users.
-const VERIFIED_SOURCES = `source_api IN ('fatsecret', 'spoonacular', 'user_created')`
+const VERIFIED_SOURCES = `source_api IN ('fatsecret', 'spoonacular', 'themealdb', 'user_created')`
 
 export async function searchRecipes(
   query: string,
@@ -227,6 +227,7 @@ export interface RecipeFullDetail {
   ingredients: RecipeIngredient[]
   nutritionalInfo: NutritionalInfo
   allergens: string[]
+  imageUrl?: string
 }
 
 export async function updateRecipeFullDetail(
@@ -234,23 +235,45 @@ export async function updateRecipeFullDetail(
   detail: RecipeFullDetail
 ): Promise<void> {
   const db = await getDatabase()
-  await db.runAsync(
-    `UPDATE recipes SET
-      instructions = ?, ingredients = ?, prep_time = ?, cook_time = ?,
-      servings = ?, nutritional_info = ?, allergens = ?, updated_at = ?
-    WHERE id = ?`,
-    [
-      JSON.stringify(detail.instructions),
-      JSON.stringify(detail.ingredients),
-      detail.prepTime,
-      detail.cookTime,
-      detail.servings,
-      JSON.stringify(detail.nutritionalInfo),
-      JSON.stringify(detail.allergens),
-      new Date().toISOString(),
-      id,
-    ]
-  )
+  const now = new Date().toISOString()
+  if (detail.imageUrl) {
+    await db.runAsync(
+      `UPDATE recipes SET
+        instructions = ?, ingredients = ?, prep_time = ?, cook_time = ?,
+        servings = ?, nutritional_info = ?, allergens = ?, image_url = ?, updated_at = ?
+      WHERE id = ?`,
+      [
+        JSON.stringify(detail.instructions),
+        JSON.stringify(detail.ingredients),
+        detail.prepTime,
+        detail.cookTime,
+        detail.servings,
+        JSON.stringify(detail.nutritionalInfo),
+        JSON.stringify(detail.allergens),
+        detail.imageUrl,
+        now,
+        id,
+      ]
+    )
+  } else {
+    await db.runAsync(
+      `UPDATE recipes SET
+        instructions = ?, ingredients = ?, prep_time = ?, cook_time = ?,
+        servings = ?, nutritional_info = ?, allergens = ?, updated_at = ?
+      WHERE id = ?`,
+      [
+        JSON.stringify(detail.instructions),
+        JSON.stringify(detail.ingredients),
+        detail.prepTime,
+        detail.cookTime,
+        detail.servings,
+        JSON.stringify(detail.nutritionalInfo),
+        JSON.stringify(detail.allergens),
+        now,
+        id,
+      ]
+    )
+  }
 }
 
 export async function updateRecipeTranslation(
@@ -267,6 +290,11 @@ export async function updateRecipeTranslation(
   values.push(id)
   const db = await getDatabase()
   await db.runAsync(`UPDATE recipes SET ${parts.join(', ')} WHERE id = ?`, values)
+}
+
+export async function wipeRecipesDatabase(): Promise<void> {
+  const db = await getDatabase()
+  await db.runAsync('DELETE FROM recipes')
 }
 
 export async function getRandomRecipes(

@@ -5,6 +5,7 @@ import {
   getSpoonacularRecipeDetail,
   SPOONACULAR_CUISINE_QUERIES,
 } from '../../services/spoonacular'
+import { fetchAllTheMealDB } from '../../services/themealdb'
 import { translateRecipeNames, translateInstructions } from '../../services/translator'
 import {
   batchUpsertRecipes,
@@ -12,11 +13,12 @@ import {
   getRecipeCount,
   updateRecipeFullDetail,
   updateRecipeTranslation,
+  wipeRecipesDatabase,
 } from './recipeDB'
 import { markSourceSynced, RecipeSourceKey } from './recipeSourcesConfig'
 
 // Bump whenever sync logic changes to force a re-download.
-const SYNC_VERSION = '6'
+const SYNC_VERSION = '7'
 
 const KEY_RECIPES_SYNCED    = 'recipes_synced'
 const KEY_SYNC_VERSION      = 'recipes_sync_version'
@@ -148,6 +150,35 @@ export async function syncSpoonacularRecipes(
   return totalCount
 }
 
+// ─── TheMealDB sync ───────────────────────────────────────────────────────────
+
+export async function syncTheMealDB(
+  onProgress?: SyncProgressCallback
+): Promise<number> {
+  onProgress?.(0, 'Conectando con TheMealDB...')
+
+  const recipes = await fetchAllTheMealDB((progress, message) => {
+    onProgress?.(progress * 0.9, message)
+  })
+
+  onProgress?.(0.91, `Guardando ${recipes.length} recetas de TheMealDB...`)
+  await batchUpsertRecipes(recipes)
+
+  onProgress?.(0.95, 'Filtrando imágenes incorrectas...')
+  await cleanDuplicateImageUrls()
+
+  await markSourceSynced('themealdb', recipes.length)
+  onProgress?.(1, `¡${recipes.length} recetas de TheMealDB descargadas!`)
+  return recipes.length
+}
+
+// ─── Wipe all recipes + reset sync state ────────────────────────────────────
+
+export async function wipeAndResetRecipes(): Promise<void> {
+  await wipeRecipesDatabase()
+  await AsyncStorage.multiRemove([KEY_RECIPES_SYNCED, KEY_SYNC_VERSION, KEY_RECIPES_SYNC_DATE])
+}
+
 // ─── Unified dispatcher ───────────────────────────────────────────────────────
 
 export async function syncSource(
@@ -157,6 +188,7 @@ export async function syncSource(
   switch (key) {
     case 'fatsecret':   return syncFatSecretRecipes(onProgress)
     case 'spoonacular': return syncSpoonacularRecipes(onProgress)
+    case 'themealdb':   return syncTheMealDB(onProgress)
   }
 }
 
@@ -195,13 +227,14 @@ export async function enrichSpoonacularDetail(
     if (!detail) return false
 
     await updateRecipeFullDetail(recipeId, {
-      prepTime:       detail.prepTime,
-      cookTime:       detail.cookTime,
-      servings:       detail.servings,
-      instructions:   detail.instructions,
-      ingredients:    detail.ingredients,
+      prepTime:        detail.prepTime,
+      cookTime:        detail.cookTime,
+      servings:        detail.servings,
+      instructions:    detail.instructions,
+      ingredients:     detail.ingredients,
       nutritionalInfo: detail.nutritionalInfo,
-      allergens:      detail.allergens,
+      allergens:       detail.allergens,
+      imageUrl:        detail.imageUrl,
     })
 
     // Translate instructions lazily (fire-and-forget)
