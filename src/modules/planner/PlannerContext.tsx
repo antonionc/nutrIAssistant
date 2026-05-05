@@ -14,8 +14,9 @@ import {
   saveSchoolMenuEntry,
   getSchoolMenuEntries,
 } from './plannerDB'
-import { analyzePDF } from '../../services/claude'
-import { InventoryLite } from '../../services/prompts/cloud'
+import { extractPdfText } from '../../../modules/expo-pdf-text'
+import { generateOnDevice } from '../../services/onDeviceLlm'
+import { InventoryLite } from '../../services/prompts/system'
 import { SCHOOL_MENU_EXTRACTION_PROMPT } from '../../services/prompts/schoolMenuExtraction'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { selectWeekRecipes } from './mealPlanGenerator'
@@ -44,7 +45,7 @@ interface PlannerContextValue {
   setMealForDate: (date: string, mealType: MealSlot, recipe: Recipe) => Promise<void>
   removeMealFromDate: (date: string, mealType: MealSlot) => Promise<void>
   lockDay: (date: string) => Promise<void>
-  uploadSchoolMenu: (pdfBase64: string, childId: string) => Promise<void>
+  uploadSchoolMenu: (pdfUri: string, childId: string) => Promise<void>
   getSchoolMenuEntries: typeof getSchoolMenuEntries
 }
 
@@ -176,10 +177,20 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
     await loadWeek()
   }, [loadWeek])
 
-  // School menu upload stays cloud: needs PDF vision (Anthropic Claude)
+  // School menu upload runs entirely on-device: PDF text is extracted via the
+  // expo-pdf-text native module (PDFKit on iOS, PdfBox on Android), then the
+  // local LLM parses it into structured entries.
   const uploadSchoolMenu = useCallback(
-    async (pdfBase64: string, childId: string): Promise<void> => {
-      const response = await analyzePDF(pdfBase64, SCHOOL_MENU_EXTRACTION_PROMPT)
+    async (pdfUri: string, childId: string): Promise<void> => {
+      const pdfText = await extractPdfText(pdfUri)
+      if (!pdfText.trim()) throw new Error('Could not extract text from PDF')
+
+      const userPrompt = `${SCHOOL_MENU_EXTRACTION_PROMPT}\n\nPDF TEXT:\n${pdfText}`
+      const response = await generateOnDevice(
+        userPrompt,
+        'You extract structured school-menu data and return ONLY a JSON array. No markdown, no commentary.'
+      )
+
       const jsonMatch = response.match(/\[[\s\S]*\]/)
       if (!jsonMatch) throw new Error('Could not extract school menu data')
 

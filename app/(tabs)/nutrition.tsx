@@ -16,7 +16,6 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as DocumentPicker from 'expo-document-picker'
-import * as FileSystem from 'expo-file-system/legacy'
 import { router } from 'expo-router'
 import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useInventory } from '../../src/modules/inventory/InventoryContext'
@@ -114,12 +113,8 @@ export default function NutritionScreen() {
     const file = result.assets[0]
     setUploadPhase('analyzing')
     try {
-      const base64 = await FileSystem.readAsStringAsync(file.uri, {
-        encoding: 'base64',
-      })
-
       for (const member of schoolAgeMembers) {
-        await uploadSchoolMenu(base64, member.id)
+        await uploadSchoolMenu(file.uri, member.id)
       }
 
       setUploadPhase('generating')

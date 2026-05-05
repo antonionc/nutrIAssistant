@@ -1,0 +1,10 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["ExpoPdfTextModule"],
+    "podspecPath": "ExpoPdfTextModule.podspec"
+  },
+  "android": {
+    "modules": ["expo.modules.pdftext.ExpoPdfTextModule"]
+  }
+}

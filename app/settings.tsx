@@ -27,8 +27,6 @@ import {
   getLLMStatus,
   downloadModel,
   deleteModel,
-  getPreferOnDevice,
-  setPreferOnDevice,
 } from '../src/services/onDeviceLlm'
 import { OnDeviceLLMStatus } from '../src/types/ai'
 import { syncSource, isSynced, wipeAndResetRecipes } from '../src/modules/recipes/syncRecipes'
@@ -63,7 +61,6 @@ export default function SettingsScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
   const [llmStatus, setLlmStatus] = useState<OnDeviceLLMStatus>({ isDownloaded: false, isDownloading: false, isLoaded: false, downloadProgress: 0 })
-  const [preferOnDevice, setPreferOnDeviceState] = useState(true)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [editingFamilyName, setEditingFamilyName] = useState(false)
@@ -95,7 +92,6 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     getLLMStatus().then(setLlmStatus)
-    getPreferOnDevice().then(setPreferOnDeviceState)
     refreshSourceStats()
   }, [])
 
@@ -122,11 +118,6 @@ export default function SettingsScreen() {
         setLlmStatus(await getLLMStatus())
       }},
     ])
-  }
-
-  const togglePreferOnDevice = async (val: boolean) => {
-    setPreferOnDeviceState(val)
-    await setPreferOnDevice(val)
   }
 
   const handleSyncSource = async (key: RecipeSourceKey) => {
@@ -342,23 +333,14 @@ export default function SettingsScreen() {
         {/* ── Motor de IA ─────────────────────── */}
         <SectionHeader title={tr.settings.sectAiEngine} colors={colors} />
         <View style={styles.card}>
-          <View style={styles.row}>
-            <Text style={styles.label}>{tr.settings.preferOnDevice}</Text>
-            <Switch
-              value={preferOnDevice}
-              onValueChange={togglePreferOnDevice}
-              trackColor={{ true: Colors.healthGreen, false: colors.border }}
-              thumbColor={Colors.white}
-            />
-          </View>
-          <Text style={styles.hint}>{tr.settings.preferLocalAIHint}</Text>
+          <Text style={styles.hint}>{tr.settings.aiEngineHint}</Text>
 
           <View style={styles.divider} />
 
           <View style={styles.row}>
             <Text style={styles.label}>{tr.settings.localModel}</Text>
             <Text style={styles.value}>
-              {llmStatus.isDownloaded ? `✅ ${tr.settings.modelReady}` : `⬜ ${tr.settings.modelNotDownloaded}`}
+              {llmStatus.isDownloaded ? `✅ ${tr.settings.modelReady}` : `⬜ ${tr.settings.modelPreparing}`}
             </Text>
           </View>
 
@@ -366,21 +348,28 @@ export default function SettingsScreen() {
             <Text style={styles.hint}>{(llmStatus.modelSizeBytes / 1e6).toFixed(0)} MB</Text>
           )}
 
-          {isDownloading ? (
+          {isDownloading && (
             <View style={styles.progressContainer}>
               <View style={styles.progressTrack}>
                 <View style={[styles.progressBar, { width: `${downloadProgress * 100}%` }]} />
               </View>
               <Text style={styles.progressText}>{Math.round(downloadProgress * 100)}% — {tr.settings.downloadingModel}</Text>
             </View>
-          ) : llmStatus.isDownloaded ? (
-            <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteModel}>
-              <Text style={styles.dangerBtnText}>{tr.settings.deleteModelBtn}</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleDownloadModel}>
-              <Text style={styles.primaryBtnText}>{tr.settings.downloadModelBtn}</Text>
-            </TouchableOpacity>
+          )}
+
+          {__DEV__ && (
+            <>
+              {!llmStatus.isDownloaded && !isDownloading && (
+                <TouchableOpacity style={styles.primaryBtn} onPress={handleDownloadModel}>
+                  <Text style={styles.primaryBtnText}>{tr.settings.downloadModelBtn}</Text>
+                </TouchableOpacity>
+              )}
+              {llmStatus.isDownloaded && !isDownloading && (
+                <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteModel}>
+                  <Text style={styles.dangerBtnText}>{tr.settings.deleteModelBtn} (dev only)</Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
 

@@ -1,4 +1,4 @@
-import { buildCloudSystemPrompt, buildMealPlanGenerationPrompt, InventoryLite } from '../../../services/prompts/cloud'
+import { buildSystemPrompt, buildMealPlanGenerationPrompt, InventoryLite } from '../../../services/prompts/system'
 import { FamilyMember } from '../../../types/profiles'
 
 const makeMember = (overrides: Partial<FamilyMember> = {}): FamilyMember => ({
@@ -24,52 +24,51 @@ const sampleInventory: InventoryLite[] = [
 
 // ─── Guard: no hardcoded test-fixture family names ────────────────────────────
 
-describe('buildCloudSystemPrompt — no hardcoded Potter family', () => {
+describe('buildSystemPrompt — no hardcoded Potter family', () => {
   it('does not contain "Harry" in any casing', () => {
-    const prompt = buildCloudSystemPrompt([makeMember()], [])
+    const prompt = buildSystemPrompt([makeMember()], [])
     expect(prompt).not.toMatch(/\bHarry\b/i)
   })
 
   it('does not contain "Ginny" in any casing', () => {
-    const prompt = buildCloudSystemPrompt([makeMember()], [])
+    const prompt = buildSystemPrompt([makeMember()], [])
     expect(prompt).not.toMatch(/\bGinny\b/i)
   })
 
   it('does not contain "Potter" in any casing', () => {
-    const prompt = buildCloudSystemPrompt([makeMember()], [])
+    const prompt = buildSystemPrompt([makeMember()], [])
     expect(prompt).not.toMatch(/\bPotter\b/i)
   })
 })
 
 // ─── Dynamic profile directives ───────────────────────────────────────────────
 
-describe('buildCloudSystemPrompt — dynamic content', () => {
+describe('buildSystemPrompt — dynamic content', () => {
   it('embeds the actual member name when they have a condition', () => {
     const member = makeMember({ name: 'Pedro', conditions: ['hypertension'] })
-    const prompt = buildCloudSystemPrompt([member], [])
+    const prompt = buildSystemPrompt([member], [])
     expect(prompt).toContain('Pedro')
   })
 
   it('includes hypertension guidance with sodium restriction', () => {
     const member = makeMember({ conditions: ['hypertension'] })
-    const prompt = buildCloudSystemPrompt([member], [])
+    const prompt = buildSystemPrompt([member], [])
     expect(prompt).toMatch(/sodio|sodium/i)
   })
 
   it('includes osteoporosis guidance with calcium/vitamin D', () => {
     const member = makeMember({ conditions: ['osteoporosis'] })
-    const prompt = buildCloudSystemPrompt([member], [])
+    const prompt = buildSystemPrompt([member], [])
     expect(prompt).toMatch(/calcio|calcium|vitamina D/i)
   })
 
   it('produces no condition directives when member has no conditions', () => {
-    const prompt = buildCloudSystemPrompt([makeMember({ conditions: [] })], [])
-    // No member-specific condition lines should appear
+    const prompt = buildSystemPrompt([makeMember({ conditions: [] })], [])
     expect(prompt).not.toMatch(/hypertension|osteoporosis|diabetes|celiac/i)
   })
 
   it('includes inventory item names when inventory is provided', () => {
-    const prompt = buildCloudSystemPrompt([makeMember()], sampleInventory)
+    const prompt = buildSystemPrompt([makeMember()], sampleInventory)
     expect(prompt).toContain('chicken breast')
     expect(prompt).toContain('olive oil')
   })
@@ -79,13 +78,13 @@ describe('buildCloudSystemPrompt — dynamic content', () => {
       makeMember({ id: 'a', name: 'Alice', conditions: ['hypertension'] }),
       makeMember({ id: 'b', name: 'Bob', conditions: ['osteoporosis'] }),
     ]
-    const prompt = buildCloudSystemPrompt(members, [])
+    const prompt = buildSystemPrompt(members, [])
     expect(prompt).toContain('Alice')
     expect(prompt).toContain('Bob')
   })
 
   it('does not throw with empty profiles and empty inventory', () => {
-    expect(() => buildCloudSystemPrompt([], [])).not.toThrow()
+    expect(() => buildSystemPrompt([], [])).not.toThrow()
   })
 })
 
@@ -149,7 +148,6 @@ describe('buildMealPlanGenerationPrompt — dynamic content', () => {
 
   it('outputs no allergen constraint line when no members have allergies', () => {
     const prompt = buildMealPlanGenerationPrompt([makeMember({ allergies: [] })], [])
-    // Should say "safe for ALL family members" but without an allergen list
     expect(prompt).not.toMatch(/allergies:\s*\S/)
   })
 })

@@ -4,7 +4,6 @@ import { getRandomRecipes } from '../recipes/recipeDB'
 import {
   generateOnDevice,
   getLLMStatus,
-  getPreferOnDevice,
 } from '../../services/onDeviceLlm'
 
 const POOL_SIZE = 50
@@ -142,8 +141,7 @@ export async function selectWeekRecipes(profiles: FamilyMember[]): Promise<WeekR
   const pools = await buildSafeCandidatePools(profiles)
 
   const status = await getLLMStatus()
-  const preferOnDevice = await getPreferOnDevice()
-  const useLlm = preferOnDevice && status.isLoaded
+  const useLlm = status.isLoaded
 
   // Run sequentially: a single LLM instance can't process parallel inferences.
   // Each call independently falls back to the algorithmic picker on failure.

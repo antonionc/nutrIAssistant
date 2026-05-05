@@ -13,7 +13,6 @@ export interface InventoryLite {
   expiryDate?: string
 }
 
-// Maps known health conditions to concise nutritional guidance in Spanish.
 const CONDITION_GUIDANCE: Record<string, string> = {
   hypertension: 'limitar sodio a menos de 1500mg/día, evitar alimentos procesados',
   osteoporosis: 'incluir alimentos ricos en calcio y vitamina D al menos una vez al día',
@@ -43,7 +42,13 @@ function buildAllergenSummary(profiles: FamilyMember[]): string {
     .join('; ')
 }
 
-export function buildCloudSystemPrompt(
+// Single source of truth for the on-device LLM system prompt. Compact,
+// line-based layout (NOT JSON) — the executorch Llama 3.2 1B mobile build
+// has a ~2k context window, so JSON dumps of the full family payload
+// overflow it and trigger a generic "Failed to generate text" native error.
+const INVENTORY_PROMPT_LIMIT = 30
+
+export function buildSystemPrompt(
   profiles: FamilyMember[],
   inventory: InventoryLite[],
   mealPlans?: MealPlan[],
@@ -51,60 +56,56 @@ export function buildCloudSystemPrompt(
 ): string {
   const today = new Date().toISOString().split('T')[0]
 
-  const profilesSummary = profiles.map((m) => ({
-    id: m.id,
-    name: m.name,
-    role: m.role,
-    age: getAge(m.dateOfBirth),
-    weight: m.weight,
-    height: m.height,
-    allergies: m.allergies,
-    conditions: m.conditions,
-    dietPreference: m.dietPreference,
-    dailyCalorieTarget: m.dailyCalorieTarget,
-    macroTargets: m.macroTargets,
-    supplements: m.supplements,
-  }))
+  const profileLines = profiles
+    .map((m) => {
+      const parts: string[] = [`${m.name} (${m.role}, ${getAge(m.dateOfBirth)}a)`]
+      if (m.dietPreference && m.dietPreference !== 'none') parts.push(`dieta=${m.dietPreference}`)
+      if (m.allergies.length) parts.push(`alergias=${m.allergies.join(',')}`)
+      if (m.conditions.length) parts.push(`condiciones=${m.conditions.join(',')}`)
+      if (m.dailyCalorieTarget) parts.push(`kcal=${m.dailyCalorieTarget}`)
+      return `- ${parts.join('; ')}`
+    })
+    .join('\n')
 
-  const inventorySummary = inventory
-    .filter((i) => i.quantity > 0)
-    .map((i) => ({
-      name: i.name,
-      quantity: i.quantity,
-      unit: i.unit,
-      expiryDate: i.expiryDate,
-      category: i.category,
-    }))
+  const inventoryItems = inventory.filter((i) => i.quantity > 0)
+  const inventoryLine = inventoryItems
+    .slice(0, INVENTORY_PROMPT_LIMIT)
+    .map((i) => `${i.name} (${i.quantity} ${i.unit})`)
+    .join(', ')
+  const inventoryOverflow = inventoryItems.length > INVENTORY_PROMPT_LIMIT
+    ? ` (+${inventoryItems.length - INVENTORY_PROMPT_LIMIT} más)`
+    : ''
 
-  const mealPlanSummary = mealPlans?.slice(0, 7).map((p) => ({
-    date: p.date,
-    breakfast: (p.meals.breakfast as { name?: string } | undefined)?.name,
-    lunch: (p.meals.lunch as { name?: string } | undefined)?.name,
-    dinner: (p.meals.dinner as { name?: string } | undefined)?.name,
-    isLocked: p.isLocked,
-  }))
+  const mealPlanLines =
+    mealPlans
+      ?.slice(0, 7)
+      .map((p) => {
+        const bk = (p.meals.breakfast as { name?: string } | undefined)?.name ?? '-'
+        const lu = (p.meals.lunch as { name?: string } | undefined)?.name ?? '-'
+        const di = (p.meals.dinner as { name?: string } | undefined)?.name ?? '-'
+        return `${p.date}: ${bk} / ${lu} / ${di}`
+      })
+      .join('\n') ?? ''
+
+  const schoolMenuLines = (schoolMenuEntries ?? [])
+    .slice(0, 7)
+    .map((e) => `${e.date}: ${e.description}`)
+    .join('\n')
 
   const conditionDirectives = buildConditionDirectives(profiles)
 
-  return `Eres NutriBot, el asistente experto en nutrición familiar de NutrIAssistant. La fecha de hoy es ${today}.
+  return `Eres NutriBot, asistente de nutrición familiar de NutrIAssistant. Hoy es ${today}. Responde SIEMPRE en español de España, cercano y conciso.
 
-Responde SIEMPRE en español de España, de forma cercana y natural, como un amigo nutricionista.
+FAMILIA:
+${profileLines || '(sin perfiles)'}
 
-PERFILES FAMILIARES:
-${JSON.stringify(profilesSummary, null, 2)}
-
-INVENTARIO DE DESPENSA ACTUAL:
-${JSON.stringify(inventorySummary, null, 2)}
-
-${mealPlanSummary ? `PLAN DE COMIDAS DE ESTA SEMANA:\n${JSON.stringify(mealPlanSummary, null, 2)}\n` : ''}
-${schoolMenuEntries?.length ? `MENÚ ESCOLAR:\n${JSON.stringify(schoolMenuEntries, null, 2)}\n` : ''}
-
+DESPENSA: ${inventoryLine || '(vacía)'}${inventoryOverflow}
+${mealPlanLines ? `\nPLAN ESTA SEMANA:\n${mealPlanLines}\n` : ''}${schoolMenuLines ? `\nMENÚ ESCOLAR:\n${schoolMenuLines}\n` : ''}
 DIRECTRICES:
-- Respetar SIEMPRE las alergias de todos los miembros de la familia
-${conditionDirectives ? conditionDirectives + '\n' : ''}- Usar la dieta mediterránea como base
-- En planes de comidas: no repetir la misma proteína principal más de 2 veces por semana
-- Dar respuestas prácticas, concretas y adaptadas a la despensa disponible
-- Si no hay ingredientes suficientes, sugerir qué comprar`
+- Comprueba SIEMPRE alérgenos y condiciones antes de sugerir nada; ante duda, marca AVISO.
+${conditionDirectives ? conditionDirectives + '\n' : ''}- Base mediterránea; no repetir la misma proteína principal más de 2 veces por semana.
+- Respuestas concretas, basadas en la despensa disponible.
+- Si faltan ingredientes, sugerir qué comprar.`
 }
 
 export function buildMealPlanGenerationPrompt(

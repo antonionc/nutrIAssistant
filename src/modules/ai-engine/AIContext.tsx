@@ -1,27 +1,36 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { AIContext as AIContextType, AIMessage, OnDeviceLLMStatus } from '../../types/ai'
+import { AIMessage, OnDeviceLLMStatus } from '../../types/ai'
 import { generateId } from '../../utils/idUtils'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { usePlanner } from '../planner/PlannerContext'
 import { useInventory } from '../inventory/InventoryContext'
 import { getSchoolMenuEntries } from '../planner/plannerDB'
-import { routeQuery, isOffline } from '../../services/aiRouter'
-import { streamCompletion } from '../../services/claude'
-import { buildCloudSystemPrompt } from '../../services/prompts/cloud'
-import { buildOnDeviceSystemPrompt } from '../../services/prompts/onDevice'
-import {
-  getLLMStatus,
-  getPreferOnDevice,
-  generateOnDevice,
-} from '../../services/onDeviceLlm'
+import { buildSystemPrompt } from '../../services/prompts/system'
+import { getLLMStatus, generateOnDevice } from '../../services/onDeviceLlm'
+import { t } from '../../i18n'
+
 interface AIEngineContextValue {
   messages: AIMessage[]
   isResponding: boolean
+  modelStatus: OnDeviceLLMStatus
+  refreshModelStatus: () => Promise<void>
   sendMessage: (content: string, imageBase64?: string) => Promise<void>
   clearHistory: () => void
 }
 
 const AIEngineContext = createContext<AIEngineContextValue | null>(null)
+
+const HISTORY_TURNS = 6 // last N user+assistant turns folded into the prompt
+
+function buildPromptWithHistory(history: AIMessage[], latestUserContent: string): string {
+  const recent = history.slice(-HISTORY_TURNS * 2)
+  if (recent.length === 0) return latestUserContent
+  const lines = recent
+    .filter((m) => m.content.trim().length > 0)
+    .map((m) => (m.role === 'user' ? `Usuario: ${m.content}` : `Asistente: ${m.content}`))
+  lines.push(`Usuario: ${latestUserContent}`)
+  return lines.join('\n')
+}
 
 export function AIEngineProvider({ children }: { children: React.ReactNode }) {
   const { profiles } = useProfiles()
@@ -29,37 +38,30 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
   const { items: inventory } = useInventory()
   const [messages, setMessages] = useState<AIMessage[]>([])
   const [isResponding, setIsResponding] = useState(false)
-  const [llmStatus, setLlmStatus] = useState<OnDeviceLLMStatus>({
+  const [modelStatus, setModelStatus] = useState<OnDeviceLLMStatus>({
     isDownloaded: false,
     isDownloading: false,
     isLoaded: false,
     downloadProgress: 0,
   })
-  useEffect(() => {
-    getLLMStatus().then(setLlmStatus).catch((e) => {
+
+  const refreshModelStatus = useCallback(async () => {
+    try {
+      const status = await getLLMStatus()
+      setModelStatus(status)
+    } catch (e) {
       console.error('[AIEngine] Failed to get LLM status:', e)
-    })
+    }
   }, [])
+
+  useEffect(() => {
+    refreshModelStatus()
+    const interval = setInterval(refreshModelStatus, 5000)
+    return () => clearInterval(interval)
+  }, [refreshModelStatus])
 
   const sendMessage = useCallback(
     async (content: string, imageBase64?: string) => {
-      const schoolAgeIds = profiles.filter((p) => p.isSchoolAge).map((p) => p.id)
-      const [offline, schoolMenuEntries] = await Promise.all([
-        isOffline(),
-        Promise.all(schoolAgeIds.map((id) => getSchoolMenuEntries(id))).then((res) =>
-          res.flat().map((e) => ({ ...e, meal: 'lunch' as const }))
-        ),
-      ])
-      const context: AIContextType = {
-        familyProfiles: profiles,
-        inventory,
-        currentMealPlan: weekPlans,
-        schoolMenuEntries,
-        isOffline: offline,
-        requiresImage: !!imageBase64,
-        imageBase64,
-      }
-
       const userMessage: AIMessage = {
         id: generateId('msg'),
         role: 'user',
@@ -67,14 +69,8 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
         timestamp: new Date().toISOString(),
         imageUri: imageBase64,
       }
-
       setMessages((prev) => [...prev, userMessage])
-      setIsResponding(true)
 
-      const route = routeQuery(content, context)
-      const preferOnDevice = await getPreferOnDevice()
-
-      // Assistant placeholder for streaming
       const assistantId = generateId('msg')
       const assistantMessage: AIMessage = {
         id: assistantId,
@@ -82,78 +78,61 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
         content: '',
         timestamp: new Date().toISOString(),
         isStreaming: true,
-        route,
+        route: 'on_device',
       }
       setMessages((prev) => [...prev, assistantMessage])
+      setIsResponding(true)
 
       try {
-        const allMessages = [...messages, userMessage]
-
-        if (route === 'on_device' && preferOnDevice && llmStatus.isLoaded) {
-          // Use on-device LLM
-          const systemPrompt = buildOnDeviceSystemPrompt(profiles, inventory)
-          let fullText = ''
-          await generateOnDevice(content, systemPrompt, (token) => {
-            fullText += token
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantId
-                  ? { ...m, content: fullText }
-                  : m
-              )
-            )
-          })
+        if (!modelStatus.isLoaded) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
-                ? { ...m, content: fullText, isStreaming: false }
+                ? { ...m, content: t.ai.modelPreparingMessage, isStreaming: false }
                 : m
             )
           )
-        } else {
-          // Use Claude API
-          const systemPrompt = buildCloudSystemPrompt(profiles, inventory, weekPlans, schoolMenuEntries.length ? schoolMenuEntries : undefined)
-
-          await streamCompletion(allMessages, systemPrompt, {
-            onDelta: (text) => {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, content: m.content + text }
-                    : m
-                )
-              )
-            },
-            onComplete: (fullText) => {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, content: fullText, isStreaming: false }
-                    : m
-                )
-              )
-            },
-            onError: (error) => {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? {
-                        ...m,
-                        content: `Sorry, I encountered an error: ${error.message}`,
-                        isStreaming: false,
-                      }
-                    : m
-                )
-              )
-            },
-          })
+          return
         }
+
+        const schoolAgeIds = profiles.filter((p) => p.isSchoolAge).map((p) => p.id)
+        const schoolMenuEntries = (
+          await Promise.all(schoolAgeIds.map((id) => getSchoolMenuEntries(id)))
+        )
+          .flat()
+          .map((e) => ({ ...e, meal: 'lunch' as const }))
+
+        const systemPrompt = buildSystemPrompt(
+          profiles,
+          inventory,
+          weekPlans,
+          schoolMenuEntries.length ? schoolMenuEntries : undefined
+        )
+
+        const userPrompt = buildPromptWithHistory(messages, content)
+
+        let fullText = ''
+        await generateOnDevice(userPrompt, systemPrompt, (token) => {
+          fullText += token
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId ? { ...m, content: fullText } : m
+            )
+          )
+        })
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: fullText, isStreaming: false }
+              : m
+          )
+        )
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error'
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, content: `Sorry, something went wrong: ${errorMsg}`, isStreaming: false }
+              ? { ...m, content: `${t.ai.errorPrefix}: ${errorMsg}`, isStreaming: false }
               : m
           )
         )
@@ -161,7 +140,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
         setIsResponding(false)
       }
     },
-    [profiles, weekPlans, inventory, messages, llmStatus.isLoaded]
+    [profiles, weekPlans, inventory, messages, modelStatus.isLoaded]
   )
 
   const clearHistory = useCallback(() => {
@@ -173,6 +152,8 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
       value={{
         messages,
         isResponding,
+        modelStatus,
+        refreshModelStatus,
         sendMessage,
         clearHistory,
       }}

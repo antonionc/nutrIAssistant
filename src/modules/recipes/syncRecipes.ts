@@ -6,7 +6,7 @@ import {
   SPOONACULAR_CUISINE_QUERIES,
 } from '../../services/spoonacular'
 import { fetchAllTheMealDB } from '../../services/themealdb'
-import { translateRecipeNames, translateInstructions } from '../../services/translator'
+import { translateRecipeNames, translateInstructions } from '../../services/translatorLocal'
 import {
   batchUpsertRecipes,
   cleanDuplicateImageUrls,
@@ -86,7 +86,6 @@ async function translateSpoonacularNames(
     } catch (e) {
       console.warn('[Translate] Batch failed:', e)
     }
-    // Brief pause between Claude calls to avoid bursting
     await new Promise((r) => setTimeout(r, 100))
   }
   console.log(`[Translate] Finished translating ${recipes.length} Spoonacular recipe names`)

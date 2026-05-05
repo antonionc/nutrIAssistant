@@ -24,7 +24,8 @@ import { runMigrations } from '../src/db/database'
 import { t } from '../src/i18n'
 import { seedRecipesIfNeeded } from '../src/modules/recipes/seedRecipes'
 import { isSynced, syncRecipes } from '../src/modules/recipes/syncRecipes'
-import { ensureModelAvailable } from '../src/services/onDeviceLlm'
+import { ensureModelAvailable, isModelDownloaded } from '../src/services/onDeviceLlm'
+import { notifyDownloadStarted, notifyModelReady } from '../src/services/aiNotifications'
 
 function AppShell() {
   const { isDark, colors } = useTheme()
@@ -95,11 +96,17 @@ export default function RootLayout() {
         console.error('[Init] Error durante la inicialización:', e)
       }
 
-      try {
-        await ensureModelAvailable()
-      } catch (e) {
-        console.warn('[Init] LLM init failed, using Claude API fallback:', e)
-      }
+      // Bring up the local LLM in the background — the on-device assistant is
+      // a core, mandatory part of the app, but we don't block the UI on its
+      // ~800MB first download. The user can proceed with onboarding/profiles
+      // and is notified when the model is ready.
+      isModelDownloaded()
+        .then(async (alreadyDownloaded) => {
+          if (!alreadyDownloaded) await notifyDownloadStarted()
+          const loaded = await ensureModelAvailable()
+          if (loaded && !alreadyDownloaded) await notifyModelReady()
+        })
+        .catch((e) => console.warn('[Init] LLM init failed:', e))
 
       setDbReady(true)
     }

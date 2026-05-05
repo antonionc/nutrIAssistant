@@ -1,23 +1,4 @@
-import { FamilyMember } from './profiles'
-import { InventoryItem } from './inventory'
-import { MealPlan } from './planner'
-import { SchoolMenuEntry } from './profiles'
-
-export type AIRoute = 'on_device' | 'cloud'
-export type QueryComplexity = 'simple' | 'moderate' | 'complex'
-
-export interface AIContext {
-  familyProfiles: FamilyMember[]
-  inventory: InventoryItem[]
-  currentMealPlan?: MealPlan[]
-  schoolMenuEntries?: SchoolMenuEntry[]
-  activeMemberId?: string
-  isOffline: boolean
-  requiresPDF?: boolean
-  requiresImage?: boolean
-  imageBase64?: string
-  pdfBase64?: string
-}
+export type AIRoute = 'on_device'
 
 export interface AIMessage {
   id: string

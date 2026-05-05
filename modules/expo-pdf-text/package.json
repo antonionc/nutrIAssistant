@@ -1,0 +1,6 @@
+{
+  "name": "expo-pdf-text",
+  "version": "1.0.0",
+  "description": "Local PDF text extraction for nutrIAssistant (iOS PDFKit, Android PdfBox)",
+  "main": "index.ts"
+}
