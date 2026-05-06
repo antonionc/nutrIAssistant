@@ -81,7 +81,7 @@ interface AIAssistantProps {
 
 export const AIAssistant = forwardRef<any, AIAssistantProps>(
   function AIAssistant({ onClose }, ref) {
-    const { messages, isResponding, sendMessage, clearHistory } = useAIEngine()
+    const { messages, isResponding, sendMessage, clearHistory, lastActionToast, dismissActionToast } = useAIEngine()
     const { colors, isDark } = useTheme()
     const tr = useTranslation()
     const { vs, ts } = useMemo(() => makeStyles(colors), [colors])
@@ -422,6 +422,15 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
             </View>
           ) : null}
 
+          {/* AI action confirmation toast (e.g. "✔ Añadido X a favoritos") */}
+          {lastActionToast ? (
+            <TouchableOpacity onPress={dismissActionToast} activeOpacity={0.85}>
+              <View style={vs.actionBanner}>
+                <Text style={ts.actionText}>{lastActionToast}</Text>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+
           {/* Messages */}
           <View style={vs.messagesArea}>
             {messages.length === 0 ? (
@@ -521,6 +530,10 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: `${Colors.errorRed}15`, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
       borderBottomWidth: 1, borderBottomColor: `${Colors.errorRed}30`,
     } as ViewStyle,
+    actionBanner: {
+      backgroundColor: `${Colors.healthGreen}18`, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
+      borderBottomWidth: 1, borderBottomColor: `${Colors.healthGreen}30`,
+    } as ViewStyle,
     messagesArea: { flex: 1, overflow: 'hidden' } as ViewStyle,
     messageListContainer: { flex: 1 } as ViewStyle,
     welcome: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, gap: Spacing.md, paddingVertical: Spacing.xl } as ViewStyle,
@@ -563,6 +576,7 @@ function makeStyles(colors: ThemeColors) {
     messageTextUser: { color: Colors.white } as TextStyle,
     cursor: { color: Colors.healthGreen, fontSize: 16 } as TextStyle,
     errorText: { ...Typography.caption, color: Colors.errorRed } as TextStyle,
+    actionText: { ...Typography.caption, color: Colors.forestGreen, fontFamily: Typography.heading3.fontFamily } as TextStyle,
     micIcon: { fontSize: 18 } as TextStyle,
     input: {
       ...Typography.body, color: colors.text,

@@ -5,11 +5,22 @@ const KEY_PROFILES = 'family_profiles'
 const KEY_FAMILY_NAME = 'family_name'
 const KEY_APP_INITIALIZED = 'app_initialized'
 
+// Defaults applied when reading older payloads that predate the new
+// favoriteRecipeIds / documents fields.
+function withDefaults(member: any): FamilyMember {
+  return {
+    ...member,
+    favoriteRecipeIds: Array.isArray(member.favoriteRecipeIds) ? member.favoriteRecipeIds : [],
+    documents: Array.isArray(member.documents) ? member.documents : [],
+  } as FamilyMember
+}
+
 export async function loadProfiles(): Promise<FamilyMember[]> {
   const json = await AsyncStorage.getItem(KEY_PROFILES)
   if (!json) return []
   try {
-    return JSON.parse(json)
+    const parsed = JSON.parse(json)
+    return Array.isArray(parsed) ? parsed.map(withDefaults) : []
   } catch (e) {
     console.error('[profileStorage] Corrupt profiles data, resetting:', e)
     return []

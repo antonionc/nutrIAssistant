@@ -23,12 +23,6 @@ import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../src/theme
 import { useTheme, ThemePreference, ThemeColors } from '../src/theme/ThemeContext'
 import { FamilyMember, AllergenType, DietPreference } from '../src/types/profiles'
 import { EU_14_ALLERGENS, ALLERGEN_DISPLAY_NAMES } from '../src/seed/allergen-rules'
-import {
-  getLLMStatus,
-  downloadModel,
-  deleteModel,
-} from '../src/services/onDeviceLlm'
-import { OnDeviceLLMStatus } from '../src/types/ai'
 import { syncSource, isSynced, wipeAndResetRecipes } from '../src/modules/recipes/syncRecipes'
 import {
   getSourcesConfig,
@@ -60,9 +54,6 @@ export default function SettingsScreen() {
   const { preference: themePreference, setPreference: setThemePreference, colors } = useTheme()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
-  const [llmStatus, setLlmStatus] = useState<OnDeviceLLMStatus>({ isDownloaded: false, isDownloading: false, isLoaded: false, downloadProgress: 0 })
-  const [isDownloading, setIsDownloading] = useState(false)
-  const [downloadProgress, setDownloadProgress] = useState(0)
   const [editingFamilyName, setEditingFamilyName] = useState(false)
   const [familyNameInput, setFamilyNameInput] = useState(familyName)
   const [syncingSource, setSyncingSource] = useState<RecipeSourceKey | null>(null)
@@ -91,34 +82,8 @@ export default function SettingsScreen() {
   }
 
   useEffect(() => {
-    getLLMStatus().then(setLlmStatus)
     refreshSourceStats()
   }, [])
-
-  const handleDownloadModel = async () => {
-    setIsDownloading(true)
-    try {
-      await downloadModel((progress) => {
-        setDownloadProgress(progress)
-      })
-      const status = await getLLMStatus()
-      setLlmStatus(status)
-    } catch (e) {
-      Alert.alert(tr.settings.downloadError, e instanceof Error ? e.message : tr.app.error)
-    } finally {
-      setIsDownloading(false)
-    }
-  }
-
-  const handleDeleteModel = () => {
-    Alert.alert(tr.settings.deleteModelTitle, tr.settings.deleteModelMsg, [
-      { text: tr.app.cancel, style: 'cancel' },
-      { text: tr.app.delete, style: 'destructive', onPress: async () => {
-        await deleteModel()
-        setLlmStatus(await getLLMStatus())
-      }},
-    ])
-  }
 
   const handleSyncSource = async (key: RecipeSourceKey) => {
     if (syncingSource) return
@@ -328,49 +293,6 @@ export default function SettingsScreen() {
           >
             <Text style={styles.addMemberText}>+ {tr.settings.addMember}</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* ── Motor de IA ─────────────────────── */}
-        <SectionHeader title={tr.settings.sectAiEngine} colors={colors} />
-        <View style={styles.card}>
-          <Text style={styles.hint}>{tr.settings.aiEngineHint}</Text>
-
-          <View style={styles.divider} />
-
-          <View style={styles.row}>
-            <Text style={styles.label}>{tr.settings.localModel}</Text>
-            <Text style={styles.value}>
-              {llmStatus.isDownloaded ? `✅ ${tr.settings.modelReady}` : `⬜ ${tr.settings.modelPreparing}`}
-            </Text>
-          </View>
-
-          {llmStatus.modelSizeBytes && (
-            <Text style={styles.hint}>{(llmStatus.modelSizeBytes / 1e6).toFixed(0)} MB</Text>
-          )}
-
-          {isDownloading && (
-            <View style={styles.progressContainer}>
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressBar, { width: `${downloadProgress * 100}%` }]} />
-              </View>
-              <Text style={styles.progressText}>{Math.round(downloadProgress * 100)}% — {tr.settings.downloadingModel}</Text>
-            </View>
-          )}
-
-          {__DEV__ && (
-            <>
-              {!llmStatus.isDownloaded && !isDownloading && (
-                <TouchableOpacity style={styles.primaryBtn} onPress={handleDownloadModel}>
-                  <Text style={styles.primaryBtnText}>{tr.settings.downloadModelBtn}</Text>
-                </TouchableOpacity>
-              )}
-              {llmStatus.isDownloaded && !isDownloading && (
-                <TouchableOpacity style={styles.dangerBtn} onPress={handleDeleteModel}>
-                  <Text style={styles.dangerBtnText}>{tr.settings.deleteModelBtn} (dev only)</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
         </View>
 
         {/* ── Fuentes de recetas ─────────────── */}

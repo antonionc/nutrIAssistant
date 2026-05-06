@@ -32,6 +32,21 @@ export interface SchoolMenuEntry {
   }
 }
 
+export type DocumentCategory = 'lab_report' | 'medical_history' | 'prescription' | 'other'
+
+export type DocumentSummaryStatus = 'pending' | 'ready' | 'failed'
+
+export interface ProfileDocument {
+  id: string
+  filename: string
+  filePath: string                  // relative to FileSystem.documentDirectory
+  uploadedAt: string                // ISO
+  category: DocumentCategory
+  pageCount?: number
+  aiSummary?: string                // ≤500 chars; injected into the LLM system prompt
+  aiSummaryStatus: DocumentSummaryStatus
+}
+
 export interface FamilyMember {
   id: string
   name: string
@@ -56,6 +71,8 @@ export interface FamilyMember {
     carbs: number
     fat: number
   }
+  favoriteRecipeIds: string[]
+  documents: ProfileDocument[]
   createdAt: string
   updatedAt: string
 }

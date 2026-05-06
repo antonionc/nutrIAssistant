@@ -47,23 +47,65 @@ function buildAllergenSummary(profiles: FamilyMember[]): string {
 // has a ~2k context window, so JSON dumps of the full family payload
 // overflow it and trigger a generic "Failed to generate text" native error.
 const INVENTORY_PROMPT_LIMIT = 30
+const FAVORITES_PER_MEMBER = 5
+const DOCS_PER_MEMBER = 3
+const DOC_SUMMARY_MAX_CHARS = 200
+const RECIPES_AVAILABLE_LIMIT = 20
+
+export interface RecipeRef {
+  id: string
+  name: string
+}
+
+export interface PromptExtras {
+  // Map of recipe id → name. Used to resolve favorite names per member and
+  // to surface a candidate ID list to the LLM for the <actions> protocol.
+  recipeIndex?: Map<string, string>
+  // Top recipes the LLM may reference by id in <actions>.
+  availableRecipes?: RecipeRef[]
+}
 
 export function buildSystemPrompt(
   profiles: FamilyMember[],
   inventory: InventoryLite[],
   mealPlans?: MealPlan[],
-  schoolMenuEntries?: SchoolMenuEntry[]
+  schoolMenuEntries?: SchoolMenuEntry[],
+  extras?: PromptExtras
 ): string {
   const today = new Date().toISOString().split('T')[0]
+  const recipeIndex = extras?.recipeIndex
 
   const profileLines = profiles
     .map((m) => {
-      const parts: string[] = [`${m.name} (${m.role}, ${getAge(m.dateOfBirth)}a)`]
+      const parts: string[] = [`id=${m.id}; ${m.name} (${m.role}, ${getAge(m.dateOfBirth)}a)`]
       if (m.dietPreference && m.dietPreference !== 'none') parts.push(`dieta=${m.dietPreference}`)
       if (m.allergies.length) parts.push(`alergias=${m.allergies.join(',')}`)
       if (m.conditions.length) parts.push(`condiciones=${m.conditions.join(',')}`)
       if (m.dailyCalorieTarget) parts.push(`kcal=${m.dailyCalorieTarget}`)
-      return `- ${parts.join('; ')}`
+      const head = `- ${parts.join('; ')}`
+      const extraLines: string[] = []
+
+      if (recipeIndex && m.favoriteRecipeIds.length > 0) {
+        const names = m.favoriteRecipeIds
+          .slice(0, FAVORITES_PER_MEMBER)
+          .map((id) => recipeIndex.get(id))
+          .filter((n): n is string => !!n)
+        if (names.length) extraLines.push(`  Favoritos: ${names.join(', ')}`)
+      }
+
+      const readyDocs = m.documents.filter((d) => d.aiSummaryStatus === 'ready' && d.aiSummary)
+      if (readyDocs.length > 0) {
+        const shown = readyDocs.slice(0, DOCS_PER_MEMBER)
+        for (const d of shown) {
+          const trimmed = d.aiSummary!.replace(/\s+/g, ' ').slice(0, DOC_SUMMARY_MAX_CHARS)
+          extraLines.push(`  Notas médicas (${d.filename}): ${trimmed}`)
+        }
+        if (readyDocs.length > shown.length) {
+          extraLines.push(`  (+${readyDocs.length - shown.length} documentos más)`)
+        }
+      }
+
+      return [head, ...extraLines].join('\n')
     })
     .join('\n')
 
@@ -94,18 +136,25 @@ export function buildSystemPrompt(
 
   const conditionDirectives = buildConditionDirectives(profiles)
 
+  const availableRecipes = extras?.availableRecipes?.slice(0, RECIPES_AVAILABLE_LIMIT) ?? []
+  const availableRecipesLine = availableRecipes.length > 0
+    ? availableRecipes.map((r) => `id=${r.id} "${r.name}"`).join('; ')
+    : ''
+
   return `Eres NutriBot, asistente de nutrición familiar de NutrIAssistant. Hoy es ${today}. Responde SIEMPRE en español de España, cercano y conciso.
 
 FAMILIA:
 ${profileLines || '(sin perfiles)'}
 
 DESPENSA: ${inventoryLine || '(vacía)'}${inventoryOverflow}
-${mealPlanLines ? `\nPLAN ESTA SEMANA:\n${mealPlanLines}\n` : ''}${schoolMenuLines ? `\nMENÚ ESCOLAR:\n${schoolMenuLines}\n` : ''}
+${mealPlanLines ? `\nPLAN ESTA SEMANA:\n${mealPlanLines}\n` : ''}${schoolMenuLines ? `\nMENÚ ESCOLAR:\n${schoolMenuLines}\n` : ''}${availableRecipesLine ? `\nRECETAS DISPONIBLES: ${availableRecipesLine}\n` : ''}
 DIRECTRICES:
 - Comprueba SIEMPRE alérgenos y condiciones antes de sugerir nada; ante duda, marca AVISO.
 ${conditionDirectives ? conditionDirectives + '\n' : ''}- Base mediterránea; no repetir la misma proteína principal más de 2 veces por semana.
 - Respuestas concretas, basadas en la despensa disponible.
-- Si faltan ingredientes, sugerir qué comprar.`
+- Si faltan ingredientes, sugerir qué comprar.
+
+ACCIONES: Cuando el usuario te pida explícitamente añadir o quitar una receta de favoritos para un miembro, termina tu respuesta con UN bloque <actions>JSON</actions> donde JSON es un array. Formato: [{"type":"add_favorite","memberId":"<id>","recipeId":"<id>"}] o [{"type":"remove_favorite","memberId":"<id>","recipeId":"<id>"}]. Usa SOLO los IDs que aparecen en FAMILIA y RECETAS DISPONIBLES. Nunca inventes IDs. No emitas el bloque si el usuario no pidió la acción.`
 }
 
 export function buildMealPlanGenerationPrompt(

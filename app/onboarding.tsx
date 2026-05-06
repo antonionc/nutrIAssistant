@@ -68,6 +68,8 @@ function blankDraft(): MemberDraft {
     conditions: [],
     dietPreference: 'none',
     isSchoolAge: false,
+    favoriteRecipeIds: [],
+    documents: [],
   }
 }
 

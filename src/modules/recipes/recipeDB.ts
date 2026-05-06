@@ -282,6 +282,31 @@ export async function wipeRecipesDatabase(): Promise<void> {
   await db.runAsync('DELETE FROM recipes')
 }
 
+export async function getRecipesByIds(ids: string[]): Promise<Recipe[]> {
+  if (ids.length === 0) return []
+  const db = await getDatabase()
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM recipes WHERE id IN (${placeholders})`,
+    ids
+  )
+  // Preserve caller-supplied order so favorites display in the order added.
+  const byId = new Map<string, Recipe>(rows.map((row) => {
+    const r = rowToRecipe(row)
+    return [r.id, r]
+  }))
+  return ids.map((id) => byId.get(id)).filter((r): r is Recipe => r !== undefined)
+}
+
+export async function getFavoriteRecipes(limit = 50): Promise<Recipe[]> {
+  const db = await getDatabase()
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM recipes WHERE ${VERIFIED_SOURCES} AND is_favorite = 1 ORDER BY updated_at DESC LIMIT ?`,
+    [limit]
+  )
+  return rows.map(rowToRecipe)
+}
+
 export async function getRandomRecipes(
   limit = 6,
   category?: string

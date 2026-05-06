@@ -10,7 +10,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { LogBox, StyleSheet, View } from 'react-native'
+
+// Cosmetic: react-native-executorch warns when HuggingFace's CDN serves the
+// tokenizer JSON files without a Content-Length header (= can't compute a
+// download progress %). Files download fine; the warnings are noise.
+LogBox.ignoreLogs([/\[React Native ExecuTorch\] No content-length header/])
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ProfilesProvider } from '../src/modules/profiles/ProfilesContext'
 import { PlannerProvider } from '../src/modules/planner/PlannerContext'
@@ -52,6 +57,15 @@ function AppShell() {
           <Stack.Screen
             name="recipe/[id]"
             options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="profile/[id]"
+            options={{
+              headerTransparent: true,
+              headerTitle: '',
+              headerBackTitle: '',
+              headerTintColor: colors.text,
+            }}
           />
         </Stack>
         <StatusBar style={isDark ? 'light' : 'dark'} />

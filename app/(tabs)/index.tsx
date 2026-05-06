@@ -26,6 +26,7 @@ import { RecipeCard } from '../../src/components/cards/RecipeCard'
 import { FamilyMember } from '../../src/types/profiles'
 import { getMemberAvatarSource } from '../../src/services/avatarService'
 import { Recipe } from '../../src/types/recipes'
+import { AllergyPill } from '../../src/components/badges/AllergyPill'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -140,7 +141,12 @@ export default function HomeScreen() {
                 }}
                 renderItem={({ item }) => (
                   <View style={{ width: SCREEN_WIDTH, paddingHorizontal: Spacing.md }}>
-                    <MemberCardWide member={item} caloriesConsumed={0} />
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      onPress={() => router.push({ pathname: '/profile/[id]', params: { id: item.id } } as never)}
+                    >
+                      <MemberCardWide member={item} caloriesConsumed={0} />
+                    </TouchableOpacity>
                   </View>
                 )}
               />
@@ -312,11 +318,10 @@ function MemberCardWide({
         {member.allergies.length > 0 && (
           <View style={wide.badges}>
             {member.allergies.slice(0, 4).map((a) => (
-              <View key={a} style={wide.badge}>
-                <Text style={wide.badgeText}>
-                  {(tr.allergens as Record<string, string>)[a] ?? a}
-                </Text>
-              </View>
+              <AllergyPill
+                key={a}
+                label={(tr.allergens as Record<string, string>)[a] ?? a}
+              />
             ))}
           </View>
         )}
@@ -470,17 +475,6 @@ function makeWideStyles(colors: ThemeColors) {
       flexWrap: 'wrap',
       gap: Spacing.xs,
       marginTop: 4,
-    },
-    badge: {
-      backgroundColor: `${Colors.errorRed}18`,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 3,
-      borderRadius: BorderRadius.pill,
-    },
-    badgeText: {
-      ...Typography.caption,
-      color: Colors.errorRed,
-      fontFamily: Typography.heading3.fontFamily,
     },
   })
 }
