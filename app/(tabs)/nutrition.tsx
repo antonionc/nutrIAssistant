@@ -20,6 +20,7 @@ import { router } from 'expo-router'
 import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useInventory } from '../../src/modules/inventory/InventoryContext'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
+import { useSelectedProfile } from '../../src/modules/profiles/SelectedProfileContext'
 import { useTranslation } from '../../src/i18n'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
 import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
@@ -30,6 +31,7 @@ import { MealType } from '../../src/types/planner'
 import { Recipe } from '../../src/types/recipes'
 import { getRandomRecipes } from '../../src/modules/recipes/recipeDB'
 import { MEAL_LABELS } from '../../src/constants/mealTypes'
+import { HeaderProfileAvatar } from '../../src/components/layout/HeaderProfileAvatar'
 
 function getDayOptions(): PillOption[] {
   return Array.from({ length: 7 }, (_, i) => {
@@ -44,6 +46,15 @@ function getDayOptions(): PillOption[] {
 
 export default function NutritionScreen() {
   const { profiles } = useProfiles()
+  const { selectedId } = useSelectedProfile()
+  // Members ordered with the active profile first so MealCard's compatibility
+  // row emphasises them; the rest of the family is still represented.
+  const orderedMembers = useMemo(() => {
+    if (!selectedId) return profiles
+    const sel = profiles.find((p) => p.id === selectedId)
+    if (!sel) return profiles
+    return [sel, ...profiles.filter((p) => p.id !== selectedId)]
+  }, [profiles, selectedId])
   const { items: inventory } = useInventory()
   const {
     weekPlans,
@@ -134,17 +145,20 @@ export default function NutritionScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{tr.nutrition.title}</Text>
-        <TouchableOpacity
-          style={[styles.generateBtn, isGenerating && styles.generateBtnDisabled]}
-          onPress={handleGeneratePlan}
-          disabled={isGenerating}
-        >
-          {isGenerating ? (
-            <ActivityIndicator color={Colors.white} size="small" />
-          ) : (
-            <Text style={styles.generateBtnText}>{tr.nutrition.generate}</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={[styles.generateBtn, isGenerating && styles.generateBtnDisabled]}
+            onPress={handleGeneratePlan}
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <ActivityIndicator color={Colors.white} size="small" />
+            ) : (
+              <Text style={styles.generateBtnText}>{tr.nutrition.generate}</Text>
+            )}
+          </TouchableOpacity>
+          <HeaderProfileAvatar />
+        </View>
       </View>
 
       {/* Day Selector */}
@@ -198,7 +212,8 @@ export default function NutritionScreen() {
                 <MealCard
                   mealType={mealType}
                   recipe={selectedPlan?.meals[mealType]}
-                  members={profiles}
+                  members={orderedMembers}
+                  activeMemberId={selectedId ?? undefined}
                   isLocked={selectedPlan?.isLocked}
                   isGenerating={isGenerating}
                   onPress={() => {
@@ -334,6 +349,7 @@ function makeStyles(colors: ThemeColors) {
       paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.xs,
     },
     title: { ...Typography.displaySerif, color: colors.text },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     generateBtn: {
       backgroundColor: Colors.healthGreen, paddingHorizontal: Spacing.md,
       paddingVertical: Spacing.sm, borderRadius: BorderRadius.pill, minWidth: 100, alignItems: 'center',

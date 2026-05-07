@@ -572,5 +572,16 @@ export const ES = {
     invalidFileMsg: 'No se pudo leer el archivo de copia de seguridad.',
     importFamilyMsg: (n: number) => `Se importarán ${n} miembro${n !== 1 ? 's' : ''}. Los datos actuales se reemplazarán.`,
     summaryAge: (n: number) => `${n} años`,
+    adminPickTitle: '¿Quién gestiona la app?',
+    adminPickBody: 'Marca a las personas que podrán añadir o editar miembros, gestionar copias de seguridad y cambiar ajustes. Debe haber al menos una.',
+    adminBadge: 'Admin',
+  },
+  admin: {
+    onlyAdminBanner: 'Solo los administradores familiares pueden cambiar estos ajustes.',
+    onlyAdminEditMember: 'Solo el administrador puede editar este perfil.',
+    adminLabel: 'Administrador',
+    adminHint: 'Puede gestionar miembros, ajustes y copias de seguridad.',
+    lastAdminTitle: 'No se puede continuar',
+    lastAdminMsg: 'Debe quedar al menos un administrador en la familia.',
   },
 } as const

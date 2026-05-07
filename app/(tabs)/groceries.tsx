@@ -21,6 +21,7 @@ import { useTranslation } from '../../src/i18n'
 import { EmptyState } from '../../src/components/layout/EmptyState'
 import { GroceryItem } from '../../src/types/groceries'
 import { RETAILERS } from '../../src/constants/retailers'
+import { HeaderProfileAvatar } from '../../src/components/layout/HeaderProfileAvatar'
 
 export default function GroceriesScreen() {
   const {
@@ -64,9 +65,12 @@ export default function GroceriesScreen() {
             <Text style={styles.count}>{tr.groceries.pendingCount(activeItems.length)}</Text>
           )}
         </View>
-        <TouchableOpacity style={styles.addHeaderBtn} onPress={() => setShowAddModal(true)}>
-          <Ionicons name="add" size={22} color={Colors.healthGreen} />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.addHeaderBtn} onPress={() => setShowAddModal(true)}>
+            <Ionicons name="add" size={22} color={Colors.healthGreen} />
+          </TouchableOpacity>
+          <HeaderProfileAvatar />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -276,10 +280,11 @@ function makeStyles(colors: ThemeColors) {
     },
     title: { ...Typography.displaySerif, color: colors.text },
     count: { ...Typography.caption, color: colors.textSecondary, marginTop: 2 },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: 4 },
     addHeaderBtn: {
       width: 36, height: 36, borderRadius: 18,
       backgroundColor: `${Colors.healthGreen}18`,
-      alignItems: 'center', justifyContent: 'center', marginTop: 4,
+      alignItems: 'center', justifyContent: 'center',
     },
 
     // Scroll

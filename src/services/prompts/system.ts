@@ -63,6 +63,10 @@ export interface PromptExtras {
   recipeIndex?: Map<string, string>
   // Top recipes the LLM may reference by id in <actions>.
   availableRecipes?: RecipeRef[]
+  // Family member currently using the app. The LLM should address them
+  // directly and prioritise their constraints, while still seeing the rest
+  // of the family for cross-member queries.
+  activeMemberId?: string
 }
 
 export function buildSystemPrompt(
@@ -141,11 +145,18 @@ export function buildSystemPrompt(
     ? availableRecipes.map((r) => `id=${r.id} "${r.name}"`).join('; ')
     : ''
 
+  const activeMember = extras?.activeMemberId
+    ? profiles.find((p) => p.id === extras.activeMemberId)
+    : undefined
+  const activeUserLine = activeMember
+    ? `\nUSUARIO ACTIVO: ${activeMember.name} (id=${activeMember.id}). Prioriza sus alergias/condiciones/calorías. Responde dirigiéndote a ${activeMember.name} en segunda persona.\n`
+    : ''
+
   return `Eres NutriBot, asistente de nutrición familiar de NutrIAssistant. Hoy es ${today}. Responde SIEMPRE en español de España, cercano y conciso.
 
 FAMILIA:
 ${profileLines || '(sin perfiles)'}
-
+${activeUserLine}
 DESPENSA: ${inventoryLine || '(vacía)'}${inventoryOverflow}
 ${mealPlanLines ? `\nPLAN ESTA SEMANA:\n${mealPlanLines}\n` : ''}${schoolMenuLines ? `\nMENÚ ESCOLAR:\n${schoolMenuLines}\n` : ''}${availableRecipesLine ? `\nRECETAS DISPONIBLES: ${availableRecipesLine}\n` : ''}
 DIRECTRICES:

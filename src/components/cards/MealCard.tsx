@@ -21,6 +21,7 @@ interface MealCardProps {
   mealType: MealType
   recipe?: Recipe
   members?: FamilyMember[]
+  activeMemberId?: string
   onPress?: () => void
   onSuggestAlternative?: () => void
   onLock?: () => void
@@ -32,6 +33,7 @@ export function MealCard({
   mealType,
   recipe,
   members = [],
+  activeMemberId,
   onPress,
   onSuggestAlternative,
   onLock,
@@ -93,6 +95,7 @@ export function MealCard({
             <FamilyCompatibilityRow
               compatibility={recipe.familyCompatibility}
               members={members}
+              activeMemberId={activeMemberId}
               compact
             />
           )}

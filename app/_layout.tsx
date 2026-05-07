@@ -18,6 +18,8 @@ import { LogBox, StyleSheet, View } from 'react-native'
 LogBox.ignoreLogs([/\[React Native ExecuTorch\] No content-length header/])
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ProfilesProvider } from '../src/modules/profiles/ProfilesContext'
+import { SelectedProfileProvider } from '../src/modules/profiles/SelectedProfileContext'
+import { HeaderProfileAvatar } from '../src/components/layout/HeaderProfileAvatar'
 import { PlannerProvider } from '../src/modules/planner/PlannerContext'
 import { GroceriesProvider } from '../src/modules/groceries/GroceriesContext'
 import { InventoryProvider } from '../src/modules/inventory/InventoryContext'
@@ -37,6 +39,7 @@ function AppShell() {
 
   return (
     <ProfilesProvider>
+      <SelectedProfileProvider>
       <GroceriesProvider>
       <PlannerProvider>
       <InventoryProvider>
@@ -51,7 +54,13 @@ function AppShell() {
           />
           <Stack.Screen
             name="settings"
-            options={{ title: t.settings.title, headerBackTitle: t.app.backTitle, headerStyle: { backgroundColor: colors.surface }, headerTintColor: colors.text }}
+            options={{
+              title: t.settings.title,
+              headerBackTitle: t.app.backTitle,
+              headerStyle: { backgroundColor: colors.surface },
+              headerTintColor: colors.text,
+              headerRight: () => <HeaderProfileAvatar />,
+            }}
           />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen
@@ -75,6 +84,7 @@ function AppShell() {
       </InventoryProvider>
       </PlannerProvider>
       </GroceriesProvider>
+      </SelectedProfileProvider>
     </ProfilesProvider>
   )
 }

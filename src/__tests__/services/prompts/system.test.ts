@@ -14,6 +14,7 @@ const makeMember = (overrides: Partial<FamilyMember> = {}): FamilyMember => ({
   isSchoolAge: false,
   favoriteRecipeIds: [],
   documents: [],
+  isSuperUser: false,
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
   ...overrides,
@@ -87,6 +88,24 @@ describe('buildSystemPrompt — dynamic content', () => {
 
   it('does not throw with empty profiles and empty inventory', () => {
     expect(() => buildSystemPrompt([], [])).not.toThrow()
+  })
+
+  it('embeds USUARIO ACTIVO directive when activeMemberId resolves to a member', () => {
+    const members = [
+      makeMember({ id: 'a', name: 'Alice' }),
+      makeMember({ id: 'b', name: 'Bob' }),
+    ]
+    const prompt = buildSystemPrompt(members, [], undefined, undefined, { activeMemberId: 'b' })
+    expect(prompt).toContain('USUARIO ACTIVO')
+    expect(prompt).toContain('Bob')
+  })
+
+  it('omits USUARIO ACTIVO when activeMemberId is missing or unknown', () => {
+    const members = [makeMember({ id: 'a', name: 'Alice' })]
+    expect(buildSystemPrompt(members, [])).not.toContain('USUARIO ACTIVO')
+    expect(
+      buildSystemPrompt(members, [], undefined, undefined, { activeMemberId: 'ghost' })
+    ).not.toContain('USUARIO ACTIVO')
   })
 })
 

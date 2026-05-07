@@ -12,6 +12,7 @@ function withDefaults(member: any): FamilyMember {
     ...member,
     favoriteRecipeIds: Array.isArray(member.favoriteRecipeIds) ? member.favoriteRecipeIds : [],
     documents: Array.isArray(member.documents) ? member.documents : [],
+    isSuperUser: Boolean(member.isSuperUser),
   } as FamilyMember
 }
 

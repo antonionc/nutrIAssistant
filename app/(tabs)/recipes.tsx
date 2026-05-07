@@ -17,6 +17,7 @@ import { SearchBar } from '../../src/components/inputs/SearchBar'
 import { RecipeCard } from '../../src/components/cards/RecipeCard'
 import { EmptyState } from '../../src/components/layout/EmptyState'
 import { RecipeCategory } from '../../src/types/recipes'
+import { HeaderProfileAvatar } from '../../src/components/layout/HeaderProfileAvatar'
 
 const CUISINE_ENTRIES: { key: string; flag: string; i18nKey: keyof ReturnType<typeof useTranslation>['recipes']['cuisines'] }[] = [
   { key: 'All',        flag: '🌍', i18nKey: 'all' },
@@ -92,6 +93,7 @@ export default function RecipesScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>{tr.recipes.title}</Text>
+        <HeaderProfileAvatar />
       </View>
 
       {/* Buscador */}
@@ -176,7 +178,12 @@ export default function RecipesScreen() {
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.xs },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.xs,
+    },
     title: { ...Typography.displaySerif, color: colors.text },
     searchContainer: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
     filterRow: {

@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { AIMessage, OnDeviceLLMStatus } from '../../types/ai'
 import { generateId } from '../../utils/idUtils'
 import { useProfiles } from '../profiles/ProfilesContext'
+import { useSelectedProfile } from '../profiles/SelectedProfileContext'
 import { usePlanner } from '../planner/PlannerContext'
 import { useInventory } from '../inventory/InventoryContext'
 import { getSchoolMenuEntries } from '../planner/plannerDB'
@@ -38,6 +39,7 @@ function buildPromptWithHistory(history: AIMessage[], latestUserContent: string)
 
 export function AIEngineProvider({ children }: { children: React.ReactNode }) {
   const { profiles, applyAIActions } = useProfiles()
+  const { selectedId } = useSelectedProfile()
   const { weekPlans } = usePlanner()
   const { items: inventory } = useInventory()
   const [messages, setMessages] = useState<AIMessage[]>([])
@@ -126,7 +128,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
           inventory,
           weekPlans,
           schoolMenuEntries.length ? schoolMenuEntries : undefined,
-          { recipeIndex, availableRecipes }
+          { recipeIndex, availableRecipes, activeMemberId: selectedId ?? undefined }
         )
 
         const userPrompt = buildPromptWithHistory(messages, content)
@@ -179,7 +181,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
         setIsResponding(false)
       }
     },
-    [profiles, weekPlans, inventory, messages, modelStatus.isLoaded, applyAIActions]
+    [profiles, weekPlans, inventory, messages, modelStatus.isLoaded, applyAIActions, selectedId]
   )
 
   const clearHistory = useCallback(() => {

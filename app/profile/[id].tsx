@@ -20,6 +20,7 @@ import { ProgressRing } from '../../src/components/charts/ProgressRing'
 import { AllergyPill } from '../../src/components/badges/AllergyPill'
 import { FavoritesSheet, FavoritesSheetRef } from '../../src/components/sheets/FavoritesSheet'
 import { DocumentsSheet, DocumentsSheetRef } from '../../src/components/sheets/DocumentsSheet'
+import { HeaderProfileAvatar } from '../../src/components/layout/HeaderProfileAvatar'
 
 // Custom pill back button shared by both render branches. Replaces the
 // default iOS pill that leaks the parent route name ("(tabs)") as a label.
@@ -71,6 +72,7 @@ export default function ProfileScreen() {
       headerShadowVisible: false,
       headerBackVisible: false,
       headerLeft: () => <CircleBackButton tint={colors.text} bg={colors.surface} />,
+      headerRight: () => <HeaderProfileAvatar />,
     }),
     [colors.text, colors.surface]
   )

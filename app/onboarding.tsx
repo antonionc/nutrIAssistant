@@ -70,6 +70,7 @@ function blankDraft(): MemberDraft {
     isSchoolAge: false,
     favoriteRecipeIds: [],
     documents: [],
+    isSuperUser: false,
   }
 }
 
@@ -85,6 +86,9 @@ export default function OnboardingScreen() {
   const [familyName, setFamilyName]   = useState('')
   const [memberCount, setMemberCount] = useState(3)
   const [drafts, setDrafts]           = useState<MemberDraft[]>([])
+  // Indices of drafts marked as super-user during onboarding. Defaults to the
+  // first member; surfaced to the user on the all-done step.
+  const [superUserIdx, setSuperUserIdx] = useState<Set<number>>(() => new Set([0]))
   // Collapsed by default so the Next button is always reachable on small phones.
   const [expandedAllergies, setExpandedAllergies]   = useState(false)
   const [expandedConditions, setExpandedConditions] = useState(false)
@@ -548,32 +552,73 @@ export default function OnboardingScreen() {
     )
   }
 
+  function toggleSuperUser(i: number) {
+    setSuperUserIdx((prev) => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
+  }
+
   function renderAllDone() {
+    const adminCount = superUserIdx.size
+    const canSubmit = adminCount > 0
     return (
       <View style={styles.stepContainer}>
         <Text style={styles.bigEmoji}>🎉</Text>
         <Text style={styles.stepTitle}>{tr.onboarding.allDoneTitle}</Text>
         <Text style={styles.stepBody}>{tr.onboarding.allDoneBody(familyName)}</Text>
 
+        <Text style={styles.adminPickTitle}>{tr.onboarding.adminPickTitle}</Text>
+        <Text style={styles.adminPickBody}>{tr.onboarding.adminPickBody}</Text>
+
         <View style={styles.membersSummary}>
-          {drafts.map((d, i) => (
-            <View key={i} style={styles.summaryRow}>
-              <Image
-                source={getDraftAvatarSource(d)}
-                style={styles.summaryAvatar}
-              />
-              <Text style={styles.summaryName}>{d.name}</Text>
-              <Text style={styles.summaryMeta}>{tr.settings.memberRoles[d.role]} · {tr.onboarding.summaryAge(getAge(d.dateOfBirth))}</Text>
-            </View>
-          ))}
+          {drafts.map((d, i) => {
+            const isAdmin = superUserIdx.has(i)
+            return (
+              <TouchableOpacity
+                key={i}
+                style={[styles.summaryRow, isAdmin && styles.summaryRowAdmin]}
+                onPress={() => toggleSuperUser(i)}
+                activeOpacity={0.7}
+              >
+                <Image
+                  source={getDraftAvatarSource(d)}
+                  style={styles.summaryAvatar}
+                />
+                <View style={styles.summaryTextCol}>
+                  <View style={styles.summaryNameRow}>
+                    <Text style={styles.summaryName}>{d.name}</Text>
+                    {isAdmin ? (
+                      <View style={styles.adminBadge}>
+                        <Text style={styles.adminBadgeText}>{tr.onboarding.adminBadge}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={styles.summaryMeta}>
+                    {tr.settings.memberRoles[d.role]} · {tr.onboarding.summaryAge(getAge(d.dateOfBirth))}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={isAdmin ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={22}
+                  color={isAdmin ? Colors.healthGreen : colors.textMuted}
+                />
+              </TouchableOpacity>
+            )
+          })}
         </View>
 
         <TouchableOpacity
-          style={styles.primaryBtn}
+          style={[styles.primaryBtn, !canSubmit && styles.primaryBtnDisabled]}
           onPress={async () => {
-            await completeOnboarding(familyName, drafts)
+            if (!canSubmit) return
+            const tagged = drafts.map((d, i) => ({ ...d, isSuperUser: superUserIdx.has(i) }))
+            await completeOnboarding(familyName, tagged)
             router.replace('/(tabs)')
           }}
+          disabled={!canSubmit}
           activeOpacity={0.85}
         >
           <Text style={styles.primaryBtnText}>{tr.onboarding.startBtn}</Text>
@@ -990,17 +1035,49 @@ function makeStyles(colors: ThemeColors) {
       textAlign: 'center',
     },
     // All done summary
+    adminPickTitle: {
+      ...Typography.heading2,
+      color: colors.text,
+      marginTop: Spacing.md,
+      marginBottom: Spacing.xs,
+    },
+    adminPickBody: {
+      ...Typography.body,
+      color: colors.textSecondary,
+      marginBottom: Spacing.sm,
+    },
     membersSummary: {
       backgroundColor: colors.surface,
       borderRadius: BorderRadius.lg,
-      padding: Spacing.md,
+      padding: Spacing.sm,
       gap: Spacing.xs,
     },
     summaryRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Spacing.sm,
-      paddingVertical: 2,
+      paddingVertical: Spacing.xs,
+      paddingHorizontal: Spacing.xs,
+      borderRadius: BorderRadius.md,
+      borderWidth: 1,
+      borderColor: 'transparent',
+    },
+    summaryRowAdmin: {
+      borderColor: Colors.healthGreen,
+      backgroundColor: `${Colors.healthGreen}10`,
+    },
+    summaryTextCol: { flex: 1 },
+    summaryNameRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+    adminBadge: {
+      backgroundColor: Colors.softMint,
+      paddingHorizontal: Spacing.xs + 2,
+      paddingVertical: 1,
+      borderRadius: BorderRadius.pill,
+    },
+    adminBadgeText: {
+      ...Typography.caption,
+      color: Colors.forestGreen,
+      fontFamily: Typography.heading3.fontFamily,
     },
     summaryAvatar: {
       width: 32,

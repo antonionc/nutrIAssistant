@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics'
 import { router } from 'expo-router'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useProfiles } from '../src/modules/profiles/ProfilesContext'
+import { useSelectedProfile } from '../src/modules/profiles/SelectedProfileContext'
 import { useInventory } from '../src/modules/inventory/InventoryContext'
 import { getProductByBarcode } from '../src/services/openFoodFacts'
 import { computeNutriScore } from '../src/services/nutriscore'
@@ -39,6 +40,13 @@ type ScanMode = 'barcode' | 'photo'
 export default function ScannerScreen() {
   const insets = useSafeAreaInsets()
   const { profiles } = useProfiles()
+  const { selectedId } = useSelectedProfile()
+  const orderedMembers = useMemo(() => {
+    if (!selectedId) return profiles
+    const sel = profiles.find((p) => p.id === selectedId)
+    if (!sel) return profiles
+    return [sel, ...profiles.filter((p) => p.id !== selectedId)]
+  }, [profiles, selectedId])
   const { addItem } = useInventory()
   const { colors } = useTheme()
   const tr = useTranslation()
@@ -250,7 +258,8 @@ export default function ScannerScreen() {
               <Text style={styles.sectionLabel}>{tr.scanner.familyCompatibility}</Text>
               <FamilyCompatibilityRow
                 compatibility={scannedResult.familyCompatibility}
-                members={profiles}
+                members={orderedMembers}
+                activeMemberId={selectedId ?? undefined}
                 compact={false}
               />
             </View>

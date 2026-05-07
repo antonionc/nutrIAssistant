@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfiles } from '../src/modules/profiles/ProfilesContext'
+import { useSelectedProfile } from '../src/modules/profiles/SelectedProfileContext'
 import { getAge } from '../src/utils/ageUtils'
 import { DateOfBirthInput } from '../src/components/inputs/DateOfBirthInput'
 import { useTranslation } from '../src/i18n'
@@ -51,6 +52,8 @@ const CONDITIONS_LIST = ['hypertension', 'osteoporosis', 'diabetes_type1', 'diab
 export default function SettingsScreen() {
   const tr = useTranslation()
   const { profiles, familyName, addProfile, updateProfile, deleteProfile, setFamilyName, importFamily } = useProfiles()
+  const { isSuperUser, canEdit } = useSelectedProfile()
+  const superUserCount = profiles.filter((p) => p.isSuperUser).length
   const { preference: themePreference, setPreference: setThemePreference, colors } = useTheme()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
@@ -217,6 +220,13 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.container} edges={[]}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
+        {!isSuperUser && (
+          <View style={styles.adminBanner}>
+            <Ionicons name="lock-closed-outline" size={16} color={Colors.goldenAmber} />
+            <Text style={styles.adminBannerText}>{tr.admin.onlyAdminBanner}</Text>
+          </View>
+        )}
+
         {/* ── Apariencia ──────────────────────── */}
         <SectionHeader title={tr.settings.sectAppearance} colors={colors} />
         <View style={styles.card}>
@@ -256,43 +266,65 @@ export default function SettingsScreen() {
             ) : (
               <>
                 <Text style={styles.familyHeading}>{tr.settings.familyTitle(familyName)}</Text>
-                <TouchableOpacity
-                  onPress={() => { setFamilyNameInput(familyName); setEditingFamilyName(true) }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Ionicons name="pencil-outline" size={18} color={Colors.healthGreen} />
-                </TouchableOpacity>
+                {isSuperUser && (
+                  <TouchableOpacity
+                    onPress={() => { setFamilyNameInput(familyName); setEditingFamilyName(true) }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="pencil-outline" size={18} color={Colors.healthGreen} />
+                  </TouchableOpacity>
+                )}
               </>
             )}
           </View>
 
-          {profiles.map((member) => (
-            <MemberProfileRow
-              key={member.id}
-              member={member}
-              isExpanded={expandedMemberId === member.id}
-              onToggle={() => setExpandedMemberId(expandedMemberId === member.id ? null : member.id)}
-              onUpdate={(updates) => updateProfile(member.id, updates)}
-              onDelete={() => {
-                Alert.alert(tr.settings.deleteProfileTitle, tr.settings.deleteProfileMsg(member.name), [
-                  { text: tr.app.cancel, style: 'cancel' },
-                  { text: tr.app.delete, style: 'destructive', onPress: () => deleteProfile(member.id) },
-                ])
-              }}
-            />
-          ))}
+          {profiles.map((member) => {
+            const editable = canEdit(member.id)
+            return (
+              <MemberProfileRow
+                key={member.id}
+                member={member}
+                isExpanded={expandedMemberId === member.id}
+                editable={editable}
+                showAdminToggle={isSuperUser}
+                canDeleteOrDemote={!member.isSuperUser || superUserCount > 1}
+                onToggle={() => setExpandedMemberId(expandedMemberId === member.id ? null : member.id)}
+                onUpdate={(updates) => updateProfile(member.id, updates)}
+                onToggleAdmin={() => {
+                  // Block demoting the last admin.
+                  if (member.isSuperUser && superUserCount <= 1) {
+                    Alert.alert(tr.admin.lastAdminTitle, tr.admin.lastAdminMsg)
+                    return
+                  }
+                  updateProfile(member.id, { isSuperUser: !member.isSuperUser })
+                }}
+                onDelete={() => {
+                  if (member.isSuperUser && superUserCount <= 1) {
+                    Alert.alert(tr.admin.lastAdminTitle, tr.admin.lastAdminMsg)
+                    return
+                  }
+                  Alert.alert(tr.settings.deleteProfileTitle, tr.settings.deleteProfileMsg(member.name), [
+                    { text: tr.app.cancel, style: 'cancel' },
+                    { text: tr.app.delete, style: 'destructive', onPress: () => deleteProfile(member.id) },
+                  ])
+                }}
+              />
+            )
+          })}
 
-          <TouchableOpacity
-            style={styles.addMemberBtn}
-            onPress={() => addProfile({
-              name: tr.settings.newMember, role: 'other', dateOfBirth: `${new Date().getFullYear() - 30}-01-01`, weight: 70, height: 170,
-              allergies: [], conditions: [], dietPreference: 'none',
-              isSchoolAge: false,
-              dailyCalorieTarget: 2000, macroTargets: { protein: 150, carbs: 225, fat: 67 },
-            })}
-          >
-            <Text style={styles.addMemberText}>+ {tr.settings.addMember}</Text>
-          </TouchableOpacity>
+          {isSuperUser && (
+            <TouchableOpacity
+              style={styles.addMemberBtn}
+              onPress={() => addProfile({
+                name: tr.settings.newMember, role: 'other', dateOfBirth: `${new Date().getFullYear() - 30}-01-01`, weight: 70, height: 170,
+                allergies: [], conditions: [], dietPreference: 'none',
+                isSchoolAge: false,
+                dailyCalorieTarget: 2000, macroTargets: { protein: 150, carbs: 225, fat: 67 },
+              })}
+            >
+              <Text style={styles.addMemberText}>+ {tr.settings.addMember}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ── Fuentes de recetas ─────────────── */}
@@ -303,27 +335,31 @@ export default function SettingsScreen() {
             <Text style={styles.value}>{tr.settings.recipesCount(recipeCount)}</Text>
           </View>
           <Text style={styles.hint}>{tr.settings.imagesAutoFiltered}</Text>
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={[styles.primaryBtn, isCleaningImages && styles.primaryBtnDisabled]}
-            onPress={handleCleanImages}
-            disabled={isCleaningImages}
-          >
-            {isCleaningImages
-              ? <ActivityIndicator color={Colors.white} size="small" />
-              : <Text style={styles.primaryBtnText}>{tr.settings.cleanImagesBtn}</Text>
-            }
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.dangerBtn, isWipingDB && styles.primaryBtnDisabled]}
-            onPress={handleWipeDB}
-            disabled={isWipingDB || recipeCount === 0}
-          >
-            {isWipingDB
-              ? <ActivityIndicator color={Colors.errorRed} size="small" />
-              : <Text style={styles.dangerBtnText}>{tr.settings.wipeDbBtn}</Text>
-            }
-          </TouchableOpacity>
+          {isSuperUser && (
+            <>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={[styles.primaryBtn, isCleaningImages && styles.primaryBtnDisabled]}
+                onPress={handleCleanImages}
+                disabled={isCleaningImages}
+              >
+                {isCleaningImages
+                  ? <ActivityIndicator color={Colors.white} size="small" />
+                  : <Text style={styles.primaryBtnText}>{tr.settings.cleanImagesBtn}</Text>
+                }
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.dangerBtn, isWipingDB && styles.primaryBtnDisabled]}
+                onPress={handleWipeDB}
+                disabled={isWipingDB || recipeCount === 0}
+              >
+                {isWipingDB
+                  ? <ActivityIndicator color={Colors.errorRed} size="small" />
+                  : <Text style={styles.dangerBtnText}>{tr.settings.wipeDbBtn}</Text>
+                }
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* Recipe sources — consolidated into one compact card */}
@@ -428,6 +464,8 @@ export default function SettingsScreen() {
         </View>
 
         {/* ── Copia de seguridad ─────────────── */}
+        {isSuperUser && (
+        <>
         <SectionHeader title={tr.settings.sectBackup} colors={colors} />
         <View style={styles.card}>
           <Text style={styles.hint}>{tr.settings.backupHint}</Text>
@@ -455,8 +493,12 @@ export default function SettingsScreen() {
             )}
           </TouchableOpacity>
         </View>
+        </>
+        )}
 
         {/* ── Datos y privacidad ──────────────── */}
+        {isSuperUser && (
+        <>
         <SectionHeader title={tr.settings.sectDataPrivacy} colors={colors} />
         <View style={styles.card}>
           <View style={styles.row}>
@@ -481,6 +523,8 @@ export default function SettingsScreen() {
             <Text style={styles.dangerBtnText}>{tr.settings.deleteAllDataBtn}</Text>
           </TouchableOpacity>
         </View>
+        </>
+        )}
 
         {/* ── Contacto ────────────────────────── */}
         <SectionHeader title={tr.settings.contact} colors={colors} />
@@ -614,15 +658,23 @@ function ContactRow({ label, value, onPress, colors }: { label: string; value: s
 function MemberProfileRow({
   member,
   isExpanded,
+  editable,
+  showAdminToggle,
+  canDeleteOrDemote,
   onToggle,
   onUpdate,
   onDelete,
+  onToggleAdmin,
 }: {
   member: FamilyMember
   isExpanded: boolean
+  editable: boolean
+  showAdminToggle: boolean
+  canDeleteOrDemote: boolean
   onToggle: () => void
   onUpdate: (updates: Partial<FamilyMember>) => void
   onDelete: () => void
+  onToggleAdmin: () => void
 }) {
   const tr = useTranslation()
   const { updateProfile } = useProfiles()
@@ -645,7 +697,11 @@ function MemberProfileRow({
   return (
     <View style={styles.memberSection}>
       <View style={styles.memberHeader}>
-        <TouchableOpacity onPress={handleAvatarPress} style={styles.memberAvatarBtn}>
+        <TouchableOpacity
+          onPress={editable ? handleAvatarPress : undefined}
+          style={styles.memberAvatarBtn}
+          disabled={!editable}
+        >
           <Image
             source={
               avatarError
@@ -655,18 +711,31 @@ function MemberProfileRow({
             style={styles.memberAvatarImage}
             onError={() => setAvatarError(true)}
           />
-          <Text style={styles.memberAvatarEdit}>📷</Text>
+          {editable && <Text style={styles.memberAvatarEdit}>📷</Text>}
         </TouchableOpacity>
         <TouchableOpacity style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }} onPress={onToggle}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.memberName}>{member.name}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
+              <Text style={styles.memberName}>{member.name}</Text>
+              {member.isSuperUser && (
+                <View style={styles.adminPill}>
+                  <Text style={styles.adminPillText}>{tr.onboarding.adminBadge}</Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.memberMeta}>{tr.settings.memberRoles[member.role]} · {getAge(member.dateOfBirth)}a · {member.weight}kg</Text>
           </View>
           <Text style={styles.expandIcon}>{isExpanded ? '▲' : '▼'}</Text>
         </TouchableOpacity>
       </View>
 
-      {isExpanded && (
+      {isExpanded && !editable && (
+        <Text style={[styles.hint, { paddingHorizontal: Spacing.xs, paddingBottom: Spacing.sm }]}>
+          {tr.admin.onlyAdminEditMember}
+        </Text>
+      )}
+
+      {isExpanded && editable && (
         <View style={styles.memberForm}>
           <FormRow label={tr.settings.memberFields.name} colors={colors}>
             <TextInput
@@ -753,7 +822,26 @@ function MemberProfileRow({
             />
           </View>
 
-          <TouchableOpacity style={[styles.dangerBtn, { marginTop: Spacing.sm }]} onPress={onDelete}>
+          {showAdminToggle && (
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.formLabel}>{tr.admin.adminLabel}</Text>
+                <Text style={styles.hint}>{tr.admin.adminHint}</Text>
+              </View>
+              <Switch
+                value={member.isSuperUser}
+                onValueChange={onToggleAdmin}
+                disabled={member.isSuperUser && !canDeleteOrDemote}
+                trackColor={{ true: Colors.healthGreen, false: colors.border }}
+              />
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.dangerBtn, { marginTop: Spacing.sm }, !canDeleteOrDemote && styles.primaryBtnDisabled]}
+            onPress={onDelete}
+            disabled={!canDeleteOrDemote}
+          >
             <Text style={styles.dangerBtnText}>{tr.settings.deleteProfileMsg(member.name)}</Text>
           </TouchableOpacity>
         </View>
@@ -912,5 +1000,26 @@ function makeStyles(colors: ThemeColors) {
       borderBottomWidth: 1, borderColor: Colors.healthGreen, minWidth: 100,
     },
     saveText: { ...Typography.body, color: Colors.healthGreen, fontFamily: Typography.heading3.fontFamily },
+    adminBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      backgroundColor: `${Colors.goldenAmber}18`,
+      borderRadius: BorderRadius.md,
+      padding: Spacing.sm,
+      marginBottom: Spacing.sm,
+    },
+    adminBannerText: { ...Typography.caption, color: colors.text, flex: 1 },
+    adminPill: {
+      backgroundColor: Colors.softMint,
+      paddingHorizontal: Spacing.xs + 2,
+      paddingVertical: 1,
+      borderRadius: BorderRadius.pill,
+    },
+    adminPillText: {
+      ...Typography.caption,
+      color: Colors.forestGreen,
+      fontFamily: Typography.heading3.fontFamily,
+    },
   })
 }

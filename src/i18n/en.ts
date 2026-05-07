@@ -553,5 +553,16 @@ export const EN = {
     invalidFileMsg: 'Could not read the backup file.',
     importFamilyMsg: (n: number) => `${n} member${n !== 1 ? 's' : ''} will be imported. Current data will be replaced.`,
     summaryAge: (n: number) => `${n} yr${n !== 1 ? 's' : ''}`,
+    adminPickTitle: 'Who manages the app?',
+    adminPickBody: 'Pick the people who can add or edit members, manage backups and change settings. At least one is required.',
+    adminBadge: 'Admin',
+  },
+  admin: {
+    onlyAdminBanner: 'Only family admins can change these settings.',
+    onlyAdminEditMember: 'Only the admin can edit this profile.',
+    adminLabel: 'Admin',
+    adminHint: 'Can manage members, settings and backups.',
+    lastAdminTitle: 'Cannot continue',
+    lastAdminMsg: 'At least one admin must remain in the family.',
   },
 } as const

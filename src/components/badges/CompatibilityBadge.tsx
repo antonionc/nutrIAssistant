@@ -10,9 +10,10 @@ interface CompatibilityBadgeProps {
   result: CompatibilityResult
   member?: FamilyMember
   showName?: boolean
+  isActive?: boolean
 }
 
-export function CompatibilityBadge({ result, member, showName = true }: CompatibilityBadgeProps) {
+export function CompatibilityBadge({ result, member, showName = true, isActive = false }: CompatibilityBadgeProps) {
   const { colors } = useTheme()
   const styles = useMemo(() => makeStyles(colors), [colors])
 
@@ -32,7 +33,7 @@ export function CompatibilityBadge({ result, member, showName = true }: Compatib
   const avatarSource = member ? getMemberAvatarSource(member) : null
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isActive && styles.containerActive]}>
       <View style={[styles.iconCircle, { backgroundColor: `${iconColor}20` }]}>
         {avatarSource ? (
           <Image source={avatarSource} style={styles.avatarImage} />
@@ -42,7 +43,7 @@ export function CompatibilityBadge({ result, member, showName = true }: Compatib
       </View>
       {showName && (
         <View>
-          <Text style={styles.name}>{result.memberName}</Text>
+          <Text style={[styles.name, isActive && styles.nameActive]}>{result.memberName}</Text>
           {result.reason && result.riskLevel !== 'safe' ? (
             <Text style={[styles.reason, { color: iconColor }]} numberOfLines={1}>
               {result.reason}
@@ -60,10 +61,12 @@ export function CompatibilityBadge({ result, member, showName = true }: Compatib
 export function FamilyCompatibilityRow({
   compatibility,
   members,
+  activeMemberId,
   compact = false,
 }: {
   compatibility: Record<string, CompatibilityResult>
   members: FamilyMember[]
+  activeMemberId?: string
   compact?: boolean
 }) {
   const { colors } = useTheme()
@@ -74,10 +77,22 @@ export function FamilyCompatibilityRow({
       {members.map((member) => {
         const result = compatibility[member.id]
         if (!result) return null
+        const isActive = member.id === activeMemberId
         return compact ? (
-          <CompactCompatibilityDot key={member.id} result={result} member={member} />
+          <CompactCompatibilityDot
+            key={member.id}
+            result={result}
+            member={member}
+            isActive={isActive}
+          />
         ) : (
-          <CompatibilityBadge key={member.id} result={result} member={member} showName />
+          <CompatibilityBadge
+            key={member.id}
+            result={result}
+            member={member}
+            showName
+            isActive={isActive}
+          />
         )
       })}
     </View>
@@ -87,9 +102,11 @@ export function FamilyCompatibilityRow({
 function CompactCompatibilityDot({
   result,
   member,
+  isActive = false,
 }: {
   result: CompatibilityResult
   member: FamilyMember
+  isActive?: boolean
 }) {
   const { colors } = useTheme()
   const styles = useMemo(() => makeStyles(colors), [colors])
@@ -102,7 +119,13 @@ function CompactCompatibilityDot({
       : Colors.healthGreen
 
   return (
-    <View style={[styles.dot, { borderColor }]}>
+    <View
+      style={[
+        styles.dot,
+        { borderColor },
+        isActive && { borderWidth: 3, transform: [{ scale: 1.1 }] },
+      ]}
+    >
       <Image source={getMemberAvatarSource(member)} style={styles.dotImage} />
     </View>
   )
@@ -114,6 +137,14 @@ function makeStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: Spacing.xs,
+    },
+    containerActive: {
+      borderLeftWidth: 3,
+      borderLeftColor: Colors.healthGreen,
+      paddingLeft: Spacing.xs,
+    },
+    nameActive: {
+      fontFamily: Typography.heading3.fontFamily,
     },
     iconCircle: {
       width: 32,

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Dimensions,
   FlatList,
@@ -27,6 +27,8 @@ import { FamilyMember } from '../../src/types/profiles'
 import { getMemberAvatarSource } from '../../src/services/avatarService'
 import { Recipe } from '../../src/types/recipes'
 import { AllergyPill } from '../../src/components/badges/AllergyPill'
+import { HeaderProfileAvatar } from '../../src/components/layout/HeaderProfileAvatar'
+import { useSelectedProfile } from '../../src/modules/profiles/SelectedProfileContext'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -54,13 +56,15 @@ const NEWS_ITEMS = [
 export default function HomeScreen() {
   const tr = useTranslation()
   const { profiles, familyName } = useProfiles()
+  const { selected, selectedId, select, isSuperUser } = useSelectedProfile()
   const { expiryAlerts, getLowStockAlerts } = useInventory()
   const { weekPlans } = usePlanner()
   const { getRandom } = useRecipeDB()
   const { colors } = useTheme()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [featuredRecipes, setFeaturedRecipes] = useState<Recipe[]>([])
-  const [activeMemberIndex, setActiveMemberIndex] = useState(0)
+  const carouselRef = useRef<FlatList<FamilyMember>>(null)
+  const activeMemberIndex = Math.max(0, profiles.findIndex((p) => p.id === selectedId))
   const [activeMealIndex, setActiveMealIndex] = useState(0)
 
   const todayStr = new Date().toISOString().split('T')[0]
@@ -71,6 +75,13 @@ export default function HomeScreen() {
       console.warn('[Home] Error cargando recetas:', e)
     })
   }, [])
+
+  // Keep the carousel in sync when the active profile is changed elsewhere
+  // (e.g. via the header avatar sheet on this or another screen).
+  useEffect(() => {
+    if (activeMemberIndex < 0) return
+    carouselRef.current?.scrollToIndex({ index: activeMemberIndex, animated: true })
+  }, [activeMemberIndex])
 
   const lowStockAlerts = getLowStockAlerts()
   const allAlerts = [...expiryAlerts, ...lowStockAlerts].slice(0, 5)
@@ -86,15 +97,24 @@ export default function HomeScreen() {
               <Ionicons name="camera-outline" size={22} color={colors.text} style={styles.iconInactive} />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => router.push('/settings')} style={styles.iconBtn}>
-            <Ionicons name="settings-outline" size={22} color={colors.text} style={styles.iconInactive} />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <HeaderProfileAvatar />
+            {isSuperUser && (
+              <TouchableOpacity onPress={() => router.push('/settings')} style={styles.iconBtn}>
+                <Ionicons name="settings-outline" size={22} color={colors.text} style={styles.iconInactive} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* ── Saludo familiar ───────────────────── */}
         <View style={styles.greetingSection}>
           <Text style={styles.greetingTitle}>
-            {familyName ? tr.home_screen.greetingWithName(familyName) : tr.home_screen.greetingEmpty}
+            {selected
+              ? tr.home_screen.greetingWithName(selected.name)
+              : familyName
+              ? tr.home_screen.greetingWithName(familyName)
+              : tr.home_screen.greetingEmpty}
           </Text>
           <Text style={styles.greetingSubtitle}>
             {todayPlan ? tr.home_screen.menuReady : tr.home_screen.addRecipesToWeek}
@@ -130,14 +150,19 @@ export default function HomeScreen() {
           {profiles.length > 0 ? (
             <>
               <FlatList
+                ref={carouselRef}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 data={profiles}
                 keyExtractor={(m) => m.id}
+                initialScrollIndex={activeMemberIndex}
+                getItemLayout={(_, i) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * i, index: i })}
                 onMomentumScrollEnd={(e) => {
                   const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH)
-                  setActiveMemberIndex(Math.max(0, Math.min(idx, profiles.length - 1)))
+                  const clamped = Math.max(0, Math.min(idx, profiles.length - 1))
+                  const next = profiles[clamped]
+                  if (next && next.id !== selectedId) select(next.id)
                 }}
                 renderItem={({ item }) => (
                   <View style={{ width: SCREEN_WIDTH, paddingHorizontal: Spacing.md }}>
@@ -343,6 +368,7 @@ function makeStyles(colors: ThemeColors) {
       paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
     },
     headerLeft: { flexDirection: 'row', alignItems: 'center' },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     iconBtn: { padding: Spacing.xs },
     iconInactive: { opacity: 0.5 },
 

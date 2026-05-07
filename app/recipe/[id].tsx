@@ -20,6 +20,7 @@ import { useInventory } from '../../src/modules/inventory/InventoryContext'
 import { useGroceries } from '../../src/modules/groceries/GroceriesContext'
 import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
+import { useSelectedProfile } from '../../src/modules/profiles/SelectedProfileContext'
 import { useTranslation, t } from '../../src/i18n'
 import { Recipe, RecipeIngredient } from '../../src/types/recipes'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
@@ -46,6 +47,13 @@ export default function RecipeDetailScreen() {
   const { addItem: addToGroceries } = useGroceries()
   const { setMealForDate, removeMealFromDate } = usePlanner()
   const { profiles } = useProfiles()
+  const { selectedId } = useSelectedProfile()
+  const orderedMembers = useMemo(() => {
+    if (!selectedId) return profiles
+    const sel = profiles.find((p) => p.id === selectedId)
+    if (!sel) return profiles
+    return [sel, ...profiles.filter((p) => p.id !== selectedId)]
+  }, [profiles, selectedId])
   const { colors } = useTheme()
   const tr = useTranslation()
   const styles = useMemo(() => makeStyles(colors), [colors])
@@ -369,7 +377,8 @@ export default function RecipeDetailScreen() {
               <Text style={styles.sectionLabel}>{tr.recipes.familyCompatibility}</Text>
               <FamilyCompatibilityRow
                 compatibility={recipe.familyCompatibility}
-                members={profiles}
+                members={orderedMembers}
+                activeMemberId={selectedId ?? undefined}
                 compact={false}
               />
             </View>

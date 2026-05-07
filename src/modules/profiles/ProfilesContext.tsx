@@ -55,10 +55,11 @@ function migrateProfile(raw: any): FamilyMember {
 // stored FamilyMember.
 type NewMemberInput = Omit<
   FamilyMember,
-  'id' | 'createdAt' | 'updatedAt' | 'favoriteRecipeIds' | 'documents'
+  'id' | 'createdAt' | 'updatedAt' | 'favoriteRecipeIds' | 'documents' | 'isSuperUser'
 > & {
   favoriteRecipeIds?: string[]
   documents?: ProfileDocument[]
+  isSuperUser?: boolean
 }
 
 interface ProfilesContextValue {
@@ -102,8 +103,16 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
           const [raw, fn] = await Promise.all([loadProfiles(), loadFamilyName()])
           const migrated = (raw as any[]).map(migrateProfile)
           const { profiles: p, changed } = await sanitiseAvatarUris(migrated)
-          if (changed) await saveProfiles(p)
-          setProfilesState(p)
+          // Backfill super-user flag for legacy data: if no member is a super-user,
+          // promote the first member. Idempotent: only fires when none exists.
+          let withSuper = p
+          let superChanged = false
+          if (withSuper.length > 0 && !withSuper.some((m) => m.isSuperUser)) {
+            withSuper = withSuper.map((m, i) => (i === 0 ? { ...m, isSuperUser: true } : m))
+            superChanged = true
+          }
+          if (changed || superChanged) await saveProfiles(withSuper)
+          setProfilesState(withSuper)
           setFamilyNameState(fn)
         }
       } catch (e) {
@@ -123,6 +132,7 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
         ...member,
         favoriteRecipeIds: member.favoriteRecipeIds ?? [],
         documents: member.documents ?? [],
+        isSuperUser: member.isSuperUser ?? false,
         id: generateId('member'),
         createdAt: now,
         updatedAt: now,
@@ -173,6 +183,7 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
           ...m,
           favoriteRecipeIds: m.favoriteRecipeIds ?? [],
           documents: m.documents ?? [],
+          isSuperUser: m.isSuperUser ?? false,
           id: `member-${Date.now()}-${i}`,
           dailyCalorieTarget: calories,
           macroTargets: macros,
@@ -197,8 +208,13 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
           ...m,
           favoriteRecipeIds: m.favoriteRecipeIds ?? [],
           documents: m.documents ?? [],
+          isSuperUser: Boolean(m.isSuperUser),
         })
       )
+      // Same backfill as init() for imports lacking a super-user.
+      if (normalised.length > 0 && !normalised.some((m) => m.isSuperUser)) {
+        normalised[0] = { ...normalised[0], isSuperUser: true }
+      }
       await saveProfiles(normalised)
       await saveFamilyName(familyNameInput)
       await markAppInitialized()

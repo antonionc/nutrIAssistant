@@ -73,6 +73,7 @@ export interface FamilyMember {
   }
   favoriteRecipeIds: string[]
   documents: ProfileDocument[]
+  isSuperUser: boolean
   createdAt: string
   updatedAt: string
 }
