@@ -126,7 +126,7 @@ export default function HomeScreen() {
           <TouchableOpacity style={styles.tile} onPress={() => router.push('/(tabs)/nutrition')} activeOpacity={0.8}>
             <Ionicons name="calendar-outline" size={22} color={colors.text} style={styles.tileLeadingIcon} />
             <View style={styles.tileContent}>
-              <Text style={styles.tileTitle}>{tr.home_screen.todayMenu}</Text>
+              <Text style={styles.tileTitle}>{tr.home_screen.todayTile}</Text>
               <Text style={styles.tileSubtitle}>
                 {todayPlan ? tr.home_screen.viewTodayMeals : tr.home_screen.planYourWeek}
               </Text>

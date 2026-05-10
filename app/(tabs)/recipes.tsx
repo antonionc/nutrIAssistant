@@ -130,11 +130,12 @@ export default function RecipesScreen() {
               key={c.key}
               style={[styles.cuisineBtn, selectedCuisine === c.key && styles.cuisineBtnActive]}
               onPress={() => handleCuisineSelect(c.key)}
+              // Flag is a visual-only emoji; expose the cuisine name for
+              // screen readers so the row stays accessible without a label.
+              accessibilityLabel={c.label}
+              accessibilityRole="button"
             >
               <Text style={styles.cuisineFlag}>{c.flag}</Text>
-              <Text style={[styles.cuisineText, selectedCuisine === c.key && styles.cuisineTextActive]}>
-                {c.label}
-              </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -194,27 +195,26 @@ function makeStyles(colors: ThemeColors) {
     },
     pill: {
       flex: 1,
-      height: 56,
-      borderRadius: BorderRadius.lg,
+      height: 40,
+      borderRadius: BorderRadius.pill,
       backgroundColor: colors.mintSurface,
       alignItems: 'center',
       justifyContent: 'center',
     },
     pillActive: { backgroundColor: Colors.healthGreen },
-    pillText: { ...Typography.bodyLarge, color: colors.text, fontFamily: Typography.heading3.fontFamily },
+    pillText: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily },
     pillTextActive: { color: Colors.white },
     cuisineSection: { marginBottom: Spacing.sm },
     cuisineLabel: { ...Typography.overline, color: colors.textSecondary, paddingHorizontal: Spacing.md, marginBottom: Spacing.xs },
     cuisineStrip: { paddingHorizontal: Spacing.md, gap: Spacing.sm },
     cuisineBtn: {
-      alignItems: 'center', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
-      borderRadius: BorderRadius.md, backgroundColor: colors.surface, minWidth: 60,
+      alignItems: 'center', justifyContent: 'center',
+      width: 48, height: 48,
+      borderRadius: BorderRadius.md, backgroundColor: colors.surface,
       borderWidth: 1, borderColor: colors.border,
     },
     cuisineBtnActive: { borderColor: Colors.healthGreen, backgroundColor: `${Colors.healthGreen}15` },
-    cuisineFlag: { fontSize: 20 },
-    cuisineText: { ...Typography.caption, color: colors.text },
-    cuisineTextActive: { color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
+    cuisineFlag: { fontSize: 24 },
     recipeList: { flex: 1 },
     grid: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
     gridRow: { gap: Spacing.sm, marginBottom: Spacing.sm },

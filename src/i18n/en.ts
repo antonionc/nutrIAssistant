@@ -579,6 +579,7 @@ export const EN = {
   home_screen: {
     familyProgress: 'Family',
     todayMenu: "Today's menu",
+    todayTile: 'Today',
     recipesForYou: 'Recipes for you',
     pantryAlerts: '⚠️ Pantry alerts',
     healthNews: 'Health news',

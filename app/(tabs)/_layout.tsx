@@ -21,6 +21,19 @@ export default function TabLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
+          // Float the tab bar over the screen content. Without this,
+          // React Navigation reserves layout space at the bottom of every
+          // screen for the tab bar, so the screen's own background fills
+          // that space and looks like a colored shelf under the floating
+          // pill. With position:absolute, the screens use their full
+          // height and the existing per-screen 120px bottom spacers keep
+          // anything important from hiding behind the pill.
+          tabBarStyle: {
+            position: 'absolute',
+            backgroundColor: 'transparent',
+            borderTopWidth: 0,
+            elevation: 0,
+          },
         }}
         tabBar={(props) => <LiquidGlassTabBar {...props} />}
       >

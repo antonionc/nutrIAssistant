@@ -13,6 +13,7 @@ import { retrievePdfChunks, rankByKeywordOverlap } from '../../services/retrieva
 import { getTopMemoriesForMember, addMemberMemory } from '../../services/memoryStore'
 import { extractFactsFromTurn, CandidateFact } from '../../services/factExtractor'
 import { classify, getRefusalMessage } from '../../services/topicGate'
+import { isAIAccessibleForMember } from './aiAccess'
 import { t } from '../../i18n'
 import { parseActions, describeAction, stripThinkingBlock } from '../../services/aiActions'
 import { getAllRecipes, getRecipesByIds } from '../recipes/recipeDB'
@@ -123,6 +124,13 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage = useCallback(
     async (content: string, imageBase64?: string) => {
+      // Hard age gate: drop the message before it touches the LLM if the
+      // active profile is under 18 (or unverifiable). The FAB and the host
+      // sheet should already prevent reaching this point — this is the
+      // last line of defense in case either visual layer is bypassed.
+      const activeMemberSafe = selectedId ? profiles.find((p) => p.id === selectedId) : null
+      if (!isAIAccessibleForMember(activeMemberSafe)) return
+
       const userMessage: AIMessage = {
         id: generateId('msg'),
         role: 'user',

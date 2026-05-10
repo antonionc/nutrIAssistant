@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors, Shadows } from '../../theme'
 import { useTheme } from '../../theme/ThemeContext'
 import { useAIAssistant } from './AIAssistantHost'
+import { useSelectedProfile } from '../../modules/profiles/SelectedProfileContext'
+import { isAIAccessibleForMember } from '../../modules/ai-engine/aiAccess'
 
 const TAB_BAR_GAP = 76 // approximate height of the floating pill bar
 const SIDE_MARGIN = 16
@@ -14,6 +16,12 @@ export function AIFloatingButton() {
   const insets = useSafeAreaInsets()
   const { isDark } = useTheme()
   const { open } = useAIAssistant()
+  const { selected } = useSelectedProfile()
+
+  // Hide the FAB entirely for under-18 users. Returning null instead of
+  // greying it out makes it impossible to tap and matches the "the AI
+  // simply doesn't exist for minors" intent.
+  if (!isAIAccessibleForMember(selected)) return null
 
   const bottomOffset = insets.bottom + TAB_BAR_GAP + SIDE_MARGIN
 

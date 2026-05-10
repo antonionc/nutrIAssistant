@@ -529,6 +529,7 @@ export const ES = {
   home_screen: {
     familyProgress: 'Familia',
     todayMenu: 'Menú de hoy',
+    todayTile: 'Hoy',
     recipesForYou: 'Recetas para ti',
     pantryAlerts: '⚠️ Alertas de despensa',
     healthNews: 'Noticias de salud',

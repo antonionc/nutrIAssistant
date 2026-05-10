@@ -116,10 +116,6 @@ CREATE TABLE IF NOT EXISTS retailer_connections (
   capabilities TEXT NOT NULL DEFAULT '[]',
   is_coming_soon INTEGER NOT NULL DEFAULT 0
 );
-
-CREATE TABLE IF NOT EXISTS app_metadata (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
+-- Note: the long-unused app_metadata table that lived here was removed
+-- from fresh installs. Existing installs drop it via migration 012.
 `
