@@ -20,11 +20,13 @@ import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 import { FamilyMember, ProfileDocument } from '../../types/profiles'
 import { useProfiles } from '../../modules/profiles/ProfilesContext'
 import {
-  DOCUMENT_CATEGORY_LABEL,
   deleteDocumentFile,
+  indexDocumentForRetrieval,
   pickAndCopyDocument,
   summarizeDocument,
 } from '../../services/profileDocuments'
+import { deleteDocChunksForDoc } from '../../services/memoryStore'
+import { useTranslation, type Translations } from '../../i18n'
 
 let BottomSheet: any = null
 let BottomSheetScrollView: any = null
@@ -50,6 +52,7 @@ export const DocumentsSheet = forwardRef<DocumentsSheetRef, Props>(
   function DocumentsSheet({ member, onAfterClose }, ref) {
     const { colors } = useTheme()
     const { addDocument, updateDocument, removeDocument } = useProfiles()
+    const tr = useTranslation()
     const styles = useMemo(() => makeStyles(colors), [colors])
     const sheetRef = useRef<any>(null)
     const [uploading, setUploading] = useState(false)
@@ -70,7 +73,9 @@ export const DocumentsSheet = forwardRef<DocumentsSheetRef, Props>(
         }
         await addDocument(member.id, doc)
         setUploading(false)
-        // Kick off the summary in the background — UI updates via context.
+        // Kick off the summary AND semantic indexing in the background. They
+        // both read the same PDF text but the LLM summary call can be slow,
+        // so they run in parallel — UI updates incrementally via context.
         summarizeDocument(doc)
           .then(async (summary) => {
             await updateDocument(member.id, doc.id, {
@@ -82,32 +87,36 @@ export const DocumentsSheet = forwardRef<DocumentsSheetRef, Props>(
             console.warn('[DocumentsSheet] summarize failed:', e)
             await updateDocument(member.id, doc.id, { aiSummaryStatus: 'failed' })
           })
+        indexDocumentForRetrieval(member.id, doc).catch((e) =>
+          console.warn('[DocumentsSheet] indexing failed:', e)
+        )
       } catch (e) {
         setUploading(false)
-        const msg = e instanceof Error ? e.message : 'Error desconocido'
-        Alert.alert('Error al subir', msg)
+        const msg = e instanceof Error ? e.message : tr.app.error
+        Alert.alert(tr.documents.uploadError, msg)
       }
-    }, [uploading, member.id, addDocument, updateDocument])
+    }, [uploading, member.id, addDocument, updateDocument, tr])
 
     const handleDelete = useCallback(
       (doc: ProfileDocument) => {
         Alert.alert(
-          'Eliminar documento',
-          `¿Eliminar "${doc.filename}"? El asistente perderá este contexto.`,
+          tr.documents.deleteTitle,
+          tr.documents.deleteMsg(doc.filename),
           [
-            { text: 'Cancelar', style: 'cancel' },
+            { text: tr.app.cancel, style: 'cancel' },
             {
-              text: 'Eliminar',
+              text: tr.app.delete,
               style: 'destructive',
               onPress: async () => {
                 await removeDocument(member.id, doc.id)
                 await deleteDocumentFile(doc.filePath)
+                await deleteDocChunksForDoc(doc.id)
               },
             },
           ]
         )
       },
-      [member.id, removeDocument]
+      [member.id, removeDocument, tr]
     )
 
     if (!BottomSheet) return null
@@ -126,18 +135,14 @@ export const DocumentsSheet = forwardRef<DocumentsSheetRef, Props>(
         <View style={styles.container}>
           <View style={styles.header}>
             <Ionicons name="document-text-outline" size={20} color={colors.text} />
-            <Text style={styles.title}>Informes y documentos</Text>
+            <Text style={styles.title}>{tr.documents.sheetTitle}</Text>
           </View>
 
           <BottomSheetScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <Text style={styles.hint}>
-              Sube PDFs (informes médicos, analíticas, recetas) y el asistente
-              local los resumirá para tener más contexto sobre {member.name}. Todo
-              se almacena en el dispositivo.
-            </Text>
+            <Text style={styles.hint}>{tr.documents.uploadHint(member.name)}</Text>
 
             <TouchableOpacity
               style={[styles.uploadBtn, uploading && styles.uploadBtnDisabled]}
@@ -150,13 +155,13 @@ export const DocumentsSheet = forwardRef<DocumentsSheetRef, Props>(
               ) : (
                 <>
                   <Ionicons name="cloud-upload-outline" size={18} color={Colors.white} />
-                  <Text style={styles.uploadBtnText}>Subir PDF</Text>
+                  <Text style={styles.uploadBtnText}>{tr.documents.uploadBtn}</Text>
                 </>
               )}
             </TouchableOpacity>
 
             {member.documents.length === 0 ? (
-              <Text style={styles.empty}>Aún no hay documentos para {member.name}.</Text>
+              <Text style={styles.empty}>{tr.documents.empty(member.name)}</Text>
             ) : (
               member.documents.map((doc) => (
                 <DocumentRow
@@ -164,6 +169,7 @@ export const DocumentsSheet = forwardRef<DocumentsSheetRef, Props>(
                   doc={doc}
                   onDelete={() => handleDelete(doc)}
                   styles={styles}
+                  tr={tr}
                 />
               ))
             )}
@@ -180,12 +186,16 @@ function DocumentRow({
   doc,
   onDelete,
   styles,
+  tr,
 }: {
   doc: ProfileDocument
   onDelete: () => void
   styles: ReturnType<typeof makeStyles>
+  tr: Translations
 }) {
-  const date = new Date(doc.uploadedAt).toLocaleDateString('es-ES', {
+  // Date format follows the device locale (Intl), so EN devices see
+  // "Mar 4, 2026" and ES devices see "4 mar 2026" without us hardcoding.
+  const date = new Date(doc.uploadedAt).toLocaleDateString(undefined, {
     day: '2-digit', month: 'short', year: 'numeric',
   })
 
@@ -198,7 +208,7 @@ function DocumentRow({
         <View style={styles.docHeaderText}>
           <Text style={styles.docFilename} numberOfLines={1}>{doc.filename}</Text>
           <Text style={styles.docMeta}>
-            {DOCUMENT_CATEGORY_LABEL[doc.category]} · {date}
+            {tr.documents.categories[doc.category]} · {date}
           </Text>
         </View>
         <TouchableOpacity onPress={onDelete} hitSlop={8} style={styles.docDelete}>
@@ -210,18 +220,16 @@ function DocumentRow({
         {doc.aiSummaryStatus === 'pending' && (
           <>
             <ActivityIndicator size="small" color={Colors.forestGreen} />
-            <Text style={styles.docStatusPending}>Resumiendo con IA…</Text>
+            <Text style={styles.docStatusPending}>{tr.documents.summarizing}</Text>
           </>
         )}
         {doc.aiSummaryStatus === 'ready' && (
           <Text style={styles.docSummary} numberOfLines={4}>
-            {doc.aiSummary || 'Sin datos clínicos relevantes.'}
+            {doc.aiSummary || tr.documents.summaryFallback}
           </Text>
         )}
         {doc.aiSummaryStatus === 'failed' && (
-          <Text style={styles.docStatusFailed}>
-            No se pudo resumir el documento. Comprueba que el PDF contenga texto.
-          </Text>
+          <Text style={styles.docStatusFailed}>{tr.documents.summaryFailed}</Text>
         )}
       </View>
     </View>

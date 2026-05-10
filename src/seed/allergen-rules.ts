@@ -6,22 +6,8 @@ export const EU_14_ALLERGENS: AllergenType[] = [
   'mollusks', 'sulfites',
 ]
 
-export const ALLERGEN_DISPLAY_NAMES: Record<AllergenType, string> = {
-  gluten: 'Gluten',
-  dairy: 'Dairy',
-  eggs: 'Eggs',
-  peanuts: 'Peanuts',
-  'tree nuts': 'Tree Nuts',
-  soy: 'Soy',
-  fish: 'Fish',
-  shellfish: 'Shellfish',
-  sesame: 'Sesame',
-  celery: 'Celery',
-  mustard: 'Mustard',
-  lupin: 'Lupin',
-  mollusks: 'Mollusks',
-  sulfites: 'Sulfites',
-}
+// Display names live in src/i18n/{en,es}.ts under `allergens.*`. Render via
+// `tr.allergens[a]` so labels follow the device locale.
 
 // Cross-reactivity: if someone is allergic to X, also watch for Y
 export const CROSS_REACTIVITY: Partial<Record<AllergenType, string[]>> = {

@@ -1,3 +1,10 @@
+// Pin the locale to Spanish: this suite asserts the Spanish wording of the
+// guardrail and section labels. expo-localization in jest-expo defaults to
+// the host's locale (often `en`), which would break these assertions.
+jest.mock('expo-localization', () => ({
+  getLocales: () => [{ languageCode: 'es' }],
+}))
+
 import { buildSystemPrompt, buildMealPlanGenerationPrompt, InventoryLite } from '../../../services/prompts/system'
 import { FamilyMember } from '../../../types/profiles'
 
@@ -45,6 +52,75 @@ describe('buildSystemPrompt — no hardcoded Potter family', () => {
 })
 
 // ─── Dynamic profile directives ───────────────────────────────────────────────
+
+describe('buildSystemPrompt — topic guardrail and scoping', () => {
+  it('always includes the strict-scope topic directive', () => {
+    const prompt = buildSystemPrompt([makeMember()], [])
+    expect(prompt).toMatch(/ÁMBITO ESTRICTO/)
+    expect(prompt).toMatch(/nutrición.*alimentación.*salud.*comidas.*compras/)
+  })
+
+  it('includes a few-shot example of refusing an off-topic question', () => {
+    const prompt = buildSystemPrompt([makeMember()], [])
+    expect(prompt).toMatch(/Ejemplo:/)
+    expect(prompt).toMatch(/Soy NutriBot, así que solo puedo ayudarte/)
+  })
+
+  it('with activeMemberId, scopes the PERFIL section to that member only', () => {
+    const members = [
+      makeMember({ id: 'a', name: 'Alice' }),
+      makeMember({ id: 'b', name: 'Bob' }),
+    ]
+    const prompt = buildSystemPrompt(members, [], undefined, undefined, { activeMemberId: 'a' })
+    expect(prompt).toContain('Alice')
+    expect(prompt).not.toContain('Bob')
+  })
+
+  it('injects About-me notes when provided', () => {
+    const member = makeMember({ id: 'a', name: 'Alice' })
+    const prompt = buildSystemPrompt([member], [], undefined, undefined, {
+      activeMemberId: 'a',
+      aboutMeNotes: 'Soy intolerante al picante',
+    })
+    expect(prompt).toMatch(/SOBRE MÍ/)
+    expect(prompt).toContain('Soy intolerante al picante')
+  })
+
+  it('injects extracted member memories when provided', () => {
+    const member = makeMember({ id: 'a', name: 'Alice' })
+    const prompt = buildSystemPrompt([member], [], undefined, undefined, {
+      activeMemberId: 'a',
+      memberMemories: ['Entrena 4 veces por semana', 'No le gusta el cilantro'],
+    })
+    expect(prompt).toMatch(/RECUERDOS/)
+    expect(prompt).toContain('Entrena 4 veces por semana')
+  })
+
+  it('injects retrieved doc chunks with filename attribution', () => {
+    const member = makeMember({ id: 'a', name: 'Alice' })
+    const prompt = buildSystemPrompt([member], [], undefined, undefined, {
+      activeMemberId: 'a',
+      retrievedChunks: [{ filename: 'analitica.pdf', text: 'Glucosa: 110 mg/dl' }],
+    })
+    expect(prompt).toMatch(/DOCUMENTOS MÉDICOS RELEVANTES/)
+    expect(prompt).toContain('analitica.pdf')
+    expect(prompt).toContain('Glucosa: 110 mg/dl')
+  })
+
+  it('hard-caps the prompt length to stay under the 1B model context budget', () => {
+    const members = Array.from({ length: 8 }, (_, i) =>
+      makeMember({ id: `m${i}`, name: `Member${i}`, conditions: ['hypertension'] })
+    )
+    const inv: InventoryLite[] = Array.from({ length: 100 }, (_, i) => ({
+      name: `item${i} with a moderately long name`,
+      quantity: 1,
+      unit: 'g',
+    }))
+    const prompt = buildSystemPrompt(members, inv)
+    // PROMPT_HARD_CAP_CHARS is 4500; allow a little slack for the suffix.
+    expect(prompt.length).toBeLessThanOrEqual(4500)
+  })
+})
 
 describe('buildSystemPrompt — dynamic content', () => {
   it('embeds the actual member name when they have a condition', () => {

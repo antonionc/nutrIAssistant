@@ -124,6 +124,7 @@ export default function HomeScreen() {
         {/* ── Accesos rápidos (2 tiles) ─────────── */}
         <View style={styles.tilesRow}>
           <TouchableOpacity style={styles.tile} onPress={() => router.push('/(tabs)/nutrition')} activeOpacity={0.8}>
+            <Ionicons name="calendar-outline" size={22} color={colors.text} style={styles.tileLeadingIcon} />
             <View style={styles.tileContent}>
               <Text style={styles.tileTitle}>{tr.home_screen.todayMenu}</Text>
               <Text style={styles.tileSubtitle}>
@@ -134,6 +135,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.tile} onPress={() => router.push('/(tabs)/groceries')} activeOpacity={0.8}>
+            <Ionicons name="cart-outline" size={22} color={colors.text} style={styles.tileLeadingIcon} />
             <View style={styles.tileContent}>
               <Text style={styles.tileTitle}>{tr.home_screen.shoppingList}</Text>
               <Text style={styles.tileSubtitle}>
@@ -391,9 +393,10 @@ function makeStyles(colors: ThemeColors) {
     tile: {
       flex: 1, flexDirection: 'row', alignItems: 'center',
       backgroundColor: colors.warmSurface, borderRadius: BorderRadius.lg,
-      paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm,
-      gap: Spacing.xs,
+      paddingVertical: Spacing.md, paddingHorizontal: Spacing.md,
+      gap: Spacing.sm,
     },
+    tileLeadingIcon: { marginRight: 2 },
     tileContent: { flex: 1 },
     tileTitle: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily },
     tileSubtitle: { ...Typography.caption, color: colors.textSecondary, marginTop: 2 },

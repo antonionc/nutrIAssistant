@@ -32,7 +32,10 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
       pointerEvents="box-none"
       style={[
         styles.container,
-        { paddingBottom: insets.bottom + 12, backgroundColor: colors.background },
+        // Transparent so screen content shows through. The pill itself keeps
+        // its own opaque background (set below) so it stays visually solid;
+        // the surrounding band that used to be `colors.background` is gone.
+        { paddingBottom: insets.bottom + 12 },
       ]}
     >
       <View style={[styles.pill, { backgroundColor: colors.surface }]}>
@@ -83,6 +86,11 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.sm,
+    // Transparent: the surrounding band used to fill with colors.background
+    // (cream/dark cream depending on theme) and looked like the pill was
+    // sitting on a colored shelf. Removing the fill makes the pill read as
+    // a floating element. The pill itself stays opaque (colors.surface).
+    backgroundColor: 'transparent',
   },
   pill: {
     flexDirection: 'row',

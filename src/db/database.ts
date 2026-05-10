@@ -9,6 +9,7 @@ import { migration007 } from './migrations/007_grocery_recipe_id'
 import { migration008 } from './migrations/008_grocery_rebuild'
 import { migration009 } from './migrations/009_purge_themealdb'
 import { migration010 } from './migrations/010_drop_unused_tables'
+import { migration011 } from './migrations/011_memory_layer'
 
 let db: SQLite.SQLiteDatabase | null = null
 
@@ -36,6 +37,7 @@ const MIGRATIONS: Migration[] = [
   { name: '008_grocery_rebuild', fn: migration008 },
   { name: '009_purge_themealdb', sql: migration009 },
   { name: '010_drop_unused_tables', sql: migration010 },
+  { name: '011_memory_layer', sql: migration011 },
 ]
 
 export async function runMigrations(): Promise<void> {

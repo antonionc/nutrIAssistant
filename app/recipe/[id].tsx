@@ -26,6 +26,7 @@ import { Recipe, RecipeIngredient } from '../../src/types/recipes'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
 import { useTheme, ThemeColors } from '../../src/theme/ThemeContext'
 import { MEAL_LABELS } from '../../src/constants/mealTypes'
+import { translateIngredient, translateUnit } from '../../src/utils/ingredientTranslations'
 import { NutriScoreBadge } from '../../src/components/charts/NutriScoreBadge'
 import { MacroBar } from '../../src/components/charts/MacroBar'
 import { FamilyCompatibilityRow } from '../../src/components/badges/CompatibilityBadge'
@@ -424,9 +425,9 @@ export default function RecipeDetailScreen() {
                 <View key={`${ingredient.name}-${index}`} style={styles.ingredientRow}>
                   <View style={[styles.ingredientDot, inPantry && styles.ingredientDotPantry, ingredient.isAllergen && styles.ingredientDotAllergen]} />
                   <View style={styles.ingredientInfo}>
-                    <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                    <Text style={styles.ingredientName}>{translateIngredient(ingredient.name)}</Text>
                     <Text style={styles.ingredientQty}>
-                      {scaledIngredientQty(ingredient.quantity)} {ingredient.unit}
+                      {scaledIngredientQty(ingredient.quantity)} {translateUnit(ingredient.unit)}
                     </Text>
                   </View>
                   <View style={styles.ingredientBadges}>

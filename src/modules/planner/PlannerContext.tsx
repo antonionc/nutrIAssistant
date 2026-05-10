@@ -70,9 +70,9 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
   }, [loadWeek])
 
   /**
-   * Generates a 7-day meal plan from locally-stored recipes. Uses the on-device
-   * LLM (Llama 3.2 1B) when available to curate cuisine/variety; otherwise
-   * falls back to a deterministic algorithmic picker that guarantees no
+   * Generates a 7-day meal plan from locally-stored recipes. Uses the
+   * on-device LLM when available to curate cuisine/variety; otherwise falls
+   * back to a deterministic algorithmic picker that guarantees no
    * within-week repeats and rotates cuisines. School-menu lunch entries are
    * respected for school-age kids. No cloud AI calls.
    */

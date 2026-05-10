@@ -37,8 +37,9 @@ function getDayOptions(): PillOption[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date()
     d.setDate(d.getDate() + i)
-    const day = d.toLocaleDateString('es-ES', { weekday: 'short' })
-    const date = d.toLocaleDateString('es-ES', { day: 'numeric' })
+    // Pass undefined → toLocaleDateString uses the device locale.
+    const day = d.toLocaleDateString(undefined, { weekday: 'short' })
+    const date = d.toLocaleDateString(undefined, { day: 'numeric' })
     const id = d.toISOString().split('T')[0]
     return { id, label: day, sublabel: date }
   })
@@ -142,23 +143,12 @@ export default function NutritionScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+      {/* Header — title + avatar only. Action buttons live below the day
+          selector so the title row has room to breathe and the two main
+          actions get equal visual weight side-by-side. */}
       <View style={styles.header}>
         <Text style={styles.title}>{tr.nutrition.title}</Text>
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={[styles.generateBtn, isGenerating && styles.generateBtnDisabled]}
-            onPress={handleGeneratePlan}
-            disabled={isGenerating}
-          >
-            {isGenerating ? (
-              <ActivityIndicator color={Colors.white} size="small" />
-            ) : (
-              <Text style={styles.generateBtnText}>{tr.nutrition.generate}</Text>
-            )}
-          </TouchableOpacity>
-          <HeaderProfileAvatar />
-        </View>
+        <HeaderProfileAvatar />
       </View>
 
       {/* Day Selector */}
@@ -170,37 +160,69 @@ export default function NutritionScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* School Menu Upload Banner */}
-        <TouchableOpacity
-          style={styles.schoolBanner}
-          onPress={handleUploadSchoolMenu}
-          disabled={uploadPhase !== 'idle'}
-        >
-          {uploadPhase !== 'idle' ? (
-            <View style={styles.uploadProgressContainer}>
-              <View style={styles.uploadProgressHeader}>
-                <ActivityIndicator color={Colors.healthGreen} size="small" />
-                <Text style={styles.uploadStatusText}>
-                  {uploadPhase === 'analyzing' ? tr.nutrition.analyzingMenu : tr.nutrition.generatingPlan}
-                </Text>
+        {/* Action tiles row — school menu upload + AI plan generation. Equal
+            width so neither dominates; both share the same compact tile shape
+            with emoji + title + subtitle. */}
+        <View style={styles.actionTilesRow}>
+          <TouchableOpacity
+            style={[styles.actionTile, styles.actionTileWide]}
+            onPress={handleUploadSchoolMenu}
+            disabled={uploadPhase !== 'idle'}
+            activeOpacity={0.85}
+          >
+            {uploadPhase !== 'idle' ? (
+              <View style={styles.uploadProgressContainer}>
+                <View style={styles.uploadProgressHeader}>
+                  <ActivityIndicator color={Colors.healthGreen} size="small" />
+                  <Text style={styles.uploadStatusText} numberOfLines={2}>
+                    {uploadPhase === 'analyzing' ? tr.nutrition.analyzingMenu : tr.nutrition.generatingPlan}
+                  </Text>
+                </View>
+                <UploadProgressBar phase={uploadPhase} />
               </View>
-              <UploadProgressBar phase={uploadPhase} />
-            </View>
-          ) : (
-            <>
-              <Text style={styles.schoolBannerEmoji}>🏫</Text>
-              <View style={styles.schoolBannerText}>
-                <Text style={styles.schoolBannerTitle}>{tr.nutrition.uploadSchoolMenu}</Text>
-                <Text style={styles.schoolBannerSub}>
+            ) : (
+              <>
+                <Text style={styles.actionTileEmoji}>🏫</Text>
+                <Text style={styles.actionTileTitle} numberOfLines={2}>
+                  {tr.nutrition.uploadSchoolMenu}
+                </Text>
+                <Text style={styles.actionTileSub} numberOfLines={2}>
                   {hasSchoolAgeMembers
                     ? tr.nutrition.uploadSchoolMenuSub
                     : tr.nutrition.noSchoolEnabledNote}
                 </Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionTile, isGenerating && styles.actionTileDisabled]}
+            onPress={handleGeneratePlan}
+            disabled={isGenerating}
+            activeOpacity={0.85}
+          >
+            {isGenerating ? (
+              <View style={styles.uploadProgressContainer}>
+                <View style={styles.uploadProgressHeader}>
+                  <ActivityIndicator color={Colors.healthGreen} size="small" />
+                  <Text style={styles.uploadStatusText} numberOfLines={2}>
+                    {tr.nutrition.generatingPlan}
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.schoolBannerArrow}>→</Text>
-            </>
-          )}
-        </TouchableOpacity>
+            ) : (
+              <>
+                <Text style={styles.actionTileEmoji}>✨</Text>
+                <Text style={styles.actionTileTitle} numberOfLines={2}>
+                  {tr.nutrition.generateTileTitle}
+                </Text>
+                <Text style={styles.actionTileSub} numberOfLines={2}>
+                  {tr.nutrition.generateTileSubtitle}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* Meal Cards for selected day */}
         {isLoading ? (
@@ -349,32 +371,34 @@ function makeStyles(colors: ThemeColors) {
       paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.xs,
     },
     title: { ...Typography.displaySerif, color: colors.text },
-    headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    generateBtn: {
-      backgroundColor: Colors.healthGreen, paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm, borderRadius: BorderRadius.pill, minWidth: 100, alignItems: 'center',
-    },
-    generateBtnDisabled: { backgroundColor: colors.textMuted },
-    generateBtnText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
     pillSelectorContent: { paddingVertical: Spacing.lg },
-    scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.lg },
+    scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md },
     loader: { marginTop: Spacing.xxl },
-    schoolBanner: {
-      flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+
+    // Action tiles row (school menu upload + AI generation)
+    actionTilesRow: {
+      flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md,
+    },
+    actionTile: {
+      flex: 1, minHeight: 96,
       backgroundColor: colors.surface,
       borderRadius: BorderRadius.md,
       borderWidth: 1, borderColor: colors.border,
       paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md,
-      marginBottom: Spacing.md,
+      gap: 2, justifyContent: 'center',
     },
-    schoolBannerEmoji: { fontSize: 18 },
-    schoolBannerText: { flex: 1 },
-    schoolBannerTitle: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily },
-    schoolBannerSub: { ...Typography.caption, color: colors.textSecondary, marginTop: 1 },
-    schoolBannerArrow: { color: colors.textMuted, fontSize: 16 },
-    uploadProgressContainer: { flex: 1 },
+    // School-menu tile carries the longest title + subtitle ("Subir menú
+    // escolar (PDF)" / "La IA extraerá e integrará…"), so it gets ~63% of
+    // the row width and the generate tile gets the remaining ~37%.
+    actionTileWide: { flex: 1.7 },
+    actionTileDisabled: { opacity: 0.6 },
+    actionTileEmoji: { fontSize: 20, marginBottom: Spacing.xs },
+    actionTileTitle: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily },
+    actionTileSub: { ...Typography.caption, color: colors.textSecondary, marginTop: 2 },
+
+    uploadProgressContainer: { flex: 1, justifyContent: 'center' },
     uploadProgressHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: Spacing.sm },
-    uploadStatusText: { ...Typography.body, color: colors.text },
+    uploadStatusText: { ...Typography.caption, color: colors.text, flex: 1 },
     mealsContainer: { gap: Spacing.md },
     supplementRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginTop: Spacing.xs, paddingHorizontal: Spacing.xs },
     supplementChip: { backgroundColor: `${Colors.goldenAmber}20`, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.pill },

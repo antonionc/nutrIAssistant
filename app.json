@@ -73,7 +73,8 @@
       "expo-localization",
       "expo-font",
       "expo-image",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

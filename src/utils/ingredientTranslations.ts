@@ -193,19 +193,27 @@ const UNIT_MAP: Record<string, string> = {
   'as needed': 'cantidad necesaria',
 }
 
+import { getLocales } from 'expo-localization'
+
 /**
- * Returns the Spanish translation of a common English ingredient name.
- * Falls back to the original name if no translation is found.
+ * Locale-aware ingredient name display. Recipe sources (FatSecret /
+ * Spoonacular) return English; on Spanish devices we map to Spanish via
+ * INGREDIENT_MAP. On English devices we return the source string as-is.
+ *
+ * Note: this only handles EN → ES. Seed recipes hardcoded in Spanish will
+ * NOT translate to English on EN devices — that requires bidirectional data
+ * (tracked separately).
  */
 export function translateIngredient(name: string): string {
+  const lang = getLocales()[0]?.languageCode ?? 'es'
+  if (lang !== 'es') return name // EN device → return source as-is
+
   const key = name.trim().toLowerCase()
-  // Try exact match first
   if (INGREDIENT_MAP[key]) return INGREDIENT_MAP[key]
-  // Try removing trailing 's' for simple plurals not explicitly mapped
   if (key.endsWith('s') && INGREDIENT_MAP[key.slice(0, -1)]) {
     return INGREDIENT_MAP[key.slice(0, -1)]
   }
-  return name // fall back to original
+  return name
 }
 
 /**
@@ -216,6 +224,10 @@ export function translateIngredient(name: string): string {
 export function translateUnit(unit: string): string {
   const trimmed = unit.trim()
   const lower = trimmed.toLowerCase()
+
+  // EN device: leave units as-is (source data is English).
+  const lang = getLocales()[0]?.languageCode ?? 'es'
+  if (lang !== 'es') return trimmed
 
   // Exact match
   if (UNIT_MAP[lower]) return UNIT_MAP[lower]

@@ -63,6 +63,8 @@ export const ES = {
     altTitle: (meal: string) => `Alternativas para ${meal}`,
     altSubtitle: 'Toca una receta para sustituir la actual',
     noAlternatives: 'No se encontraron alternativas',
+    generateTileTitle: 'Generar menú',
+    generateTileSubtitle: 'Plan semanal a tu medida',
   },
 
   // Recipes
@@ -200,7 +202,7 @@ export const ES = {
     family: 'Perfiles familiares',
     addMember: 'Añadir miembro',
     aiEngine: 'Motor de IA',
-    aiEngineDesc: 'Modelo local descargado (~800 MB)',
+    aiEngineDesc: 'Modelo local descargado (~1 GB)',
     downloadModel: 'Descargar modelo',
     deleteModel: 'Eliminar modelo',
     downloading: 'Descargando...',
@@ -282,8 +284,8 @@ export const ES = {
     aiModelReadyNotification: 'Asistente de IA listo',
     aiModelReadyBody: 'Tu asistente local está listo para ayudarte.',
     aiModelPreparing: 'Casi listo — tu asistente de IA privado se está configurando. Te avisaremos cuando esté listo.',
-    downloadingModel: 'Descargando el modelo de IA (una sola vez, ~800 MB)…',
-    downloadModelBtn: 'Descargar modelo IA (~800 MB)',
+    downloadingModel: 'Descargando el modelo de IA (una sola vez, ~1 GB)…',
+    downloadModelBtn: 'Descargar modelo IA (~1 GB)',
     deleteModelBtn: 'Eliminar modelo IA',
     totalInDatabase: 'Total en base de datos',
     recipesCount: (n: number) => `${n} receta${n !== 1 ? 's' : ''}`,
@@ -332,15 +334,108 @@ export const ES = {
   },
 
   // AI Assistant
+  // Markdown family backup export/import
+  familyExport: {
+    docTitle: 'NutrIAssistant — Copia de Seguridad Familiar',
+    headerLine: (family: string, count: number, today: string) =>
+      `**Familia:** ${family} | **Miembros:** ${count} | **Exportado:** ${today}`,
+    membersHeading: 'Miembros de la familia',
+    footerNote: 'Este archivo fue generado automáticamente por NutrIAssistant.',
+    importNote: 'Para restaurar estos datos, importa este archivo desde Ajustes → Importar familia.',
+    memberLine: (i: number, name: string, role: string, age: number) =>
+      `### ${i}. ${name} (${role}, ${age} años)`,
+    weightHeightDiet: (w: number, h: number, diet: string) =>
+      `Peso: ${w} kg · Altura: ${h} cm · Dieta: ${diet}`,
+    allergiesLabel: (list: string) => `Alergias: ${list}`,
+    conditionsLabel: (list: string) => `Condiciones e intolerancias: ${list}`,
+    calorieGoalLabel: (kcal: number) => `Objetivo calórico: ${kcal} kcal/día`,
+    none: 'ninguna',
+  },
+
+  // Profile screen (per-member)
+  profile: {
+    notFound: 'Perfil no encontrado.',
+    back: 'Volver',
+    dailyGoal: 'Objetivo diario',
+    favorites: 'Favoritos',
+    favoritesCount: (n: number) => `${n} receta${n === 1 ? '' : 's'}`,
+    reports: 'Informes',
+    documentsCount: (n: number) => `${n} documento${n === 1 ? '' : 's'}`,
+    processing: 'procesando…',
+    allergiesTitle: 'Alergias e intolerancias',
+    noAllergies: 'Sin alergias registradas.',
+    conditionsTitle: 'Condiciones médicas',
+    noConditions: 'Sin condiciones registradas.',
+    metricsTitle: 'Métricas',
+    weight: 'Peso',
+    height: 'Altura',
+    bloodPressure: 'Tensión',
+    restingHR: 'FC reposo',
+    hrv: 'HRV',
+    spO2: 'SpO₂',
+    editInSettings: 'Editar perfil en Ajustes',
+  },
+
+  // Document categories shown in the documents sheet & elsewhere
+  documents: {
+    sheetTitle: 'Informes y documentos',
+    uploadHint: (name: string) =>
+      `Sube PDFs (informes médicos, analíticas, recetas) y el asistente local los resumirá para tener más contexto sobre ${name}. Todo se almacena en el dispositivo.`,
+    uploadBtn: 'Subir PDF',
+    empty: (name: string) => `Aún no hay documentos para ${name}.`,
+    deleteTitle: 'Eliminar documento',
+    deleteMsg: (filename: string) => `¿Eliminar "${filename}"? El asistente perderá este contexto.`,
+    summarizing: 'Resumiendo con IA…',
+    summaryFallback: 'Sin datos clínicos relevantes.',
+    summaryFailed: 'No se pudo resumir el documento. Comprueba que el PDF contenga texto.',
+    uploadError: 'Error al subir',
+    categories: {
+      lab_report: 'Informe de laboratorio',
+      medical_history: 'Historia clínica',
+      prescription: 'Receta médica',
+      other: 'Otro',
+    },
+  },
+
+  // About-me notes & long-term memories
+  aboutMe: {
+    title: 'Sobre mí',
+    description: 'Comparte preferencias, objetivos o cualquier cosa que quieras que el asistente recuerde sobre ti. Hasta 500 caracteres.',
+    placeholder: 'Ej. Entreno 4 días a la semana. Prefiero comidas rápidas entre semana. No me gusta el cilantro.',
+    saveBtn: 'Guardar',
+    savedToast: 'Guardado.',
+    charCount: (n: number) => `${n}/500`,
+  },
+  memories: {
+    title: 'Recuerdos',
+    description: 'Hechos duraderos que el asistente ha guardado a partir de tus conversaciones. Puedes borrar lo que ya no aplique.',
+    count: (n: number) => `${n} recuerdo${n === 1 ? '' : 's'}`,
+    empty: 'Aún no hay recuerdos guardados.',
+    deleteConfirm: '¿Eliminar este recuerdo?',
+    delete: 'Eliminar',
+    cancel: 'Cancelar',
+    categoryLabels: {
+      preference: 'Preferencia',
+      health: 'Salud',
+      routine: 'Rutina',
+      other: 'Otro',
+    },
+    pendingBanner: '¿Quieres que recuerde esto?',
+    accept: 'Sí, recordar',
+    dismiss: 'Descartar',
+  },
+
   ai: {
     title: '🤖 NutriBot',
     subtitle: 'Asistente nutricional IA',
     welcome: '¡Hola, soy NutriBot!',
     welcomeDesc: 'Tu asistente de nutrición familiar con IA. Pregúntame sobre recetas, ingredientes, planes de comidas o alérgenos.',
     placeholder: 'Pregunta a NutriBot...',
-    suggestions: [
+    suggestions: (memberName?: string): string[] => [
       '¿Qué puedo cocinar esta noche?',
-      '¿Es esta receta apta para Harry?',
+      memberName
+        ? `¿Es esta receta apta para ${memberName}?`
+        : '¿Es esta receta apta para mi familia?',
       'Crea un menú saludable para esta semana',
       '¿Qué le falta a mi despensa?',
     ],

@@ -32,6 +32,8 @@ import { t } from '../src/i18n'
 import { seedRecipesIfNeeded } from '../src/modules/recipes/seedRecipes'
 import { isSynced, syncRecipes } from '../src/modules/recipes/syncRecipes'
 import { ensureModelAvailable, isModelDownloaded } from '../src/services/onDeviceLlm'
+import { ensureEmbeddingsAvailable } from '../src/services/embeddings'
+import { ensureKey as ensureEncryptionKey } from '../src/services/encryption'
 import { notifyDownloadStarted, notifyModelReady } from '../src/services/aiNotifications'
 
 function AppShell() {
@@ -103,6 +105,9 @@ export default function RootLayout() {
   useEffect(() => {
     async function initApp() {
       try {
+        // Encryption key MUST be ready before any profile/memory read so the
+        // decrypt path has the key it needs. ensureKey is idempotent.
+        await ensureEncryptionKey()
         await runMigrations()
         await seedRecipesIfNeeded()
 
@@ -131,6 +136,13 @@ export default function RootLayout() {
           if (loaded && !alreadyDownloaded) await notifyModelReady()
         })
         .catch((e) => console.warn('[Init] LLM init failed:', e))
+
+      // Embeddings model (~28MB) for PDF retrieval. Smaller than the LLM,
+      // also non-blocking; PDFs uploaded before it loads will fail to index
+      // and silently skip retrieval until the next upload.
+      ensureEmbeddingsAvailable().catch((e) =>
+        console.warn('[Init] Embeddings init failed:', e)
+      )
 
       setDbReady(true)
     }

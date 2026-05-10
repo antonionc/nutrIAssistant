@@ -23,7 +23,7 @@ import { useTranslation } from '../src/i18n'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../src/theme'
 import { useTheme, ThemePreference, ThemeColors } from '../src/theme/ThemeContext'
 import { FamilyMember, AllergenType, DietPreference } from '../src/types/profiles'
-import { EU_14_ALLERGENS, ALLERGEN_DISPLAY_NAMES } from '../src/seed/allergen-rules'
+import { EU_14_ALLERGENS } from '../src/seed/allergen-rules'
 import { syncSource, isSynced, wipeAndResetRecipes } from '../src/modules/recipes/syncRecipes'
 import {
   getSourcesConfig,
@@ -783,7 +783,7 @@ function MemberProfileRow({
                   }}
                 >
                   <Text style={[styles.tagText, active && styles.tagTextActive]}>
-                    {ALLERGEN_DISPLAY_NAMES[a]}
+                    {(tr.allergens as Record<string, string>)[a] ?? a}
                   </Text>
                 </TouchableOpacity>
               )

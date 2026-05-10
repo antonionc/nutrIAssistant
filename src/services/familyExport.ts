@@ -2,73 +2,32 @@ import * as FileSystem from 'expo-file-system/legacy'
 import * as DocumentPicker from 'expo-document-picker'
 import { FamilyMember } from '../types/profiles'
 import { getAge } from '../utils/ageUtils'
-
-const DIET_LABELS: Record<string, string> = {
-  none: 'Sin restricción',
-  mediterranean: 'Mediterránea',
-  vegetarian: 'Vegetariana',
-  vegan: 'Vegana',
-  pescatarian: 'Pescetariana',
-  keto: 'Keto',
-}
-
-const ROLE_LABELS: Record<string, string> = {
-  father: 'padre',
-  mother: 'madre',
-  son: 'hijo',
-  daughter: 'hija',
-  other: 'otro',
-}
-
-const ALLERGEN_ES: Record<string, string> = {
-  gluten: 'Gluten',
-  dairy: 'Lácteos',
-  eggs: 'Huevos',
-  peanuts: 'Cacahuetes',
-  'tree nuts': 'Frutos secos',
-  soy: 'Soja',
-  fish: 'Pescado',
-  shellfish: 'Mariscos',
-  sesame: 'Sésamo',
-  celery: 'Apio',
-  mustard: 'Mostaza',
-  lupin: 'Altramuces',
-  mollusks: 'Moluscos',
-  sulfites: 'Sulfitos',
-}
-
-const CONDITIONS_ES: Record<string, string> = {
-  hypertension: 'Hipertensión',
-  osteoporosis: 'Osteoporosis',
-  diabetes_type1: 'Diabetes tipo 1',
-  diabetes_type2: 'Diabetes tipo 2',
-  celiac: 'Celiaquía',
-  lactose_intolerance: 'Intolerancia a la lactosa',
-  high_cholesterol: 'Colesterol alto',
-  ibs: 'Síndrome del intestino irritable',
-}
+import { t } from '../i18n'
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
-  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })
+  // undefined → device locale; matches the rest of the app's date formatting.
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 function memberToMarkdown(m: FamilyMember, index: number): string {
   const allergies = m.allergies.length
-    ? m.allergies.map((a) => ALLERGEN_ES[a] ?? a).join(', ')
-    : 'ninguna'
+    ? m.allergies.map((a) => (t.allergens as Record<string, string>)[a] ?? a).join(', ')
+    : t.familyExport.none
   const conditions = m.conditions.length
-    ? m.conditions.map((c) => CONDITIONS_ES[c] ?? c).join(', ')
-    : 'ninguna'
-  const diet = DIET_LABELS[m.dietPreference] ?? m.dietPreference
-  const role = ROLE_LABELS[m.role] ?? m.role
+    ? m.conditions
+        .map((c) => (t.settings.conditions as Record<string, string>)[c] ?? c)
+        .join(', ')
+    : t.familyExport.none
+  const diet = (t.diets as Record<string, string>)[m.dietPreference] ?? m.dietPreference
+  const role = (t.roles as Record<string, string>)[m.role] ?? m.role
 
   return [
-    `### ${index + 1}. ${m.name} (${role}, ${getAge(m.dateOfBirth)} años)`,
-    `Peso: ${m.weight} kg · Altura: ${m.height} cm · Dieta: ${diet}`,
-    `Alergias: ${allergies}`,
-    `Condiciones e intolerancias: ${conditions}`,
-    m.dailyCalorieTarget ? `Objetivo calórico: ${m.dailyCalorieTarget} kcal/día` : '',
+    t.familyExport.memberLine(index + 1, m.name, role, getAge(m.dateOfBirth)),
+    t.familyExport.weightHeightDiet(m.weight, m.height, diet),
+    t.familyExport.allergiesLabel(allergies),
+    t.familyExport.conditionsLabel(conditions),
+    m.dailyCalorieTarget ? t.familyExport.calorieGoalLabel(m.dailyCalorieTarget) : '',
   ]
     .filter(Boolean)
     .join('\n')
@@ -84,20 +43,20 @@ export async function exportFamilyToMarkdown(
   const machineData = JSON.stringify({ familyName, members }, null, 2)
 
   const markdown = [
-    '# NutrIAssistant — Copia de Seguridad Familiar',
+    `# ${t.familyExport.docTitle}`,
     '',
-    `**Familia:** ${familyName} | **Miembros:** ${members.length} | **Exportado:** ${today}`,
+    t.familyExport.headerLine(familyName, members.length, today),
     '',
     '---',
     '',
-    '## Miembros de la familia',
+    `## ${t.familyExport.membersHeading}`,
     '',
     membersMarkdown,
     '',
     '---',
     '',
-    '> Este archivo fue generado automáticamente por NutrIAssistant.',
-    '> Para restaurar estos datos, importa este archivo desde Ajustes → Importar familia.',
+    `> ${t.familyExport.footerNote}`,
+    `> ${t.familyExport.importNote}`,
     '',
     `<!-- nutri-export-v1\n${machineData}\n-->`,
   ].join('\n')

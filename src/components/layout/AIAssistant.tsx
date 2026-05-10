@@ -25,11 +25,19 @@ import {
 } from 'react-native'
 import * as Speech from 'expo-speech'
 import { VoiceQuality } from 'expo-speech'
+import { getLocales } from 'expo-localization'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
 import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 import { AIMessage } from '../../types/ai'
 import { useAIEngine } from '../../modules/ai-engine/AIContext'
 import { useTranslation } from '../../i18n'
+
+// BCP-47 tag for voice recognition + TTS. Falls back to es-ES when the
+// device locale is anything other than English (matches the i18n fallback).
+function deviceVoiceLocale(): string {
+  const lang = getLocales()[0]?.languageCode ?? 'es'
+  return lang === 'en' ? 'en-US' : 'es-ES'
+}
 
 type BottomSheetFlatListMethods = { scrollToEnd: (opts?: { animated?: boolean }) => void }
 
@@ -81,7 +89,17 @@ interface AIAssistantProps {
 
 export const AIAssistant = forwardRef<any, AIAssistantProps>(
   function AIAssistant({ onClose }, ref) {
-    const { messages, isResponding, sendMessage, clearHistory, lastActionToast, dismissActionToast } = useAIEngine()
+    const {
+      messages,
+      isResponding,
+      sendMessage,
+      clearHistory,
+      lastActionToast,
+      dismissActionToast,
+      pendingFacts,
+      acceptPendingFact,
+      dismissPendingFact,
+    } = useAIEngine()
     const { colors, isDark } = useTheme()
     const tr = useTranslation()
     const { vs, ts } = useMemo(() => makeStyles(colors), [colors])
@@ -121,26 +139,29 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
     // Track whether results arrived before we clear the listening state
     const gotResultsRef = useRef(false)
 
-    // ── TTS: find best available Spanish voice on mount ──────────────────────
+    // ── TTS: pick the best voice that matches the device locale ─────────────
     useEffect(() => {
+      const targetLocale = deviceVoiceLocale() // e.g., 'es-ES' or 'en-US'
+      const targetPrefix = targetLocale.slice(0, 2) // 'es' or 'en'
       Speech.getAvailableVoicesAsync().then((voices) => {
-        const spanish = voices.filter(
-          (v) => v.language.startsWith('es') && v.identifier
+        const candidates = voices.filter(
+          (v) => v.language.startsWith(targetPrefix) && v.identifier
         )
-        if (spanish.length === 0) return
+        if (candidates.length === 0) return
 
-        // Sort by quality descending, then prefer es-ES over other locales
-        spanish.sort((a, b) => {
+        // Sort by quality desc, then exact-locale preference (e.g. en-US over en-GB
+        // when the device is en-US).
+        candidates.sort((a, b) => {
           const qa = VOICE_QUALITY_RANK[a.quality] ?? 1
           const qb = VOICE_QUALITY_RANK[b.quality] ?? 1
           if (qb !== qa) return qb - qa
-          const aES = a.language === 'es-ES' ? 1 : 0
-          const bES = b.language === 'es-ES' ? 1 : 0
-          return bES - aES
+          const aMatch = a.language === targetLocale ? 1 : 0
+          const bMatch = b.language === targetLocale ? 1 : 0
+          return bMatch - aMatch
         })
 
-        setTtsVoice(spanish[0].identifier)
-        console.log(`[TTS] Using voice: ${spanish[0].name} (${spanish[0].quality}, ${spanish[0].language})`)
+        setTtsVoice(candidates[0].identifier)
+        console.log(`[TTS] Using voice: ${candidates[0].name} (${candidates[0].quality}, ${candidates[0].language})`)
       }).catch(() => {/* use default voice */})
     }, [])
 
@@ -256,7 +277,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
       const lastMsg = messages[messages.length - 1]
       if (lastMsg?.role === 'assistant' && !lastMsg.isStreaming && lastMsg.content) {
         Speech.speak(lastMsg.content, {
-          language: 'es-ES',
+          language: deviceVoiceLocale(),
           rate: 0.95,
           pitch: 1.0,
           voice: ttsVoice,
@@ -321,7 +342,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
 
       try {
         gotResultsRef.current = false
-        await Voice.start('es-ES')
+        await Voice.start(deviceVoiceLocale())
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : tr.ai.errorStartMic
         setVoiceError(msg)
@@ -431,6 +452,31 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
             </TouchableOpacity>
           ) : null}
 
+          {/* Pending fact confirmation. Surfaces what the assistant proposes
+              to remember so the user has visibility before persistence. */}
+          {pendingFacts.length > 0 ? (
+            <View style={vs.factBanner}>
+              <Text style={ts.factPrompt}>{tr.memories.pendingBanner}</Text>
+              <Text style={ts.factText} numberOfLines={3}>
+                {pendingFacts[0].text}
+              </Text>
+              <View style={vs.factActions}>
+                <TouchableOpacity
+                  onPress={() => dismissPendingFact(pendingFacts[0])}
+                  style={vs.factDismissBtn}
+                >
+                  <Text style={ts.factDismissText}>{tr.memories.dismiss}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => acceptPendingFact(pendingFacts[0])}
+                  style={vs.factAcceptBtn}
+                >
+                  <Text style={ts.factAcceptText}>{tr.memories.accept}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
           {/* Messages */}
           <View style={vs.messagesArea}>
             {messages.length === 0 ? (
@@ -534,6 +580,21 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: `${Colors.healthGreen}18`, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
       borderBottomWidth: 1, borderBottomColor: `${Colors.healthGreen}30`,
     } as ViewStyle,
+    factBanner: {
+      backgroundColor: `${Colors.goldenAmber}18`,
+      paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+      borderBottomWidth: 1, borderBottomColor: `${Colors.goldenAmber}30`,
+      gap: Spacing.xs,
+    } as ViewStyle,
+    factActions: { flexDirection: 'row', gap: Spacing.sm, justifyContent: 'flex-end' } as ViewStyle,
+    factDismissBtn: {
+      paddingHorizontal: Spacing.sm, paddingVertical: 6,
+      borderRadius: BorderRadius.pill, backgroundColor: 'transparent',
+    } as ViewStyle,
+    factAcceptBtn: {
+      paddingHorizontal: Spacing.md, paddingVertical: 6,
+      borderRadius: BorderRadius.pill, backgroundColor: Colors.goldenAmber,
+    } as ViewStyle,
     messagesArea: { flex: 1, overflow: 'hidden' } as ViewStyle,
     messageListContainer: { flex: 1 } as ViewStyle,
     welcome: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, gap: Spacing.md, paddingVertical: Spacing.xl } as ViewStyle,
@@ -577,6 +638,10 @@ function makeStyles(colors: ThemeColors) {
     cursor: { color: Colors.healthGreen, fontSize: 16 } as TextStyle,
     errorText: { ...Typography.caption, color: Colors.errorRed } as TextStyle,
     actionText: { ...Typography.caption, color: Colors.forestGreen, fontFamily: Typography.heading3.fontFamily } as TextStyle,
+    factPrompt: { ...Typography.caption, color: Colors.forestGreen, fontFamily: Typography.heading3.fontFamily } as TextStyle,
+    factText: { ...Typography.body, color: colors.text } as TextStyle,
+    factDismissText: { ...Typography.caption, color: colors.textSecondary } as TextStyle,
+    factAcceptText: { ...Typography.caption, color: Colors.white, fontFamily: Typography.heading3.fontFamily } as TextStyle,
     micIcon: { fontSize: 18 } as TextStyle,
     input: {
       ...Typography.body, color: colors.text,

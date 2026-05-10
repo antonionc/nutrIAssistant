@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import {
   Image,
   ScrollView,
@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { Stack, router, useLocalSearchParams } from 'expo-router'
+import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
@@ -20,20 +20,23 @@ import { ProgressRing } from '../../src/components/charts/ProgressRing'
 import { AllergyPill } from '../../src/components/badges/AllergyPill'
 import { FavoritesSheet, FavoritesSheetRef } from '../../src/components/sheets/FavoritesSheet'
 import { DocumentsSheet, DocumentsSheetRef } from '../../src/components/sheets/DocumentsSheet'
+import { AboutMeSheet, AboutMeSheetRef } from '../../src/components/sheets/AboutMeSheet'
+import { MemorySheet, MemorySheetRef } from '../../src/components/sheets/MemorySheet'
 import { HeaderProfileAvatar } from '../../src/components/layout/HeaderProfileAvatar'
+import { countMemberMemoriesForMember } from '../../src/services/memoryStore'
 
 // Custom pill back button shared by both render branches. Replaces the
 // default iOS pill that leaks the parent route name ("(tabs)") as a label.
-function CircleBackButton({ tint, bg }: { tint: string; bg: string }) {
+function CircleBackButton({ tint, bg, label }: { tint: string; bg: string; label: string }) {
   return (
     <TouchableOpacity
       onPress={() => router.back()}
       style={[circleBackStyles.btn, { backgroundColor: bg }]}
       hitSlop={8}
-      accessibilityLabel="Volver"
+      accessibilityLabel={label}
     >
       <Ionicons name="chevron-back" size={20} color={tint} />
-      <Text style={[circleBackStyles.label, { color: tint }]}>Volver</Text>
+      <Text style={[circleBackStyles.label, { color: tint }]}>{label}</Text>
     </TouchableOpacity>
   )
 }
@@ -64,6 +67,28 @@ export default function ProfileScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors])
   const favRef = useRef<FavoritesSheetRef>(null)
   const docRef = useRef<DocumentsSheetRef>(null)
+  const aboutRef = useRef<AboutMeSheetRef>(null)
+  const memoryRef = useRef<MemorySheetRef>(null)
+
+  // Live count for the Recuerdos tile. Refreshes:
+  //   - on every focus (covers fact-acceptance from the chat sheet, which
+  //     doesn't unmount this screen but does shift focus when the assistant
+  //     sheet is dismissed)
+  //   - whenever MemorySheet emits onChanged (covers in-place deletes)
+  const [memoryCount, setMemoryCount] = useState<number | null>(null)
+  const refreshMemoryCount = useCallback(async () => {
+    if (!id) return
+    try {
+      setMemoryCount(await countMemberMemoriesForMember(id))
+    } catch (e) {
+      console.warn('[profile] memory count failed:', e)
+    }
+  }, [id])
+  useFocusEffect(
+    useCallback(() => {
+      refreshMemoryCount()
+    }, [refreshMemoryCount])
+  )
 
   const stackOptions = useMemo(
     () => ({
@@ -71,10 +96,10 @@ export default function ProfileScreen() {
       headerTransparent: true,
       headerShadowVisible: false,
       headerBackVisible: false,
-      headerLeft: () => <CircleBackButton tint={colors.text} bg={colors.surface} />,
+      headerLeft: () => <CircleBackButton tint={colors.text} bg={colors.surface} label={tr.profile.back} />,
       headerRight: () => <HeaderProfileAvatar />,
     }),
-    [colors.text, colors.surface]
+    [colors.text, colors.surface, tr.profile.back]
   )
 
   const member = profiles.find((p) => p.id === id)
@@ -84,9 +109,9 @@ export default function ProfileScreen() {
       <SafeAreaView style={styles.container} edges={['top']}>
         <Stack.Screen options={stackOptions} />
         <View style={styles.notFound}>
-          <Text style={styles.notFoundText}>Perfil no encontrado.</Text>
+          <Text style={styles.notFoundText}>{tr.profile.notFound}</Text>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>Volver</Text>
+            <Text style={styles.backBtnText}>{tr.profile.back}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -136,7 +161,7 @@ export default function ProfileScreen() {
             animate
           />
           <View style={styles.ringInfo}>
-            <Text style={styles.ringTitle}>Objetivo diario</Text>
+            <Text style={styles.ringTitle}>{tr.profile.dailyGoal}</Text>
             <Text style={styles.ringValue}>{target} kcal</Text>
             {member.macroTargets && (
               <View style={styles.macroRow}>
@@ -158,9 +183,9 @@ export default function ProfileScreen() {
             <View style={[styles.tileIcon, { backgroundColor: `${Colors.errorRed}18` }]}>
               <Ionicons name="heart" size={20} color={Colors.errorRed} />
             </View>
-            <Text style={styles.tileTitle}>Favoritos</Text>
+            <Text style={styles.tileTitle}>{tr.profile.favorites}</Text>
             <Text style={styles.tileSub}>
-              {member.favoriteRecipeIds.length} receta{member.favoriteRecipeIds.length === 1 ? '' : 's'}
+              {tr.profile.favoritesCount(member.favoriteRecipeIds.length)}
             </Text>
           </TouchableOpacity>
 
@@ -172,21 +197,52 @@ export default function ProfileScreen() {
             <View style={[styles.tileIcon, { backgroundColor: `${Colors.forestGreen}18` }]}>
               <Ionicons name="document-text-outline" size={20} color={Colors.forestGreen} />
             </View>
-            <Text style={styles.tileTitle}>Informes</Text>
+            <Text style={styles.tileTitle}>{tr.profile.reports}</Text>
             <Text style={styles.tileSub}>
-              {member.documents.length} documento{member.documents.length === 1 ? '' : 's'}
+              {tr.profile.documentsCount(member.documents.length)}
               {member.documents.length > documentReadyCount && member.documents.length > 0
-                ? ' · procesando…'
+                ? ` · ${tr.profile.processing}`
                 : ''}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── About-me + Memories row ─────────── */}
+        <View style={styles.tilesRow}>
+          <TouchableOpacity
+            style={styles.tile}
+            onPress={() => aboutRef.current?.present()}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.tileIcon, { backgroundColor: `${Colors.healthGreen}18` }]}>
+              <Ionicons name="person-circle-outline" size={20} color={Colors.healthGreen} />
+            </View>
+            <Text style={styles.tileTitle}>{tr.aboutMe.title}</Text>
+            <Text style={styles.tileSub} numberOfLines={1}>
+              {member.aboutMeNotes ? member.aboutMeNotes.slice(0, 60) : '—'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tile}
+            onPress={() => memoryRef.current?.present()}
+            activeOpacity={0.85}
+          >
+            <View style={[styles.tileIcon, { backgroundColor: `${Colors.goldenAmber}22` }]}>
+              <Ionicons name="bookmark-outline" size={20} color={Colors.goldenAmber} />
+            </View>
+            <Text style={styles.tileTitle}>{tr.memories.title}</Text>
+            <Text style={styles.tileSub}>
+              {memoryCount === null ? '—' : tr.memories.count(memoryCount)}
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* ── Allergies ───────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Alergias e intolerancias</Text>
+          <Text style={styles.sectionTitle}>{tr.profile.allergiesTitle}</Text>
           {member.allergies.length === 0 ? (
-            <Text style={styles.sectionEmpty}>Sin alergias registradas.</Text>
+            <Text style={styles.sectionEmpty}>{tr.profile.noAllergies}</Text>
           ) : (
             <View style={styles.pillRow}>
               {member.allergies.map((a) => (
@@ -202,20 +258,24 @@ export default function ProfileScreen() {
 
         {/* ── Conditions ──────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Condiciones médicas</Text>
+          <Text style={styles.sectionTitle}>{tr.profile.conditionsTitle}</Text>
           {member.conditions.length === 0 ? (
-            <Text style={styles.sectionEmpty}>Sin condiciones registradas.</Text>
+            <Text style={styles.sectionEmpty}>{tr.profile.noConditions}</Text>
           ) : (
             <View style={styles.pillRow}>
               {member.conditions.map((c) => (
-                <AllergyPill key={c} label={c} tone="condition" />
+                <AllergyPill
+                  key={c}
+                  label={(tr.settings.conditions as Record<string, string>)[c] ?? c}
+                  tone="condition"
+                />
               ))}
             </View>
           )}
         </View>
 
         {/* ── Vitals ──────────────────────────── */}
-        <Vitals member={member} styles={styles} />
+        <Vitals member={member} styles={styles} tr={tr} />
 
         {/* ── Edit footer ─────────────────────── */}
         <TouchableOpacity
@@ -224,7 +284,7 @@ export default function ProfileScreen() {
           activeOpacity={0.85}
         >
           <Ionicons name="create-outline" size={18} color={colors.text} />
-          <Text style={styles.editBtnText}>Editar perfil en Ajustes</Text>
+          <Text style={styles.editBtnText}>{tr.profile.editInSettings}</Text>
         </TouchableOpacity>
 
         <View style={{ height: 120 }} />
@@ -232,6 +292,8 @@ export default function ProfileScreen() {
 
       <FavoritesSheet ref={favRef} member={member} />
       <DocumentsSheet ref={docRef} member={member} />
+      <AboutMeSheet ref={aboutRef} member={member} />
+      <MemorySheet ref={memoryRef} member={member} onChanged={refreshMemoryCount} />
     </View>
   )
 }
@@ -261,23 +323,25 @@ const macroChipStyles = StyleSheet.create({
 function Vitals({
   member,
   styles,
+  tr,
 }: {
   member: { weight: number; height: number; bloodPressure?: string; restingHeartRate?: number; hrv?: number; spO2?: number }
   styles: ReturnType<typeof makeStyles>
+  tr: ReturnType<typeof useTranslation>
 }) {
   const items: Array<{ label: string; value: string }> = []
-  if (member.weight) items.push({ label: 'Peso', value: `${member.weight} kg` })
-  if (member.height) items.push({ label: 'Altura', value: `${member.height} cm` })
-  if (member.bloodPressure) items.push({ label: 'Tensión', value: member.bloodPressure })
-  if (member.restingHeartRate) items.push({ label: 'FC reposo', value: `${member.restingHeartRate} bpm` })
-  if (member.hrv) items.push({ label: 'HRV', value: `${member.hrv} ms` })
-  if (member.spO2) items.push({ label: 'SpO₂', value: `${member.spO2} %` })
+  if (member.weight) items.push({ label: tr.profile.weight, value: `${member.weight} kg` })
+  if (member.height) items.push({ label: tr.profile.height, value: `${member.height} cm` })
+  if (member.bloodPressure) items.push({ label: tr.profile.bloodPressure, value: member.bloodPressure })
+  if (member.restingHeartRate) items.push({ label: tr.profile.restingHR, value: `${member.restingHeartRate} bpm` })
+  if (member.hrv) items.push({ label: tr.profile.hrv, value: `${member.hrv} ms` })
+  if (member.spO2) items.push({ label: tr.profile.spO2, value: `${member.spO2} %` })
 
   if (items.length === 0) return null
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Métricas</Text>
+      <Text style={styles.sectionTitle}>{tr.profile.metricsTitle}</Text>
       <View style={styles.vitalsGrid}>
         {items.map((item) => (
           <View key={item.label} style={styles.vitalTile}>

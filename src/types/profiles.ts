@@ -73,6 +73,10 @@ export interface FamilyMember {
   }
   favoriteRecipeIds: string[]
   documents: ProfileDocument[]
+  // Free-form notes the user types about themselves (preferences, goals,
+  // recent events). Encrypted at rest; injected verbatim (capped) into the
+  // active assistant prompt for context.
+  aboutMeNotes?: string
   isSuperUser: boolean
   createdAt: string
   updatedAt: string
