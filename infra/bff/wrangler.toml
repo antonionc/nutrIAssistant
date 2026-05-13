@@ -6,7 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 # Custom domain binding (created via dashboard or `wrangler` after first deploy).
 # Once configured, requests to https://api.nutriassistant.org/* hit this Worker.
 routes = [
-  { pattern = "api.nutriassistant.org/*", custom_domain = true }
+  { pattern = "api.nutriassistant.org", custom_domain = true }
 ]
 
 # Observability via Worker Analytics is automatic; this enables structured logs.
@@ -20,18 +20,18 @@ enabled = true
 # …then paste the returned IDs below. Use --preview to also get preview_ids.
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
-id = "REPLACE_WITH_RATE_LIMIT_KV_ID"
-preview_id = "REPLACE_WITH_RATE_LIMIT_KV_PREVIEW_ID"
+id = "da3c1e2c7c1a4f7d8f1aab3bd70dac6f"
+preview_id = "3e6576e4f9cb4fdba7e38c8157cc086a"
 
 [[kv_namespaces]]
 binding = "TOKEN_CACHE_KV"
-id = "REPLACE_WITH_TOKEN_CACHE_KV_ID"
-preview_id = "REPLACE_WITH_TOKEN_CACHE_KV_PREVIEW_ID"
+id = "0073037b74a94f00a2e801949c1e0cb5"
+preview_id = "f09d71d3a6a748199d955c27a7fd89df"
 
 [[kv_namespaces]]
 binding = "QUOTA_KV"
-id = "REPLACE_WITH_QUOTA_KV_ID"
-preview_id = "REPLACE_WITH_QUOTA_KV_PREVIEW_ID"
+id = "ac242a103e204b69a8b38d36d3de1a93"
+preview_id = "07c0942456684965a72a707f3dbd6ebf"
 
 # Vars that are safe to commit (not secret). Secrets go via `wrangler secret put`.
 [vars]
@@ -43,7 +43,7 @@ ENVIRONMENT = "production"
 [env.staging]
 name = "nutriassistant-bff-staging"
 routes = [
-  { pattern = "api-staging.nutriassistant.org/*", custom_domain = true }
+  { pattern = "api-staging.nutriassistant.org", custom_domain = true }
 ]
 
 [env.staging.vars]

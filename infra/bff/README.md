@@ -143,6 +143,49 @@ The Worker is available at `http://localhost:8787`. KV bindings use the `preview
 - **Rollback:** Dashboard → Deployments tab → "Promote" a previous version
 - **Quota check:** `curl https://api.nutriassistant.org/v1/spoonacular/quota`
 
+## Provider-specific gotchas
+
+### OpenFoodFacts: use the `.net` alias, not `.org`
+
+`world.openfoodfacts.org` is fronted by Cloudflare. Workers calling another
+Cloudflare-fronted origin hits persistent **HTTP 525 (SSL handshake failed)**
+errors on the zone-to-zone path. The `.net` alias resolves to the same
+backend without the CF front. The `off.ts` route uses `.net` for this
+reason.
+
+### FatSecret: requires Cloudflare egress IPs in the allowlist
+
+FatSecret's API enforces an IP allowlist (configured per developer
+application). Calls from non-allowlisted IPs return:
+
+```json
+{ "error": { "code": 21, "message": "Invalid IP address detected: 'X.Y.Z.W'" } }
+```
+
+Workers run on Cloudflare's edge, so the egress IP is one of CF's published
+ranges. Two options:
+
+1. **Permissive (prototype):** in the FatSecret developer console
+   (`platform.fatsecret.com/my-account/api-key-management`), set the
+   allowlist to `0.0.0.0/0`. Quick, but anyone with the key can call the
+   API. Acceptable while keys are wrapped by this BFF.
+2. **Tighter:** paste Cloudflare's IPv4 ranges from
+   `https://www.cloudflare.com/ips/` into the FatSecret allowlist. 15
+   `/12`–`/22` CIDRs cover all egress paths. Re-check yearly; CF can add
+   ranges. Best balance for production.
+3. **Strict (paid):** enable Cloudflare *Dedicated Egress IPs* ($5/mo) and
+   allowlist only those two static IPs. Most defensible posture.
+
+Until one of these is configured, `/v1/fatsecret/*` will return HTTP 502
+with `fatsecret_upstream_403`.
+
+### Spoonacular: global daily quota
+
+Default is 10,000 calls/day across **all clients combined** (free plan is
+150/day). The BFF tracks usage in `QUOTA_KV` and refuses upstream calls
+once the cap is hit. Override via `SPOONACULAR_DAILY_LIMIT` in
+`wrangler.toml`.
+
 ## Architecture notes
 
 - **Rate limit** is per-IP, fixed-window 1-minute, KV-backed. Best-effort under bursty load (KV is eventually consistent). For stricter guarantees, switch to the platform `RateLimit` binding (Workers Paid, $5/mo) — same interface, just swap the middleware.
