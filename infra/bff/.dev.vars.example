@@ -1,0 +1,9 @@
+# Copy to `.dev.vars` for `wrangler dev`. Never commit `.dev.vars`.
+# Production secrets are NOT loaded from this file — set them via:
+#   wrangler secret put FATSECRET_CLIENT_ID
+#   wrangler secret put FATSECRET_CLIENT_SECRET
+#   wrangler secret put SPOONACULAR_API_KEY
+
+FATSECRET_CLIENT_ID=your_fatsecret_client_id
+FATSECRET_CLIENT_SECRET=your_fatsecret_client_secret
+SPOONACULAR_API_KEY=your_spoonacular_api_key

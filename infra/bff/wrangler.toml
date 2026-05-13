@@ -1,0 +1,52 @@
+name = "nutriassistant-bff"
+main = "src/index.ts"
+compatibility_date = "2025-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Custom domain binding (created via dashboard or `wrangler` after first deploy).
+# Once configured, requests to https://api.nutriassistant.org/* hit this Worker.
+routes = [
+  { pattern = "api.nutriassistant.org/*", custom_domain = true }
+]
+
+# Observability via Worker Analytics is automatic; this enables structured logs.
+[observability]
+enabled = true
+
+# KV namespaces. IDs are placeholders — run:
+#   wrangler kv namespace create RATE_LIMIT_KV
+#   wrangler kv namespace create TOKEN_CACHE_KV
+#   wrangler kv namespace create QUOTA_KV
+# …then paste the returned IDs below. Use --preview to also get preview_ids.
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "REPLACE_WITH_RATE_LIMIT_KV_ID"
+preview_id = "REPLACE_WITH_RATE_LIMIT_KV_PREVIEW_ID"
+
+[[kv_namespaces]]
+binding = "TOKEN_CACHE_KV"
+id = "REPLACE_WITH_TOKEN_CACHE_KV_ID"
+preview_id = "REPLACE_WITH_TOKEN_CACHE_KV_PREVIEW_ID"
+
+[[kv_namespaces]]
+binding = "QUOTA_KV"
+id = "REPLACE_WITH_QUOTA_KV_ID"
+preview_id = "REPLACE_WITH_QUOTA_KV_PREVIEW_ID"
+
+# Vars that are safe to commit (not secret). Secrets go via `wrangler secret put`.
+[vars]
+SPOONACULAR_DAILY_LIMIT = "10000"
+RATE_LIMIT_PER_MINUTE = "60"
+ENVIRONMENT = "production"
+
+# Per-environment overrides (run with `wrangler deploy --env staging`).
+[env.staging]
+name = "nutriassistant-bff-staging"
+routes = [
+  { pattern = "api-staging.nutriassistant.org/*", custom_domain = true }
+]
+
+[env.staging.vars]
+SPOONACULAR_DAILY_LIMIT = "1000"
+RATE_LIMIT_PER_MINUTE = "120"
+ENVIRONMENT = "staging"
