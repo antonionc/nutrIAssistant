@@ -8,17 +8,17 @@
 |---|---|---|---|---|---|---|---|
 | `name`, `role` | Basic PII | Art. 6.1.b (contract performance) | Member identification | Until deleted | None (local) | No | No surnames required |
 | `dateOfBirth` | PII | 6.1.b | Age computation for personalization + AI gate | Same | Local | No | — |
-| `weight`, `height` | **Health — Art. 9** | **9.2.a** (explicit consent) ⚠️ no evidence of capture | Caloric calculation, recommendations | Same | Local | No | Single measurement (no history) |
-| `bloodPressure`, `hrv`, `spO2`, `restingHeartRate` | **Health — Art. 9** | 9.2.a ⚠️ | Complementary profile info | Same | Local | No | Optional (not required) |
-| `allergies` | **Health — Art. 9** | 9.2.a ⚠️ | Meal compatibility, food safety | Same | Local | No | EU-14 closed catalog |
-| `conditions` | **Health — Art. 9** | 9.2.a ⚠️ | Personalized AI directives | Same | Local | No | Closed catalog of 8 conditions |
-| `dietPreference` | PII (potentially Art. 9 if it reflects religious belief — *vegan, kosher*) | 9.2.a ⚠️ | Personalization | Same | Local | No | Single option |
-| `aboutMeNotes` | PII / possibly Art. 9 | 9.2.a ⚠️ | AI personalization | Same (encrypted) | Local | No | Free text — overshare risk |
+| `weight`, `height` | **Health — Art. 9** | **9.2.a** (explicit consent) ✅ captured via consent toggles | Caloric calculation, recommendations | Same | Local | No | Single measurement (no history) |
+| ~~`bloodPressure`, `hrv`, `spO2`, `restingHeartRate`~~ | n/a | n/a | **Removed** (data minimization, Art. 5.1.c) | n/a | n/a | n/a | Fields deleted from `FamilyMember` in Sprint 5.6. No consumer engine used them. |
+| `allergies` | **Health — Art. 9** | 9.2.a ✅ (consent toggle `health`) | Meal compatibility, food safety | Same | Local | No | EU-14 closed catalog |
+| `conditions` | **Health — Art. 9** | 9.2.a ✅ (consent toggle `health`) | Personalized AI directives | Same | Local | No | Closed catalog of 8 conditions |
+| `dietPreference` | PII (potentially Art. 9 if it reflects religious belief — *vegan, kosher*) | 9.2.a ✅ (consent toggle `health`) | Personalization | Same | Local | No | Single option |
+| `aboutMeNotes` | PII / possibly Art. 9 | 9.2.a ✅ (consent toggle `health`) | AI personalization | Same (encrypted) | Local | No | Free text — overshare risk |
 | `avatarUrl` (image) | PII (potentially biometric if a photo) | 6.1.b | UX | Same | Local | No | Optional; defaults to an illustration |
-| `documents[]` + PDFs | **Health — Art. 9** | 9.2.a ⚠️ + 9.2.h (healthcare assistance) where applicable | Medical RAG | Same | Local | **No** (on-device processing) | 8,000-char cap when summarizing |
+| `documents[]` + PDFs | **Health — Art. 9** | 9.2.a ✅ (consent toggle `health`) + 9.2.h (healthcare assistance) where applicable | Medical RAG | Same | Local | **No** (on-device processing) | 8,000-char cap when summarizing |
 | `aiSummary` | Derived Art. 9 | Same | Prompt injection | Same (partial encryption) | Local | No | 500-char cap |
-| `member_memories` | **Art. 9** (health and routine memories) | 9.2.a ⚠️ | Personalization | Same (encrypted) | Local | No | 120-char cap, ≤3 facts per turn |
-| `doc_chunks.embedding` | Derived Art. 9 (invertible) | 9.2.a ⚠️ | RAG | Same (encrypted) | Local | No | — |
+| `member_memories` | **Art. 9** (health and routine memories) | 9.2.a ✅ (consent toggle `health`) | Personalization | Same (encrypted) | Local | No | 120-char cap, ≤3 facts per turn |
+| `doc_chunks.embedding` | Derived Art. 9 (invertible) | 9.2.a ✅ (consent toggle `health`) | RAG | Same (encrypted) | Local | No | — |
 | `inventory_items.*` | Non-PII (pantry) | 6.1.b | Pantry management | Configurable | Local | No | — |
 | Health data (steps, kcal) | **Health — Art. 9** | 9.2.a + 9.2.h | Daily-energy estimation | Refreshes on request | Local | Apple/Google (OS-bounded) | Today only (`startOfTodayIso`, `appleHealth.ts:38-42`) |
 | `meal_plans` with `school_menu_context` | Child PII | 9.2.a + parental consent | Family personalization | 90 d proposed | Local | No | Description + ingredients only |
@@ -53,13 +53,13 @@
 | Principle | How it applies today | Evidence | Gap |
 |---|---|---|---|
 | **Privacy by design** | ✅ Excellent — on-device architecture | All of [§4](./04-ai-architecture.md) | — |
-| **Privacy by default** | 🟡 — non-existent toggles cannot be "off by default"; granular consent is missing | `app/settings.tsx:509-514` (disabled switch) | Implement onboarding with toggles off by default |
-| **Minimization** | 🟡 Partial — `bloodPressure`, `hrv`, `spO2` are requested but unused (no engine consumes them) | `src/types/profiles.ts:57-60` | Remove unused fields or mark them optional and justify them |
-| **Purpose limitation** | 🟡 Implicit — the app uses data only for nutrition. No written policy | — | Document purposes in the privacy policy and enforce in code |
-| **Storage limitation** | 🔴 GAP — no retention job | `src/db/migrations/` (no scheduled DELETE) | Implement a retention sweeper |
-| **Accuracy** | 🟡 — UX allows editing everything (`app/settings.tsx:738-848`) | — | Range validation on weight/height/age |
-| **Integrity and confidentiality** | 🟡 — critical fields encrypted, not all | [§3.1](./03-security-encryption.md#31-data-encryption-policy) | Encrypt all PII |
-| **Proactive responsibility (accountability)** | 🔴 GAP — no ROPA, no logs, no DPIA | — | [§5.5](#55-gdpr-roadmap-8-steps--current-status) 8-step roadmap |
+| **Privacy by default** | ✅ Onboarding consent step exposes 3 toggles (`health`, `ai`, `documents`); each must be granted explicitly to enable the corresponding processing. Toggles are also revocable in Settings (Art. 7.3). | `src/modules/consent/ConsentContext.tsx`, `app/onboarding.tsx` (consent step) | — |
+| **Minimization** | ✅ `bloodPressure`, `hrv`, `spO2`, `restingHeartRate` removed in Sprint 5.6 — no engine consumed them, so they were indefensible under Art. 5.1.c. | `src/types/profiles.ts` (no longer present) | — |
+| **Purpose limitation** | 🟡 Documented purposes in `assets/legal/privacy-policy-v1.{en,es}.md`. Enforcement in code is implicit (each module uses only the data it needs); a formal "purpose tag" per data flow is not modelled. | `assets/legal/privacy-policy-v1.es.md` | A future audit-log enrichment could tag each event with its purpose; not strictly required. |
+| **Storage limitation** | ✅ Daily boot-time sweeper enforces: scan_history 180d, meal_plans 90d, conversation_summaries 30d, audit_log 365d. Idempotent. | `src/services/dataRetention.ts`; audit event `retention_sweep_executed` | — |
+| **Accuracy** | 🟡 — UX allows editing everything (`app/settings.tsx`) | — | Range validation on weight/height/age |
+| **Integrity and confidentiality** | ✅ Full Art. 9 field encryption (`weight`, `height`, `dateOfBirth`, `allergies`, `conditions`, `aboutMeNotes` + member memories + doc chunks + audit log payload + `.pdf.enc` files). AES-256-GCM with master key in Keychain/Keystore. Manual rotation flow available in Settings. | [§3.1](./03-security-encryption.md#31-data-encryption-policy), `src/services/keyRotation.ts` | — |
+| **Proactive responsibility (accountability)** | 🟡 ROPA published (`docs/legal/ROPA.md`); encrypted audit log persists every privacy-relevant operation (Art. 30/33); incident-response runbook at `docs/runbooks/INCIDENT_RESPONSE.md`. **External DPIA still pending** — deferred to consultancy spend. | `docs/legal/ROPA.md`, `src/services/auditLog.ts`, `docs/runbooks/INCIDENT_RESPONSE.md` | [§5.5](#55-gdpr-roadmap-8-steps--current-status) 8-step roadmap |
 
 ## 5.4. Data-subject rights implemented in the app
 
@@ -67,10 +67,10 @@
 |---|---|---|---|---|
 | Access (data download) | ✅ "Export family" produces Markdown + JSON | `app/settings.tsx:473-482` | `exportFamilyToMarkdown` `src/services/familyExport.ts:36-69` | <1 min (local) |
 | Rectification | ✅ Full profile editor | `app/settings.tsx:738-848` | `updateProfile` `src/modules/profiles/ProfilesContext.tsx:147-159` | Immediate |
-| Erasure (right to be forgotten) | 🔴 **Stub**: the button exists but the handler is `onPress: () => {}` (TODO commented) | `app/settings.tsx:517-524` | `// TODO: implement full data deletion` `app/settings.tsx:516` | n/a |
+| Erasure (right to be forgotten) | ✅ **Implemented**: atomic wipe of 12 SQLite tables + 16 AsyncStorage keys + FileSystem subtrees + Keychain master key. Two-step confirmation in UI. Audit log entry. | `src/services/dataErasure.ts`, `app/settings.tsx` (Data & privacy section) | 3 tests in `src/__tests__/services/dataErasure.test.ts` | n/a |
 | Restriction | 🟡 Partial — health provider can be deactivated, recipe sources can be disconnected; no "global pause" | `app/settings.tsx:73-77, 622-630` | `deactivateProvider`, `setSourceEnabled` | Immediate |
 | Portability | ✅ JSON inside the Markdown export is machine-readable | `src/services/familyExport.ts:43,60-62` | Same | <1 min |
-| Objection | 🔴 GAP — no dedicated UI | — | — | — |
+| Objection | ✅ Each of the three consent toggles (`health`/`ai`/`documents`) can be revoked independently from Settings → Data & privacy. Revocation gates the corresponding feature at runtime (e.g. the AI floating button disappears when `consent.ai === false`). Audit-logged as `consent_revoked`. | `src/modules/consent/ConsentContext.tsx`, `app/settings.tsx` | — | — |
 | **Right not to be subject to automated decisions (Art. 22)** | 🟡 The AI makes suggestions, not legal/significant decisions; explicit disclaimer and easy chat opt-out missing | [§4.6](./04-ai-architecture.md#46-ai-governance) | — | — |
 
 **Critical action**: implement full erasure as follows:
@@ -128,7 +128,7 @@ async function fullWipe() {
 |---|---|---|
 | Existence of minor profiles | ✅ The `isSchoolAge` field distinguishes them. Automatic backfill: `getAge(dateOfBirth) < 18 ⇒ isSchoolAge=true` | `src/modules/profiles/ProfilesContext.tsx:84-86` |
 | AI gate by age | ✅ AI chat only accessible if `age ≥ 18` | `src/modules/ai-engine/aiAccess.ts:13-22` |
-| Verifiable parental consent | 🔴 GAP — minimum consent age in Spain is 14; in the US (COPPA) it is 13. The app does not verify that the adult filling in the child's profile is the parent | — |
+| Verifiable parental consent | ✅ **Required checkbox** in onboarding when DOB implies age <14 (Spain RGPD-K). Blocks advancing past the member-health step. Persisted via the audit event `parental_consent_granted` with `(memberIndex, age, policyVersion)`. | `app/onboarding.tsx` member-health step + `src/services/auditLog.ts` |
 | "Child mode" tab | 🔴 GAP | — |
 | Processing only under parental consent | 🟡 Implicit (only super-user can add profiles, `app/settings.tsx:318-326`); explicit declaration missing | — |
 
@@ -158,14 +158,14 @@ As [§5.1](#51-personal-data-inventory) shows, NutrIAssistant is **fundamentally
 | **Anonymization** | Applies when publishing aggregate datasets (B2B, [§8.8](./08-production-readiness.md#88-business-model-and-data-monetization)). Example: "allergen distribution by postal code in Spain". k-anonymity with k≥50 + differential privacy for numeric queries |
 | **Pseudonymization** | Applies once a BFF exists: client sends `device_id_hashed` (HMAC-SHA256 with salt in KMS), not `member_id` or `email`. The BFF cannot reverse it |
 | **Differential privacy** | Recommended for aggregate telemetry (Apple-style noise) |
-| **Current state** | 🔴 GAP — none of this is applied yet. The app is 100% identifiable to anyone with access to the device, but the device is the data subject's property → it is "first party" and risk is concentrated |
+| **Current state** | 🟡 Partial — `pseudonymise()` hashes member/doc IDs in audit-log payloads (Sprint backlog item E.1). Internal IDs in the rest of the codebase remain stable random tokens; this is acceptable for an on-device-only app but should be revisited the moment data leaves the device. |
 
 **Prioritized recommendations (section 5):**
 
-1. **Publish a privacy policy** on the web + link from the app (Settings + onboarding).
-2. **Implement full erasure** (empty handler at `app/settings.tsx:520`).
-3. **Implement a granular consent screen** with the 5 toggles proposed in [§5.2](#52-legal-basis-and-consent).
-4. **Commission an external DPIA** (Art. 35) before launch.
-5. **Document the ROPA** (Records of Processing Activities).
-6. **Encrypt all PII fields** (not only the current critical ones).
-7. **Designate a DPO** (internal or external) and publish their email.
+1. ⚠️ **Privacy policy** — engineering done: `app/legal/privacy.tsx` renders `assets/legal/privacy-policy-v1.{en,es}.md`. **Pending**: legal-counsel review of the wording + public URL at `nutriassistant.ai/privacy`.
+2. ✅ **Full erasure** — implemented in `src/services/dataErasure.ts` (Sprint 1.5), atomic across all storage backends.
+3. ✅ **Granular consent screen** — 3-toggle model (`health`, `ai`, `documents`) implemented in onboarding + Settings (Sprint 3.1). The 5-toggle draft was simplified after design review to avoid consent fatigue.
+4. ❌ **External DPIA** — still pending. Requires €5-15k consultancy (Garrigues, Ecix, KPMG).
+5. ✅ **ROPA** — published at `docs/legal/ROPA.md` with 18 processing activities (Sprint 4.7).
+6. ✅ **Encryption of Art. 9 fields** — `weight`, `height`, `dateOfBirth`, `allergies` encrypted in Sprint 2.2; PDFs at rest in Sprint 2.1.
+7. ❌ **DPO designation** — pending. Fractional DPO contract (~€500-1500/mo). The placeholder `dpo@nutriassistant.ai` is referenced in the privacy-policy template.

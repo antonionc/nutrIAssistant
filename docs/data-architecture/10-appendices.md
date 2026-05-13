@@ -182,3 +182,43 @@
 **Positive consequences**: consistent latency; no opaque "rendered chat too long" failures.
 **Negative consequences**: in large families with many memories and PDFs, part of the context is silently truncated.
 **Evidence**: `src/services/prompts/system.ts:52,259-263`.
+
+### ADR-009: BFF on Cloudflare Workers — secrets out of the bundle (replaces ADR-007)
+
+**Status**: Adopted.
+**Date**: 2026-05-13 (commits `b87bf26` → `1647aac` → `c27c0d7` → `7b4630d`).
+**Context**: ADR-007 retired. The prototype's `EXPO_PUBLIC_*` API keys were extractable from the binary and any older build still leaks them. We need a server-side credential vault and a single retry/telemetry surface.
+**Decision**: deploy a Cloudflare Worker at `api.nutriassistant.org` (`infra/bff/`) that proxies OpenFoodFacts (`.net` alias to avoid the CF↔CF 525 pathology), Edamam Recipe Search v2, and Spoonacular. The Worker holds the upstream credentials in Cloudflare's encrypted secret store; the mobile bundle ships only `EXPO_PUBLIC_BFF_BASE_URL` (public). It also mirrors the on-device LLM artifacts from R2 for an EU-edge POP. The shared `bffGet()` client in `src/services/bff/client.ts` centralises retry / quota-exhausted handling for every provider service.
+**Positive consequences**: zero third-party secrets in the bundle, ROPA simplified, edge cache lowers upstream costs, single rotation runbook.
+**Negative consequences**: a new piece of infra to operate; first-launch is gated on the BFF being reachable.
+**Evidence**: `infra/bff/`, `src/services/bff/client.ts`, `infra/bff/README.md` (architecture + rotation runbook + R2 mirror runbook).
+
+### ADR-010: Encrypted local audit log for accountability (Art. 5.2 / Art. 30 / Art. 33)
+
+**Status**: Adopted.
+**Date**: 2026-05-13 (commit `aaa3179`, sprint 1.4 of the GDPR pass).
+**Context**: the app processes Art. 9 health data with no backend, no APM, and no breach-detection trail. Notifying the AEPD within 72h (Art. 33) is impossible without a queryable record of who did what when. Buying Sentry just for the audit-trail need is overkill, and shipping plaintext to a third-party processor for an Art. 9 app is the wrong direction.
+**Decision**: ship a local SQLite `audit_log` table (migration 014) with AES-GCM-encrypted payloads and cleartext metadata (`event_type`, `ts`, `actor`, `app_version`). 11 event types cover the privacy-relevant operations (consent toggles, erasure, export, PDF uploads, key rotations, retention sweeps, decrypt failures, parental consents). Identifiers (`memberId`, `docId`) are pseudonymised via `pseudonymise()` before being placed in the encrypted payload, so an attacker with the master key still cannot rebuild the dictionary. A user-facing "My activity" surface (`app/audit-log.tsx`) renders the log in plain Spanish/English for Art. 12 transparency.
+**Positive consequences**: Art. 33 enumeration possible locally; user can inspect the log directly (Art. 15); compatible with the local-first architecture.
+**Negative consequences**: the audit log lives on the device the breach would compromise (mitigation: cleartext metadata allows enumeration without the master key); the user can wipe the log via Art. 17 erasure, intentionally — Art. 17 prevails over Art. 30 for the data subject's own data.
+**Evidence**: `src/db/migrations/014_audit_log.ts`, `src/services/auditLog.ts`, `app/audit-log.tsx`, `src/__tests__/services/auditLog.test.ts`.
+
+### ADR-011: Granular consent toggles + parental gate (Art. 9.2.a / Art. 7.3 / Art. 8)
+
+**Status**: Adopted.
+**Date**: 2026-05-13 (commit `aaa3179`, sprint 3 of the GDPR pass).
+**Context**: an age-only gate (`≥18` for the chat) does not satisfy Art. 9.2.a, which requires *explicit* consent per processing purpose. A single "I accept everything" checkbox does not satisfy Art. 7.3, which requires consent to be withdrawable as easily as it was given.
+**Decision**: three toggles (`health`, `ai`, `documents`) captured in the onboarding consent step and revocable from Settings (Sprint 3.1 + post-self-review fix #5). Each toggle gates the corresponding processing — revoking `ai` removes the floating button at runtime; revoking `health` disables personalised recipes. Persisted as `nutri_consent_v1 = { health, ai, documents, grantedAt, policyVersion }`. A material change to the privacy policy bumps `POLICY_VERSION` and forces re-acceptance on next launch. For minors under 14 (Spain RGPD-K), a required parental-consent checkbox blocks advancement past the member-health step and writes a `parental_consent_granted` audit event with `(memberIndex, age, policyVersion)`. The AI assistant stays disabled for under-18s regardless of parental consent.
+**Positive consequences**: Art. 9.2.a satisfied; Art. 7.3 revocation path exists in Settings; Art. 8 verifiable parental consent on the record.
+**Negative consequences**: consent fatigue at onboarding (mitigated to 3 toggles, not 5); the parental "checkbox" is the minimum verifiable mechanism — a true KYC-style verification is out of scope.
+**Evidence**: `src/modules/consent/ConsentContext.tsx`, `app/onboarding.tsx` (consent step + parental gate), `app/settings.tsx` (revocation UI), `src/components/layout/AIFloatingButton.tsx` (runtime gating).
+
+### ADR-012: Manual master-key rotation with stream batching
+
+**Status**: Adopted.
+**Date**: 2026-05-13 (commit `aaa3179`, sprint 5.2).
+**Context**: the master key in the Keychain has been static since first launch. Cryptographic hygiene calls for rotation, but a naïve "read everything → re-encrypt → write everything" approach can OOM on devices with many PDFs (a user with 100 PDFs × 5 MB is 500 MB of plaintext in heap). The rotation also must be atomic — partial rotation followed by a key swap would leave some blobs unreadable.
+**Decision**: a user-triggered rotation in Settings → Security that streams the re-encryption: SQLite columns in `DB_BATCH_SIZE=100` batches, PDFs one-at-a-time, peak heap ~5 MB regardless of corpus size. A declarative `ENCRYPTED_TARGETS` registry (`src/services/encryptedTargets.ts`) enumerates which columns need rotation, so adding a new encrypted field is a one-row change. The atomic property is preserved by accumulating decrypt+re-encrypt results into a write queue *before* the SecureStore key swap — any decrypt failure aborts before the swap, leaving the persisted state intact.
+**Positive consequences**: rotation works for users at any corpus size; key swap is atomic; future encrypted fields are picked up automatically.
+**Negative consequences**: rotation is manual (no scheduled / time-based variant yet); the `enc:v1:` sentinel is overloaded — it tags the *schema*, not the key generation, so a v2 key with the same prefix is hard to distinguish for archaeological purposes.
+**Evidence**: `src/services/keyRotation.ts`, `src/services/encryptedTargets.ts`, `src/services/encryption.ts` (`encryptWithKey`/`decryptWithKey`/`swapMasterKey`).

@@ -87,27 +87,32 @@
 | Field-level encryption at rest | ✅ | AES-256-GCM `@noble/ciphers`, 96-bit nonce, 128-bit tag | 🟡 (does not cover all columns) |
 | Encryption in transit | ✅ | OS-default TLS 1.2/1.3; no pinning | 🟡 |
 | User authentication | 🔴 | ⚠️ GAP — no login, no MFA, no federation; local "profile selection" | 🔴 |
-| Telemetry / APM | 🔴 | ⚠️ GAP — `console.*` only | 🔴 (cannot detect a breach without observability) |
-| Data governance | 🔴 | ⚠️ GAP — no catalog, glossary, lineage, contracts, quality tests | 🔴 |
-| GDPR rights in UI | 🟡 | Markdown + JSON export ✅; full erasure ⚠️ stub (not implemented, `app/settings.tsx:516,520`) | 🟡 |
+| Telemetry / APM | 🟡 | Central logger with PII scrubbing (`src/utils/logger.ts`) wraps every call site; encrypted local audit log persisted. **DEFERRED**: Sentry/Aptabase hosting. | 🟡 |
+| Data governance | 🟡 | Catalogs consolidated in `src/domain/masterData.ts` with coherence test; ROPA in `docs/legal/ROPA.md`; incident-response runbook in `docs/runbooks/`. Still missing: data-quality observability dashboard. | 🟡 |
+| GDPR rights in UI | ✅ | Art. 15 export → zip with decrypted JSONs + PDFs (`src/services/userDataExport.ts`); Art. 17 erasure → atomic wipe (`src/services/dataErasure.ts`); Art. 7.3 consent revocation → Settings toggles | 🟢 |
+| Granular consent (Art. 9.2.a) | ✅ | 3 toggles (`health`, `ai`, `documents`) in `src/modules/consent/ConsentContext.tsx`; captured at onboarding, revocable in Settings | 🟢 |
+| Parental gate (<14) | ✅ | Required checkbox in `app/onboarding.tsx` member-health step; `parental_consent_granted` audit event with `policyVersion` | 🟢 |
+| Audit log (Art. 30/33) | ✅ | Migration 014 + `src/services/auditLog.ts`; encrypted payloads, plaintext event metadata for 72h enumeration; "My activity" surface in `app/audit-log.tsx` | 🟢 |
+| Medical disclaimer (Art. 22) | ✅ | Non-dismissible banner in `src/components/layout/AIAssistant.tsx`, EN+ES | 🟢 |
 | Medical RAG | ✅ | Encrypted clinical-PDF chunks, cosine retrieval, top-K 2, threshold 0.4 | 🟢 |
 | Automated decisions (Art. 22) | 🟡 | Suggestions, not decisions; missing explicit notice + granular opt-out in UI | 🟡 |
 | Data of minors | 🟡 | Age gate on AI chat (≥18, `src/modules/ai-engine/aiAccess.ts:13-22`); ⚠️ no parental verification for child profiles | 🟡 |
 
-### Critical findings (top 5)
+### Critical findings — status after the 5-sprint engineering pass (commit `aaa3179`)
 
-1. **✅ Secrets in public bundle (RESOLVED).** Historically `EXPO_PUBLIC_FATSECRET_*` and `EXPO_PUBLIC_SPOONACULAR_API_KEY` were compiled into the binary. As of commit `1647aac` all three upstreams (OFF, Edamam, Spoonacular) are reached only through the BFF at `api.nutriassistant.org`. The bundle now holds only `EXPO_PUBLIC_BFF_BASE_URL`, which is a public URL. **Rotating the Spoonacular API key at the provider** is still recommended since older IPA copies in the wild carry the old key.
-2. **🔴 Total lack of observability.** No APM (Sentry/Datadog), no product analytics, no audit logs. Cannot satisfy GDPR Art. 33–34 (breach notification) without traceability.
-3. **🔴 Full data deletion not implemented.** The "Delete all data" button in `app/settings.tsx:517-524` shows an Alert, but the `onPress: () => {}` handler is empty. There is an explicit `// TODO: implement full data deletion` (`app/settings.tsx:516`). Blocks the right to erasure under Art. 17.
-4. **🟡 AI usage and limitations notice missing.** No in-app "not medical advice" disclaimer. The model prompt offers guidance based on conditions (hypertension, celiac, diabetes 1/2, etc. — `src/services/prompts/system.ts:17-26`) without explicit Art. 9 consent on legal basis.
-5. **🟡 No DPIA despite Art. 9 health-data processing.** The `conditions` field is encrypted, but the systematic large-scale processing of health data requires a DPIA before production.
+1. **✅ Secrets in public bundle (RESOLVED).** Historically `EXPO_PUBLIC_FATSECRET_*` and `EXPO_PUBLIC_SPOONACULAR_API_KEY` were compiled into the binary. As of commit `1647aac` all three upstreams (OFF, Edamam, Spoonacular) are reached only through the BFF at `api.nutriassistant.org`. The bundle holds only `EXPO_PUBLIC_BFF_BASE_URL`, a public URL.
+2. **✅ Full data deletion (RESOLVED).** `src/services/dataErasure.ts` performs an atomic wipe of 12 SQLite tables, 16 AsyncStorage keys, the FileSystem subtrees (`profile-documents/`, `avatars/`, model cache), and the Keychain master key. Settings → "Delete all my data" runs it after a two-step confirmation. Audit log records `erasure_started` / `erasure_completed`. Art. 17 implemented.
+3. **✅ Medical disclaimer (RESOLVED).** Persistent non-dismissible banner under the chat header in `src/components/layout/AIAssistant.tsx`, EN+ES, fires on every reopen. Art. 22 transparency notice in place.
+4. **✅ Granular consent Art. 9.2.a (RESOLVED).** `src/modules/consent/ConsentContext.tsx` exposes three toggles (`health`, `ai`, `documents`), captured in the onboarding flow and revocable from Settings (Art. 7.3). Every change writes a `consent_granted` / `consent_revoked` audit event with `policyVersion`.
+5. **🟡 Observability — partial.** Logger central with PII scrubbing now wraps every `console.*` call (55 migrated across 25 files). Encrypted local audit log persisted via migration 014. **DEFERRED**: Sentry self-hosted EU + Aptabase telemetry (both require ~€30/mo of external spend).
+6. **❌ DPIA + DPO — deferred.** Art. 9 health-data processing still requires both. External consultancy spend (~€5-15k DPIA, €500-1500/mo DPO) — not engineering work; the technical inputs (ROPA, runbook, Model Card) are ready in `docs/legal/` and `docs/runbooks/`.
 
-### Top recommendations
+### Top recommendations — what's left
 
-1. **✅ Done — BFF migration complete** (commits `b87bf26` → `1647aac` → `c27c0d7`, May 2026). All three catalogs (OFF, Edamam, Spoonacular) ride the Cloudflare Worker at `api.nutriassistant.org`; on-device LLM artifacts are mirrored from R2 via the same Worker. The mobile bundle ships **zero** third-party credentials. Next action carried over from this item: **schedule a quarterly rotation** of `SPOONACULAR_API_KEY` / `EDAMAM_APP_KEY` per [`infra/bff/README.md#rotating-a-provider-credential`](../../infra/bff/README.md#rotating-a-provider-credential).
-2. **Implement full deletion**: wipe SQLite + AsyncStorage + FileSystem `documentDirectory/profile-documents/` + the Keychain key `nutri_master_key_v1` + AsyncStorage model flag + `app_initialized`. Same code path for the "right to be forgotten".
-3. **Add the Sentry SDK** (or equivalent) with a `beforeSend` that strips PII and `enc:v1:` fields before sending. Critical for Art. 33 (breach notification within 72h).
-4. **Publish a privacy policy** and an in-app medical disclaimer, with explicit Art. 9.2.a consent before enabling the AI chat. Today the gate is age-based (`≥18`) and not by informed consent.
-5. **Commission an external DPIA** (audit) and publish Privacy Nutrition Labels + Data Safety Section consistent with the code.
+1. **Contract a DPO + commission the DPIA.** Engineering deliverables ready in `docs/legal/ROPA.md`, `docs/MODEL_CARD.md`, `docs/runbooks/INCIDENT_RESPONSE.md`. External legal/consulting spend, no further code work.
+2. **Get the privacy policy reviewed and published** to a public URL (App Store requirement). The placeholder text in `assets/legal/privacy-policy-v1.{en,es}.md` is shipped in-app via `app/legal/privacy.tsx`.
+3. **Wire Sentry self-hosted EU + Aptabase** once the budget is approved. The logger hook in `src/utils/logger.ts` is one-line drop-in.
+4. **Sign SCCs with Edamam and Spoonacular** (Schrems II). Currently a tolerated risk for the España-only launch.
+5. **Fill the App Store Privacy Nutrition Labels + Play Data Safety forms** at submission time using the field-by-field guide in `docs/store-readiness/privacy-labels.md`.
 
 **Prioritized recommendations:** see [§9](./09-improvement-plan.md) — full table of 28 improvements ordered by severity / effort / impact.

@@ -125,7 +125,7 @@ Unified table by source:
 
 | Type | In use? | Where | Justification |
 |---|---|---|---|
-| Relational (SQL) | ✅ | Local SQLite (`nutriassistant.db`), 12 migrations | Domain data with relations (recipes ↔ plans, scans ↔ inventory) and range queries (`meal_plans WHERE date BETWEEN`). See `src/db/migrations/001_initial.ts`, `src/modules/planner/plannerDB.ts:67-72` |
+| Relational (SQL) | ✅ | Local SQLite (`nutriassistant.db`), 15 migrations (001-015) plus a `member_index` mirror added in 015 for cascade FKs | Domain data with relations (recipes ↔ plans, scans ↔ inventory) and range queries (`meal_plans WHERE date BETWEEN`). See `src/db/migrations/001_initial.ts`, `src/db/migrations/014_audit_log.ts` (encrypted audit log), `src/db/migrations/015_member_index_with_fks.ts` (real FK cascades). |
 | NoSQL key-value | ✅ | AsyncStorage + Keychain | Flags, tokens, non-relational config, master key. See `src/modules/profiles/profileStorage.ts:5-8` |
 | NoSQL document | 🟡 | Profiles as **serialized JSON** in AsyncStorage under `family_profiles` | It is JSON, but monolithic (not a doc store). Cost: full invalidation on edit; benefit: simple field-level encryption |
 | NoSQL columnar | 🔴 | Not applicable | — |
@@ -307,7 +307,7 @@ erDiagram
 |---|---|---|---|
 | Versioned schema | `migrations(name UNIQUE, run_at)` table | `src/db/database.ts:91-97` | — |
 | Forward-only | Yes, no down-migrations | `src/db/database.ts:25-27` (comment) | Acceptable on mobile; not useful for cloud TO-BE environments |
-| Idempotency | Mandatory (`CREATE TABLE IF NOT EXISTS`, `tolerateDuplicate`, fn migrations with checks) | `src/db/database.ts:29-46,118-145` | Coverage: migrations 001-012 |
+| Idempotency | Mandatory (`CREATE TABLE IF NOT EXISTS`, `tolerateDuplicate`, fn migrations with existence checks) | `src/db/database.ts:29-46,118-145` | Coverage: migrations 001-015. Migration 014 (`audit_log`) is `sql` + `CREATE TABLE IF NOT EXISTS`; migration 015 (FK rebuild) is `fn` because `PRAGMA foreign_keys` must be toggled outside a transaction. |
 | Atomicity | `sql` wrapped in `withTransactionAsync`; `fn` migrations (008) manage PRAGMA manually | `src/db/database.ts:130-137,121-125` | — |
 | Client-type migration | `migrateProfile` translates legacy fields (`age → dateOfBirth`) | `src/modules/profiles/ProfilesContext.tsx:43-50` | — |
 | Failure tolerance | Recovery from a corrupted `migrations` table | `src/db/database.ts:99-115` | "Safe today only because every migration is idempotent" — fragile invariant |
@@ -321,9 +321,9 @@ Legend: **PII** (personal data) / **Art. 9** (special categories: health, religi
 | Table / Field | Origin | Purpose | PII | Art. 9 | Current encryption | Proposed retention |
 |---|---|---|---|---|---|---|
 | `family_profiles` (AsyncStorage JSON) — `name`, `role` | Onboarding | Local family identification | Yes | No | ⚠️ Not encrypted | Until user deletes |
-| `family_profiles.dateOfBirth` | Onboarding | Compute age, AI gate | Yes | No | ⚠️ Not encrypted | Same |
-| `family_profiles.weight`, `height` | Onboarding | Calories and macros | Yes | **Yes (Art. 9 — health)** | ⚠️ Not encrypted | Same |
-| `family_profiles.allergies[]` | Onboarding | Meal compatibility | Yes | **Yes (Art. 9)** | ⚠️ Not encrypted | Same |
+| `family_profiles.dateOfBirth` | Onboarding | Compute age, AI gate, parental-consent gate (<14) | Yes | No | ✅ Encrypted (`enc:v1:`) since Sprint 2 | Same |
+| `family_profiles.weight`, `height` | Onboarding | Calories and macros | Yes | **Yes (Art. 9 — health)** | ✅ Encrypted (`enc:v1:`) since Sprint 2 | Same |
+| `family_profiles.allergies[]` | Onboarding | Meal compatibility | Yes | **Yes (Art. 9)** | ✅ Encrypted (`enc:v1:`) since Sprint 2 | Same |
 | `family_profiles.conditions[]` | Onboarding | AI directives, warnings | Yes | **Yes (Art. 9)** | ✅ AES-GCM | Same |
 | `family_profiles.aboutMeNotes` | Free-form profile | AI personalization | Yes | Possibly Art. 9 | ✅ AES-GCM | Same |
 | `family_profiles.documents[]` (metadata) | PDFs | Document catalog | Yes | Possibly | ⚠️ Not encrypted (metadata) | Until deleted |
@@ -344,7 +344,7 @@ Legend: **PII** (personal data) / **Art. 9** (special categories: health, religi
 
 **Prioritized recommendations:**
 
-1. **Encrypt every PII field in `family_profiles`** (not just `conditions` and `aboutMeNotes`). In particular `weight`, `height`, `dateOfBirth`, `bloodPressure`, `hrv`, `spO2`, `allergies`.
+1. ✅ **Done in Sprint 2**: every Art. 9 field in `family_profiles` (`weight`, `height`, `dateOfBirth`, `allergies`, `conditions`, `aboutMeNotes`) is now encrypted via the `enc:v1:` pattern with an idempotent boot migration for pre-Sprint-2 installs. The unused `bloodPressure` / `hrv` / `spO2` / `restingHeartRate` fields were removed entirely in Sprint 5.6 (data minimization, Art. 5.1.c) — re-add only when a real consumer exists.
 2. **Encrypt PDFs in FileSystem** (AES wrapper over the bytes; decrypt in memory before `extractPdfText`).
 3. **Implement automatic retention** in SQLite for `scan_history`, `meal_plans`, and `conversation_summaries` (idempotent boot job that deletes rows past the limit).
 4. **Move the schema to Zod or Valibot** for runtime client validation and auto-generated documentation (governance in [§6](./06-data-governance.md)).

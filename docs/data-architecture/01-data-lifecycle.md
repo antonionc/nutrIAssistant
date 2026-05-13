@@ -36,7 +36,7 @@ flowchart LR
 
     subgraph Cross["🟫 Cross-cutting layers"]
         SEC[Security: encryption, age gate, isolation]
-        OBS[Observability ⚠️ GAP]
+        OBS[Observability 🟡 logger + audit log local, no remote sink]
         GOV[Governance ⚠️ GAP]
     end
 
@@ -67,7 +67,7 @@ flowchart LR
 
 | Current component | Technology | Relevant files | Gaps |
 |---|---|---|---|
-| Manual onboarding | TextInput + DateOfBirthInput + Switches | `app/onboarding.tsx:289-532` | No strong client-side validation; no parental-age verification |
+| Manual onboarding | TextInput + DateOfBirthInput + Switches; granular consent step (`health`/`ai`/`documents`) before exiting; required parental-consent checkbox when DOB implies age <14. | `app/onboarding.tsx` (member-health step + consent step), `src/modules/consent/ConsentContext.tsx` | Numeric ranges (weight 1-300, height 30-260) still soft-validated; tighten with explicit error states. |
 | Barcode scanner | `expo-camera` CameraView | `app/scanner.tsx:153-159` | EAN/UPC/QR only; no OCR for non-standard labels |
 | Product photo | `expo-image-picker` | `app/scanner.tsx:17` | ⚠️ "photograph product" pipeline wires up the camera but lacks vision analysis — UI placeholder |
 | Voice | `@react-native-voice/voice` | `package.json:23` | Listed, but only local transcription; no recording |

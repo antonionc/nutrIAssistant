@@ -1,6 +1,11 @@
 # 07 — Observability & Monitoring
 
-**Current state:** 🔴 **this is the section with the largest structural gap in the project**. The app has **no** product observability system (APM, structured logs, audit logs, alerts, dashboards, metrics, traces). The only "monitoring" is **44 `console.log/warn/error` calls** scattered across 22 files (`grep -rn "console\." src/ | wc -l`), which are lost as soon as the debugger / Metro disconnects. There are **2 in-process health checks** (`getLLMStatus`, `getEmbeddingsStatus`) and **2 local notifications** (`notifyDownloadStarted`, `notifyModelReady`) — that is all. For an app processing **GDPR Art. 9 data** (weight, allergies, conditions, clinical PDFs), this observability level is **incompatible with a responsible launch**: without traces you cannot demonstrate accountability (Art. 5.2), notify a breach within 72h (Art. 33), measure whether the AI works, or evidence legitimate access to medical data.
+**Current state (post commit `aaa3179`):** 🟡 **partial — the engineering scaffolding is in place; what's missing is the remote sink.**
+- Sprint 1 introduced a central logger with PII scrubbing (`src/utils/logger.ts`) that wraps every former `console.*` call. `grep -rEn "console\." src/ app/ --include="*.ts" --include="*.tsx" | grep -v "src/utils/logger.ts\\|__tests__"` returns **zero results** — 55 calls migrated across 25 files.
+- Sprint 1 also created an encrypted local audit log (`audit_log` table, migration 014 + `src/services/auditLog.ts`) that captures every privacy-relevant event: consent toggles, erasure, export, PDF uploads, decrypt failures, key rotations, retention sweeps, parental consents. Payload is AES-GCM encrypted; `event_type`/`ts`/`actor`/`app_version` remain in cleartext so a regulator can enumerate within the 72h Art. 33 window without needing the master key.
+- A "My activity" surface in `app/audit-log.tsx` shows the user every event in plain language (Art. 12/15 transparency).
+
+**Still deferred** (engineering ready, awaiting budget): Sentry self-hosted EU (~€10/mo Hetzner) and Aptabase EU telemetry (~€19/mo). Both wire in as drop-in additions to the existing `logger.emit()` hook and audit-event taxonomy. Until then, breach detection relies on the on-device audit log enumerated locally; product analytics are blind.
 
 ## 7.1. Stack (logs, metrics, traces, alerts)
 
@@ -8,10 +13,10 @@
 
 | Pillar | State | Current implementation | Coverage | Evidence |
 |---|---|---|---|---|
-| **Application logs** | 🔴 GAP | `console.log/warn/error` with ad-hoc strings | 44 calls in 22 files | `grep -rn "console\." src/ --include="*.ts" --include="*.tsx"` |
-| **Structured logs (JSON)** | 🔴 GAP | n/a | 0% | — |
-| **Configurable levels** (trace/debug/info/warn/error/fatal) | 🔴 GAP | Only `log/warn/error` | 0% | — |
-| **Log persistence** | 🔴 GAP | n/a | 0% | — |
+| **Application logs** | 🟡 Wrapped | Central `logger.{debug,info,warn,error}` with PII scrubbing — every console.* migrated | 100% of call sites | `src/utils/logger.ts`; `src/__tests__/utils/logger.test.ts` |
+| **Structured logs (JSON)** | 🟡 Logger emits structured `(message, meta)` pairs; remote serialisation pending Sentry | 100% emit path | `src/utils/logger.ts` (`emit()`) |
+| **Configurable levels** (trace/debug/info/warn/error/fatal) | 🟡 4 levels exposed (debug/info/warn/error); fatal collapsed into error | 100% | `src/utils/logger.ts` |
+| **Log persistence** | 🔴 GAP — `console.*` is the only sink; remote sink deferred | 0% beyond device | — |
 | **Metrics** (counters, gauges, histograms) | 🔴 GAP | n/a | 0% | — |
 | **RED metrics** (Rate / Errors / Duration) | 🔴 GAP | n/a | 0% | — |
 | **USE metrics** (Utilization / Saturation / Errors) | 🔴 GAP | n/a | 0% | — |
@@ -20,7 +25,7 @@
 | **Unhandled errors** | 🔴 GAP | No Sentry, no React `ErrorBoundary`, no global promise-rejection handler | 0% | — |
 | **Crash reporting (native)** | 🟡 Implicit via App Store Connect + Play Console (iOS crashes/ANRs only) | Only native crashes, no JS errors | Partial | — |
 | **Alerts** | 🔴 GAP | n/a | 0% | — |
-| **Audit log (PII access)** | 🔴 GAP — critical risk for Art. 9 | n/a | 0% | — |
+| **Audit log (PII access)** | ✅ Encrypted local audit log via migration 014 + `src/services/auditLog.ts`. 11 event types: consent_granted/revoked, erasure_started/completed, export_generated, pdf_uploaded, key_rotation_started/completed, decrypt_failure, parental_consent_granted, retention_sweep_executed. Payload AES-GCM; metadata in cleartext for 72h enumeration. `pseudonymise()` hashes member/doc IDs. UI in `app/audit-log.tsx`. | 100% of privacy-relevant flows | `src/services/auditLog.ts`, `src/__tests__/services/auditLog.test.ts` |
 | **In-process health checks** | 🟡 Two LLM-state getters | LLM on-device only | ~20% of runtime | `src/services/onDeviceLlm.ts:193-201`, `src/services/embeddings.ts:107-115` |
 | **Operational local notifications** | 🟡 Two events: model downloading / ready | Only AI bootstrap | <5% of the flow | `src/services/aiNotifications.ts:48-54` |
 | **Cost telemetry** | 🟡 Only Spoonacular counts calls/day (client-side, not aggregated) | 1 provider of 3 | Partial | `src/services/spoonacular.ts:24-43` |

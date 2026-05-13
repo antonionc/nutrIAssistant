@@ -74,7 +74,7 @@ flowchart TB
 |---|---|---|
 | **5. Legal** | 🔴 Privacy policy not published | Draft and publish at `nutriassistant.ai/privacy`, link from Settings and App Store Connect |
 | **1.5 Developer Information** | 🟡 Settings has contact but lacks a canonical URL | Improve `app/settings.tsx:531-534` with a direct link to a support page |
-| **Privacy Nutrition Labels (App Privacy Details)** | 🔴 Not declared — since it is on-device only, declare correctly: "Data Not Collected" in most categories, but **declare** that catalog queries reach OFF / Edamam / Spoonacular via our `api.nutriassistant.org` BFF | Complete the mapping of [§5.1](./05-privacy-model.md#51-personal-data-inventory) ↔ Apple categories (Health & Fitness; Sensitive Info; Identifiers; Diagnostics; Usage Data) |
+| **Privacy Nutrition Labels (App Privacy Details)** | 🟡 **Engineering guide published** — `docs/store-readiness/privacy-labels.md` covers Apple Nutrition Labels + Google Data Safety field-by-field. Almost every category declares as "Data Not Collected" because the app is on-device-only; catalog queries via the BFF carry no personal data. Pending: filling the App Store Connect + Play Console forms at submission time. | `docs/store-readiness/privacy-labels.md` |
 | **App Tracking Transparency (ATT)** | ✅ Not applicable — no cross-app tracking | n/a |
 | **HealthKit** | ✅ `NSHealthShareUsageDescription` declared, no write (`app.json:18-19, 22-25`) | Document in App Store Connect that HealthKit data never leaves the device |
 | **Apple Intelligence / Foundation Models** | n/a — we use Qwen 3, not Foundation Models | n/a |
@@ -225,15 +225,15 @@ For NutrIAssistant the answer is **RAG + prompting (already implemented)**. Fine
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
 | 1 | **Bundled API secrets exposed** → revoked by provider → broken app | High (anyone with `strings` can extract them) | Critical (app unusable for everyone until release) | BFF ([§8.5](#85-technical-scaling)), credential rotation upon discovered exfiltration |
-| 2 | **Clinical-PDF breach in `documentDirectory`** via jailbreak/root | Low-Medium | Critical (Art. 9, AEPD fine up to 4% of annual revenue) | Encrypt PDFs at rest ([§3.5](./03-security-encryption.md#35-threat-model-simplified-stride) STRIDE), optional biometric lock |
-| 3 | **App Store rejection** due to mis-declared Privacy Nutrition Labels | Medium (common on first submission) | High (delays launch 2-4 weeks) | Internal pre-review + legal advice |
-| 4 | **Qwen 3 fails to load on old devices** | Medium-High (devices <8GB RAM) | High (broken UX; user abandons) | Graceful fallback: explain minimum requirement + offer "AI-chat off" mode |
-| 5 | **Inability to fulfill DSR in <30d** due to partial erasure | High (handler is empty today) | Critical (AEPD fine) | Implement full erasure **before** launch — blocker |
+| 2 | ~~Clinical-PDF breach in `documentDirectory` via jailbreak/root~~ | ✅ **Mitigated** | PDFs encrypted at rest as `.pdf.enc` via `src/services/secureFileStore.ts`. Boot migration rewrites legacy plaintext. iCloud/GDrive backup still includes the ciphertext (master key stays on-device). |
+| 3 | **App Store rejection** due to mis-declared Privacy Nutrition Labels | Medium (common on first submission) | High (delays launch 2-4 weeks) | Use the field-by-field guide in `docs/store-readiness/privacy-labels.md`; internal pre-review + legal advice. |
+| 4 | ~~Qwen 3 fails to load on old devices~~ | ✅ **Mitigated** | `src/services/deviceCapabilities.ts` probes `totalMemory` at first launch; <6 GB persistently disables the AI download + FAB. User keeps a fully functional scanner/planner/pantry. |
+| 5 | ~~Inability to fulfill DSR in <30d due to partial erasure~~ | ✅ **Resolved** | Atomic full-wipe in `src/services/dataErasure.ts` covering 12 SQLite tables + 16 AsyncStorage keys + FileSystem subtrees + Keychain master key. Two-step UI confirmation. |
 
 **Prioritized recommendations (section 8):**
 
-1. **Block the launch** until full erasure is implemented and the privacy policy is published.
-2. **Internal pre-review of Privacy Nutrition Labels** with a GDPR advisor before the first submission.
-3. **Fallback plan** for old devices: detect RAM <6GB and offer chat-less mode.
+1. ✅ Done: full erasure shipped. Privacy policy text shipped in-app (`app/legal/privacy.tsx`); the public URL + legal review of the wording is the next blocker before App Store submission.
+2. **Internal pre-review of Privacy Nutrition Labels** with a GDPR advisor before the first submission using `docs/store-readiness/privacy-labels.md`.
+3. ✅ Done: `src/services/deviceCapabilities.ts` handles the <6 GB fallback.
 4. **Move secrets to the BFF** before the open beta.
 5. **Enable EAS Update** for JS hotfixes without store review (note: requires registering it in `eas.json`).

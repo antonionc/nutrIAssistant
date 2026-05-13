@@ -122,18 +122,18 @@ Evidence: `src/modules/planner/mealPlanGenerator.ts:29-163`, `src/modules/planne
 
 | Data | Type | Source | Maintainer | Versioning |
 |---|---|---|---|---|
-| EU-14 allergen catalog | Master | `src/seed/allergen-rules.ts` | Product team | In code (commit) |
-| Health-condition catalog | Master | `CONDITIONS_LIST` in `app/settings.tsx:50` + `CONDITION_GUIDANCE` in `src/services/prompts/system.ts:17-26` | Product team | In code. ⚠️ Two sources; potential divergence |
+| EU-14 allergen catalog | Master | ✅ `src/domain/masterData.ts` (`EU_14_ALLERGENS`); `src/seed/allergen-rules.ts` holds the keyword-matching layer keyed off the same enum. | Product team | In code (commit) |
+| Health-condition catalog | Master | ✅ `src/domain/masterData.ts` (`CONDITIONS_LIST`); `CONDITION_GUIDANCE` in `src/services/prompts/system.ts` references it. | Product team | In code |
 | Family-role catalog | Master | `MemberRole` (`src/types/profiles.ts:1`) | Product team | In code |
 | Quantity-unit catalog | Master | `QuantityUnit` (`src/types/inventory.ts:6`) | Product team | In code |
-| Cuisine-with-flag catalog | Reference | `AREA_FLAGS` (`src/services/themealdb.ts:51-80`), `SPOONACULAR_CUISINE_QUERIES` (`src/services/spoonacular.ts:105-126`), `EDAMAM_QUERIES` (`src/services/edamam.ts`) | Product team | In code. **⚠️ Three parallel lists** — divergence risk |
+| Cuisine-with-flag catalog | Reference | ✅ `SPOONACULAR_CUISINE_QUERIES` lives in `src/domain/masterData.ts`; `spoonacular.ts` re-exports for back-compat. `AREA_FLAGS` (TheMealDB, retired) and `EDAMAM_QUERIES` (Edamam-internal taxonomy) intentionally stay provider-local. | Product team | In code |
 | Retailers catalog (future) | Master | `RETAILERS` in `src/constants/retailers.ts:10-17` | Product team | In code |
-| Recipe-category mapping catalog | Reference | `MEAL_TYPE_TO_CATEGORY` / `DISH_TYPE_TO_CATEGORY` (Edamam, `src/services/edamam.ts`), `DISH_TYPE_TO_CATEGORY` (Spoonacular, `src/services/spoonacular.ts:85-93`), `CATEGORY_MAP` (TheMealDB, `src/services/themealdb.ts:8-13`) | Product team | In code |
-| Allergen-keyword catalog | Reference | `ALLERGEN_KEYWORDS` in `src/seed/allergen-rules.ts` (not opened) and `ALLERGEN_PATTERNS` in `src/services/themealdb.ts:84-94` | Product team | In code. ⚠️ Two distinct engines |
-| Nutritional-equivalence table | Reference | `CATEGORY_NUTRITION` in `src/services/themealdb.ts:16-31` (heuristic to substitute missing data) | Product team | In code. ⚠️ Estimated values, not from an official source |
+| Recipe-category mapping catalog | Reference | Provider-internal (Edamam, Spoonacular, retired TheMealDB). Translating between provider taxonomies belongs in the service, not in domain. | Product team | In code |
+| Allergen-keyword catalog | Reference | ✅ `ALLERGEN_KEYWORDS` in `src/seed/allergen-rules.ts` keyed off `EU_14_ALLERGENS` from masterData. TheMealDB regex layer kept as dead code reference (provider retired). | Product team | In code |
+| Nutritional-equivalence table | Reference | `CATEGORY_NUTRITION` in `src/services/themealdb.ts` — TheMealDB retired in migration 009. No longer used. | Product team | In code |
 | Languages | Reference | `src/i18n/en.ts`, `src/i18n/es.ts` | Product team | In code |
 
-**Recommendation**: consolidate catalogs into a single `src/domain/masterData.ts` with coherence tests (e.g. "every allergen in `EU_14_ALLERGENS` has an entry in `ALLERGEN_KEYWORDS` and in each i18n").
+**Status:** ✅ Done in Sprint 5.5. `src/domain/masterData.ts` is the single source of truth for the catalogs that are genuinely cross-cutting (allergens, conditions, diet, Spoonacular cuisines). Provider-specific taxonomies stay in their respective service files where they belong. The coherence test at `src/__tests__/domain/masterData.test.ts` runs in CI and asserts every allergen has a keyword rule + EN/ES i18n, and every condition has EN/ES i18n.
 
 ## 6.4. Data quality
 
@@ -143,10 +143,10 @@ Evidence: `src/modules/planner/mealPlanGenerator.ts:29-163`, `src/modules/planne
 | Validity | Visual date validation (`DateOfBirthInput`), `parseFloat` with safe default | `app/onboarding.tsx:402,413` | Add ranges: weight 1-300, height 30-260, BPM 30-220 |
 | Consistency | ⚠️ No cross-store guarantee (`recipes.allergens` vs `family_profiles.allergies` with different spacing/casing) | — | Normalize to snake_case from a single source |
 | Uniqueness | PK enforced by SQLite, `INSERT OR REPLACE` on upserts | `src/modules/planner/plannerDB.ts:34-50`, `src/modules/scanner/scannerDB.ts:26-42` | ✅ |
-| Integrity | `PRAGMA foreign_keys = ON` active, but ⚠️ no FKs declared in the migrations | `src/db/database.ts:55` vs `src/db/migrations/001_initial.ts` | Declare FKs in migration 013 with `REFERENCES family_profiles(id) ON DELETE CASCADE` |
+| Integrity | ✅ Migration 015 introduces a `member_index` SQLite table mirroring AsyncStorage profile IDs and adds `FOREIGN KEY (member_id) REFERENCES member_index(id) ON DELETE CASCADE` to `member_memories`, `doc_chunks`, and `conversation_summaries`. `profileStorage.saveProfiles()` syncs the index on every save. Deleting a member cascades to their memories and document chunks. | `src/db/migrations/015_member_index_with_fks.ts`, `src/modules/profiles/profileStorage.ts:syncMemberIndex` |
 | Timeliness | Real-time (data goes from UI straight to SQLite) | — | ✅ |
 | Lineage / traceability | ⚠️ No `created_by`, `updated_by`, `source_user_id` columns | — | Add audit columns |
-| Tooling | ⚠️ GAP — no Great Expectations, dbt tests, Zod runtime | — | Add runtime Zod validation on external-API payloads |
+| Tooling | 🟡 Zod runtime boundary validation now wraps OpenFoodFacts (strict schema), Edamam and Spoonacular (permissive `.passthrough()`). Drift surfaces as a `[Provider] upstream schema drift` log. Great Expectations / dbt are out of scope for an on-device app. | `src/services/openFoodFacts.ts`, `edamam.ts`, `spoonacular.ts` |
 
 **Proposed quality rules (top-10):**
 

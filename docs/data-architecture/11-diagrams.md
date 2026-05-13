@@ -280,7 +280,7 @@ flowchart TB
 
 **Reading keys:**
 
-- **A single master key** (`nutri_master_key_v1`) encrypts everything. No rotation implemented (⚠️ GAP [§3.2](./03-security-encryption.md#32-key-storage-policy)).
+- **A single master key** (`nutri_master_key_v1`) encrypts everything. Manual rotation now available from Settings → Security (Sprint 5.2, `src/services/keyRotation.ts`). Scheduled / time-based rotation still pending [§3.2](./03-security-encryption.md#32-key-storage-policy).
 - **Embeddings are encrypted as bytes** (`encryptBytes`) because they are `Float32Array`; everything else as UTF-8 (`encrypt`).
 - The `enc:v1:` prefix lets us detect legacy plaintext during migrations (ADR-002).
 - ⚠️ The scheme covers 4 PII fields but leaves `weight`, `height`, `dateOfBirth`, `allergies`, `bloodPressure`, `hrv`, `spO2`, `avatarUrl`, and the PDFs in `FileSystem` exposed ([§3.1](./03-security-encryption.md#31-data-encryption-policy) coverage).
@@ -512,7 +512,7 @@ sequenceDiagram
     autonumber
     actor U as Super-user
     participant Set as settings.tsx
-    participant Wipe as TO-BE fullWipe()
+    participant Wipe as eraseAllUserData()
     participant DB as expo-sqlite
     participant AS as AsyncStorage
     participant FS as FileSystem
@@ -524,9 +524,9 @@ sequenceDiagram
     Set->>Set: Alert.alert destructive confirmation
     U->>Set: confirm
     rect rgba(255,0,0,0.1)
-        Note over Set: AS-IS today<br/>onPress: () => {} EMPTY<br/>handler stub line 520
+        Note over Set: ✅ Implemented (Sprint 1.5)<br/>Wired to src/services/dataErasure.ts<br/>Two-step confirmation in UI
     end
-    Set->>Wipe: TO-BE: atomic full wipe
+    Set->>Wipe: eraseAllUserData()
 
     par deletion operations
         Wipe->>DB: closeDatabase
@@ -631,7 +631,7 @@ stateDiagram-v2
     note right of Failed
         Recovery: deleteModel + retry
         Telemetry: error_code
-        ⚠️ GAP no SHA verification of .pte
+        🟡 verifyArtifactSha256() hook ready — pins empty until next R2 upload runbook fills them
     end note
 
     note right of Busy
@@ -988,7 +988,7 @@ quadrantChart
 pie title At-rest encryption by PII / Art. 9 field category
     "Encrypted (conditions, aboutMeNotes, memories, doc_chunks text+embedding)" : 5
     "Unencrypted but sensitive (weight, height, dateOfBirth, allergies, bloodPressure, hrv, spO2, avatarUrl)" : 8
-    "PDFs in FileSystem - critical GAP" : 1
+    "PDFs in FileSystem - .pdf.enc (Sprint 2.1)" : 1
     "Non-PII data (recipes, grocery_items, scan_history)" : 6
 ```
 
@@ -1190,8 +1190,8 @@ For concepts that Mermaid does not render elegantly (overlapping trust boundarie
 │  │   │   └──────────────────────┘  └──────────────────────┘    │    │     │
 │  │   │                                                          │    │     │
 │  │   │   ┌──────────────────────┐  ┌──────────────────────┐    │    │     │
-│  │   │   │ FileSystem PDFs ⚠️    │  │ FileSystem avatars   │    │    │     │
-│  │   │   │ (plaintext - GAP)    │  │ (plaintext - ok)     │    │    │     │
+│  │   │   │ FileSystem .pdf.enc ✅│  │ FileSystem avatars   │    │    │     │
+│  │   │   │ (AES-GCM at rest)    │  │ (plaintext - ok)     │    │    │     │
 │  │   │   └──────────────────────┘  └──────────────────────┘    │    │     │
 │  │   └──────────────────────────────────────────────────────────┘    │     │
 │  │                                                                   │     │
@@ -1219,7 +1219,7 @@ documentDirectory/
 ├── nutriassistant.db-shm               ← shared memory file
 ├── profile-documents/
 │   └── <member_id>/
-│       └── <doc_id>.pdf                ⚠️ CLINICAL PDFs IN PLAINTEXT (GAP §3.5)
+│       └── <doc_id>.pdf.enc            ✅ Clinical PDFs AES-GCM-encrypted (Sprint 2.1, §3.5)
 ├── avatars/
 │   └── avatar-<member_id>.jpg          → optional photos, not critical PII
 └── react-native-executorch/
@@ -1256,14 +1256,14 @@ Implications for iCloud / Google Drive backup:
 ```
                        ┌────────────────────────────────────────────┐
                        │  LAYER 7 · POLICIES & PROCESSES            │
-                       │  DPO · DPIA · ROPA · IR plan · SCC         │
-                       │  ⚠️ CRITICAL GAP TODAY                      │
+                       │  ROPA ✅ · IR plan ✅ · DPO ❌ · DPIA ❌ · SCC ❌ │
+                       │  🟡 ENGINEERING DONE; EXTERNAL SPEND PENDING│
                        └──────────────────────┬─────────────────────┘
                                               │
                   ┌───────────────────────────▼──────────────────────────┐
                   │  LAYER 6 · OBSERVABILITY                              │
-                  │  Audit log · Sentry · Metrics · Alerts                │
-                  │  ⚠️ CRITICAL GAP TODAY                                │
+                  │  Audit log ✅ · Logger ✅ · Sentry/Metrics ❌          │
+                  │  🟡 LOCAL ENCRYPTED TRAIL; REMOTE SINK PENDING        │
                   └─────────────────────────┬─────────────────────────────┘
                                             │
               ┌─────────────────────────────▼───────────────────────────────┐

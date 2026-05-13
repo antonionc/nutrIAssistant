@@ -4,7 +4,8 @@ This area documents the data lifecycle, AI architecture, security model, privacy
 
 > **Recent architectural milestones:**
 >
-> - **2026-05-13 — BFF deployed** (`api.nutriassistant.org`). `infra/bff/` proxies OpenFoodFacts, Edamam, and Spoonacular. Zero third-party API keys ship in the mobile bundle — all credentials live in Cloudflare's encrypted secret store. The "secrets in public bundle" finding (originally top-5 critical, §0) is **resolved**. See [`infra/bff/README.md`](../../infra/bff/README.md) for the BFF architecture.
+> - **2026-05-14 — GDPR engineering pass complete** (commit `aaa3179`). 21 of the 28 findings from §9 closed in a five-sprint sequence: Art. 17 full erasure, Art. 22 medical disclaimer, Art. 9.2.a granular consent (3 toggles), Art. 30/33 encrypted audit log, parental gate <14, PDFs encrypted at rest, full Art. 9 field coverage, master-key rotation, retention sweeper, ROPA + Model Card + incident-response runbook, Dependabot + gitleaks + SBOM. The 6 remaining items all require external spend (DPO, DPIA consultancy, Sentry hosting, Aptabase, SCC). See [`09-improvement-plan.md`](./09-improvement-plan.md) for the full status table.
+> - **2026-05-13 — BFF deployed** (`api.nutriassistant.org`). `infra/bff/` proxies OpenFoodFacts, Edamam, and Spoonacular. Zero third-party API keys ship in the mobile bundle — all credentials live in Cloudflare's encrypted secret store. See [`infra/bff/README.md`](../../infra/bff/README.md) for the BFF architecture.
 > - **2026-05-13 — FatSecret retired**, replaced by Edamam Recipe Search v2 as the Mediterranean catalog source. DB migration 013 purges legacy `fs-*` recipes. Edamam credentials never shipped in any binary; they only ever lived in the BFF.
 > - **2026-05-13 — Shared BFF client extracted** to `src/services/bff/client.ts`. Provides one place for retry / timeout / telemetry instead of duplicating fetch wrappers per provider. Tested at `src/__tests__/services/bff/client.test.ts`.
 
@@ -33,9 +34,10 @@ flowchart TB
         end
 
         subgraph Sec["Security"]
-            KC[(Keychain<br/>master key 256-bit)]:::ok
-            Enc[AES-GCM-256 field-level encryption]:::warn
-            PDF[(PDFs FileSystem<br/>plaintext)]:::gap
+            KC[(Keychain<br/>master key 256-bit<br/>manual rotation)]:::ok
+            Enc[AES-GCM-256 field-level encryption<br/>full Art. 9 coverage]:::ok
+            PDF[(PDFs FileSystem<br/>.pdf.enc at rest)]:::ok
+            Audit[(audit_log<br/>encrypted payload)]:::ok
         end
 
         subgraph Store["Storage"]
@@ -52,13 +54,14 @@ flowchart TB
         HF[HuggingFace CDN<br/>MiniLM + upstream of LLM mirror]:::ext
     end
 
-    subgraph Comp["🔴 Compliance — launch blockers"]
-        Wipe[GDPR full deletion]:::gap
-        Pol[Published privacy policy]:::gap
-        Obs[Sentry + observability]:::gap
-        Dis[Medical disclaimer]:::gap
-        Con[Granular consent]:::gap
-        DPO[DPO + DPIA]:::gap
+    subgraph Comp["Compliance — current state"]
+        Wipe[GDPR full deletion]:::ok
+        Dis[Medical disclaimer]:::ok
+        Con[Granular consent]:::ok
+        Parent[Parental gate &lt;14]:::ok
+        Pol[Published privacy policy]:::warn
+        Obs[Sentry instance + telemetry SaaS]:::warn
+        DPO[DPO + DPIA external]:::gap
     end
 
     subgraph Future["🟢 TO-BE production"]
@@ -114,22 +117,25 @@ This is the honest snapshot: an exemplary local-first architecture, partial encr
 | Key store | ✅ iOS Keychain / Android Keystore | 🟡 no rotation |
 | External providers | ✅ OpenFoodFacts, Edamam, Spoonacular **all via BFF**; LLM artifacts via Cloudflare R2 (HuggingFace upstream); MiniLM embeddings still direct from HuggingFace; Apple Health, Health Connect | 🔴 no DPIA, no SCC, no TIA |
 | AI model | ✅ **100% on-device** (Qwen 3 1.7B Q + MiniLM L6 v2) | 🟢 privacy-by-design |
-| Field-level encryption at rest | ✅ AES-256-GCM `@noble/ciphers` | 🟡 partial column coverage |
+| Field-level encryption at rest | ✅ AES-256-GCM on `weight`, `height`, `dateOfBirth`, `allergies`, `conditions`, `aboutMeNotes`, member memories, doc chunks, audit log payload | 🟢 full Art. 9 coverage |
+| PDFs at rest | ✅ `.pdf.enc` via `src/services/secureFileStore.ts` | 🟢 (with caveat: iCloud/GDrive backup still happens — ciphertext only, see [§3](./03-security-encryption.md)) |
+| Master-key rotation | ✅ Manual via Settings, stream-batched (`src/services/keyRotation.ts`) | 🟢 |
 | Encryption in transit | ✅ OS-default TLS 1.2/1.3, no pinning | 🟡 |
 | User authentication | 🔴 no login | 🔴 |
-| Telemetry / APM | 🔴 `console.*` only | 🔴 (can't notify under Art. 33) |
-| Data governance | 🔴 no catalog, lineage, contracts, or quality tests | 🔴 |
-| GDPR rights in UI | 🟡 Export ✅, Erasure stub ⚠️ ([`app/settings.tsx:516`](../../app/settings.tsx)) | 🟡 |
+| Telemetry / APM | 🟡 Central logger with PII scrubbing + encrypted audit log; **Sentry hosting deferred** | 🟡 |
+| Data governance | 🟡 Catalogs consolidated, ROPA published, FKs with cascade; no quality-test dashboard yet | 🟡 |
+| GDPR rights in UI | ✅ Art. 15 export (zip), Art. 17 erasure (atomic), Art. 7.3 consent revocation, "My activity" surface | 🟢 |
 | Medical RAG | ✅ encrypted chunks, top-K 2 cosine, threshold 0.4 | 🟢 |
-| Automated decisions (Art. 22) | 🟡 suggestions only; needs explicit notice + granular opt-out | 🟡 |
-| Minors | 🟡 age gate for AI chat (≥18, [`src/modules/ai-engine/aiAccess.ts:13-22`](../../src/modules/ai-engine/aiAccess.ts)) | 🟡 |
+| Automated decisions (Art. 22) | ✅ persistent disclaimer + 3 granular consent toggles | 🟢 |
+| Minors | ✅ Age gate ≥18 for AI + parental consent checkbox <14 (`app/onboarding.tsx`) | 🟢 |
 
-## Critical findings (top 5)
+## Critical findings — remaining gaps (post commit `aaa3179`)
 
-1. **✅ Secrets in public bundle (RESOLVED).** All three upstreams (OFF, Edamam, Spoonacular) are reached only through the BFF at `api.nutriassistant.org`. The bundle now holds zero third-party API keys. Rotating the Spoonacular API key at the provider remains advisable (older IPA copies still carry the old key).
-2. **🔴 No observability.** No APM (Sentry/Datadog), no product analytics, no audit logs. Impossible to satisfy GDPR Art. 33–34 (breach notification) without traceability.
-3. **🔴 Full data deletion not implemented.** The "Delete all data" button in [`app/settings.tsx:516-523`](../../app/settings.tsx) shows an Alert but the handler `onPress: () => {}` is empty. There is an explicit `// TODO: implement full data deletion`. Blocks the right to erasure under Art. 17.
-4. **🟡 No AI usage notice or limitations disclaimer.** No "not medical advice" disclaimer in the app. The system prompt offers guidance based on conditions (hypertension, celiac, diabetes 1/2, etc. — [`src/services/prompts/system.ts:17-26`](../../src/services/prompts/system.ts)) without explicit Art. 9 consent.
-5. **🟡 No DPIA despite Art. 9 health data processing.** The `conditions` field is encrypted, but systematic large-scale processing of health data triggers DPIA requirements at production scale.
+1. **✅ Secrets in public bundle — RESOLVED.** All three upstreams (OFF, Edamam, Spoonacular) reach the user only through the BFF at `api.nutriassistant.org`. Zero third-party API keys in the bundle.
+2. **✅ Full data deletion — RESOLVED.** `src/services/dataErasure.ts` performs an atomic wipe of 12 tables + 16 AsyncStorage keys + FileSystem subtrees + Keychain master key. UI in Settings with two-step confirmation. Art. 17.
+3. **✅ Medical disclaimer — RESOLVED.** Persistent non-dismissible banner in `src/components/layout/AIAssistant.tsx`, EN+ES. Art. 22.
+4. **✅ Granular consent — RESOLVED.** 3 toggles (`health`, `ai`, `documents`) captured in onboarding and revocable in Settings (Art. 7.3). Audit logged.
+5. **🟡 Observability — partial.** Logger with PII scrubbing + encrypted local audit log are in place. Sentry self-hosted EU + Aptabase telemetry are **deferred** pending the ~€30/mo budget approval.
+6. **❌ DPIA + DPO + SCC — deferred.** These require external spend (€5-15k consultancy / €500-1500/mo / legal negotiation). The technical inputs they consume (ROPA, Model Card, incident-response runbook) are all ready in `docs/legal/` and `docs/runbooks/`.
 
-See [`00-executive-summary.md`](./00-executive-summary.md) for the full status table and [`09-improvement-plan.md`](./09-improvement-plan.md) for the 28-item prioritized backlog.
+See [`00-executive-summary.md`](./00-executive-summary.md) for the full status table and [`09-improvement-plan.md`](./09-improvement-plan.md) for the 28-item status (21 done, 4 deferred for external spend, 3 partial-engineering-done-pending-publication).
