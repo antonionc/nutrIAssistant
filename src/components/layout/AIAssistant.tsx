@@ -135,6 +135,16 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
     const [voiceError, setVoiceError] = useState<string | null>(null)
     const [voiceAvailable, setVoiceAvailable] = useState<boolean | null>(null)
     const [ttsVoice, setTtsVoice] = useState<string | undefined>(undefined)
+    // The input is a fixed-height scrollable area, sized for 3 visible
+    // lines. We do NOT grow it dynamically with the content: prior
+    // approaches that did so (onContentSizeChange + a wrapper with
+    // overflow:'hidden') had a race where the third line was clipped
+    // before the wrapper resized, hiding the cursor.
+    //
+    // With a fixed height the textarea behaves like every other chat
+    // app: the cursor stays visible because the TextInput's own
+    // multiline scroll keeps it in view, and older lines scroll up
+    // automatically as the user types past line 3.
     const listRef = useRef<BottomSheetFlatListMethods>(null)
     const pulseAnim = useRef(new Animated.Value(1)).current
     const micAnim = useRef(new Animated.Value(1)).current
@@ -402,7 +412,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
       <BottomSheet
         ref={ref}
         index={-1}
-        snapPoints={['50%']}
+        snapPoints={['75%']}
         enablePanDownToClose
         onClose={onClose}
         backgroundStyle={vs.sheetBackground}
@@ -526,17 +536,26 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
                 </TouchableOpacity>
               </Animated.View>
             )}
-            <BottomSheetTextInput
-              style={ts.input}
-              value={input}
-              onChangeText={setInput}
-              placeholder={isListening ? tr.ai.listening : tr.ai.placeholder}
-              placeholderTextColor={colors.textMuted}
-              multiline
-              maxLength={500}
-              returnKeyType="send"
-              onSubmitEditing={handleSend}
-            />
+            <View style={vs.inputWrapper}>
+              <BottomSheetTextInput
+                style={ts.input}
+                value={input}
+                onChangeText={setInput}
+                placeholder={isListening ? tr.ai.listening : tr.ai.placeholder}
+                placeholderTextColor={colors.textMuted}
+                multiline
+                maxLength={500}
+                returnKeyType="send"
+                onSubmitEditing={handleSend}
+                // Fixed height (set in `vs.inputWrapper`) + scroll
+                // always enabled. As the user types past the third
+                // visible line, the TextInput auto-scrolls so the
+                // cursor remains in view; older lines scroll up
+                // inside the box. The mic and send buttons never move.
+                scrollEnabled
+                textAlignVertical="top"
+              />
+            </View>
             <TouchableOpacity
               style={[vs.sendBtn, (!input.trim() || isResponding) && vs.sendBtnDisabled]}
               onPress={handleSend}
@@ -621,9 +640,16 @@ function makeStyles(colors: ThemeColors) {
     bubbleUser: { backgroundColor: Colors.healthGreen, borderBottomRightRadius: 4 } as ViewStyle,
     bubbleBot: { backgroundColor: colors.mintSurface, borderBottomLeftRadius: 4, ...Shadows.subtle } as ViewStyle,
     inputContainer: {
-      flexDirection: 'row', alignItems: 'flex-end',
+      flexDirection: 'row',
+      // Center the mic + send buttons against the (fixed-height) text
+      // area. With `flex-end` they snap to the bottom of an empty
+      // input which looks unbalanced; centered is steadier.
+      alignItems: 'center',
       paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.sm, gap: Spacing.sm,
       borderTopWidth: 1, borderTopColor: colors.border,
+      // flexShrink: 0 keeps the input row pinned to the bottom even if
+      // the messages list (which has flex: 1) grows.
+      flexShrink: 0,
     } as ViewStyle,
     micBtn: {
       width: 40, height: 40, borderRadius: 20,
@@ -637,6 +663,20 @@ function makeStyles(colors: ThemeColors) {
     } as ViewStyle,
     sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.healthGreen, alignItems: 'center', justifyContent: 'center' } as ViewStyle,
     sendBtnDisabled: { backgroundColor: colors.border } as ViewStyle,
+    // Fixed-height text area (~3 lines visible). The inner
+    // BottomSheetTextInput has `scrollEnabled` so as the user types
+    // past line 3 the content scrolls inside this box; the cursor
+    // stays in view because RN's multiline auto-scrolls to keep it
+    // visible. Sized to comfortably show 3 lines of `Typography.body`
+    // with vertical padding.
+    inputWrapper: {
+      flex: 1,
+      height: 96,
+      overflow: 'hidden',
+      backgroundColor: colors.surface,
+      borderRadius: BorderRadius.xl,
+      ...Shadows.subtle,
+    } as ViewStyle,
   })
 
   const ts = StyleSheet.create({
@@ -657,9 +697,12 @@ function makeStyles(colors: ThemeColors) {
     micIcon: { fontSize: 18 } as TextStyle,
     input: {
       ...Typography.body, color: colors.text,
-      flex: 1, backgroundColor: colors.surface, borderRadius: BorderRadius.xl,
+      // The parent `inputWrapper` owns the height (fixed at 96px).
+      // The TextInput fills it via flex:1; multiline + scrollEnabled
+      // handles overflow so the cursor stays in view as the user
+      // types past line 3.
+      flex: 1,
       paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-      maxHeight: 100, ...Shadows.subtle,
     } as TextStyle,
     sendIcon: { color: Colors.white, fontSize: 18, fontWeight: 'bold' } as TextStyle,
   })
