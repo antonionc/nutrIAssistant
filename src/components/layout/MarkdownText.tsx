@@ -3,6 +3,11 @@ import { Platform, StyleSheet, Text, TextStyle, View } from 'react-native'
 import { Colors, Spacing, Typography } from '../../theme'
 import { useTheme } from '../../theme/ThemeContext'
 
+// Custom markdown renderer for chat bubbles — bold/italic/code, bullets,
+// ordered lists, headings, fenced code blocks, links. We don't use
+// `react-native-markdown-display`: it pulls ~400 kB and styles every node
+// generically; chat needs tight typography control and only a tiny markdown
+// subset (what Qwen 3 actually emits).
 interface Props {
   content: string
   isUser: boolean

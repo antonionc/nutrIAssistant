@@ -1,50 +1,65 @@
-# Welcome to your Expo app 👋
+# NutrIAssistant
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Family nutrition assistant for iOS and Android. Local-first architecture: every PII, health data, clinical document and LLM inference lives on the user's device.
+
+A thin Cloudflare Worker BFF at `api.nutriassistant.org` proxies third-party catalog APIs (OpenFoodFacts, Edamam, Spoonacular) and mirrors the on-device LLM artifacts from R2 — **no third-party API key ever ships in the mobile bundle**.
+
+## Stack
+
+- **Client:** React Native 0.83.6 + React 19.2, Expo SDK 55, TypeScript 5.9. Hermes + New Architecture + experimental React Compiler enabled.
+- **Routing:** `expo-router` with typed routes.
+- **Storage:** SQLite (`expo-sqlite`, 12 migrations, WAL, FK on) + AsyncStorage + FileSystem for PDFs/avatars + iOS Keychain / Android Keystore for the AES-256-GCM master key.
+- **On-device AI:** `react-native-executorch` running Qwen 3 1.7B Quantized (~1 GB `.pte`) for chat and all-MiniLM-L6-v2 (~28 MB) for embeddings. Model artifacts are mirrored on Cloudflare R2 and downloaded through our BFF.
+- **Health integrations:** Apple HealthKit (iOS) and Google Health Connect (Android), via defensive `require`.
+- **Camera & PDFs:** `expo-camera` for barcode scanning, custom Expo native module `expo-pdf-text` for clinical-PDF text extraction.
+- **BFF:** Cloudflare Workers on Hono, KV (rate limit / quota) + R2 (LLM mirror). Code in `infra/bff/`.
 
 ## Get started
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
 ```bash
-npm run reset-project
+npm install
+cp .env.example .env       # only EXPO_PUBLIC_BFF_BASE_URL — safe to bundle
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+For a development build (recommended for testing the on-device LLM, which Expo Go cannot host):
 
-## Learn more
+```bash
+npm run ios       # or
+npm run android
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Tests
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm test                 # full Jest suite (~14 suites, ~183 tests)
+npm run test:watch
+npm run test:coverage
+```
 
-## Join the community
+## Documentation
 
-Join our community of developers creating universal apps.
+| Where | What's inside |
+|---|---|
+| [`docs/data-architecture/`](./docs/data-architecture/) | 13-file technical doc set — executive summary, data lifecycle, data model, security & encryption, AI architecture, privacy model, governance, observability, production readiness, improvement plan, appendices (ADRs), extended diagrams |
+| [`infra/bff/README.md`](./infra/bff/README.md) | Cloudflare Worker BFF — architecture, endpoints, one-time setup, secrets policy, credential rotation runbook, on-device LLM mirroring procedure |
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Layout
+
+```
+app/                    Expo Router screens (tabs, recipe detail, scanner, settings, onboarding…)
+src/
+  components/           Reusable UI (cards, charts, badges, layout — MarkdownText, LLMLoadingBar, AIAssistant…)
+  modules/              Domain modules with their own React contexts (profiles, planner, inventory, groceries, recipes, ai-engine, health)
+  services/             Cross-cutting services (BFF client, on-device LLM, embeddings, retrieval, prompts, encryption, providers…)
+  db/                   SQLite migration runner + 12 migrations
+  i18n/                 English + Spanish translation tables (mandatory routing for every new string)
+  theme/                Design tokens + theme context
+  types/                Shared TypeScript types
+infra/bff/              Cloudflare Worker BFF source
+modules/expo-pdf-text/  Custom Expo native module (Swift + Kotlin) for PDF text extraction
+```
+
+## Privacy & compliance
+
+NutrIAssistant processes GDPR Art. 9 health data (medical conditions, lab reports, dietary restrictions) under a privacy-by-design posture: all inference and analysis runs on-device, sensitive fields use AES-256-GCM column-level encryption with a 256-bit key stored in the secure enclave, and the only cloud traffic is non-PII catalog lookups via our own EU-hosted Worker. Known compliance gaps (full deletion not yet implemented, no DPIA on file, missing medical disclaimer) are tracked in [`docs/data-architecture/09-improvement-plan.md`](./docs/data-architecture/09-improvement-plan.md).

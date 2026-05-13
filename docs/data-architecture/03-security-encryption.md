@@ -116,7 +116,7 @@ Active and well-designed (see table above). **It is the primary protection mecha
 | Aspect | Implementation | Evidence | Recommendation |
 |---|---|---|---|
 | `.env` in gitignore | Likely — see `.gitignore` (lines with `.env*` expected) | `.gitignore` (537 bytes; not opened, but `.env` appears in `ls`) | Confirm and add `.env.local`, `.env.production` |
-| Secrets in bundle | **🔴 Yes** — `EXPO_PUBLIC_FATSECRET_CLIENT_SECRET` ships in the binary | `.env:5-7` | Move to BFF + ephemeral signed token |
+| Secrets in bundle | **✅ No** — only `EXPO_PUBLIC_BFF_BASE_URL` (a public URL) ships. Historically `EXPO_PUBLIC_FATSECRET_*` and `EXPO_PUBLIC_SPOONACULAR_API_KEY` were bundled; resolved in commit `1647aac` by routing all three catalogs through the BFF. Provider secrets now live exclusively in Cloudflare's encrypted secret store. | `.env.example`, `infra/bff/wrangler.toml`, `infra/bff/README.md` (rotation runbook) | Quarterly rotation via `wrangler secret put` (runbook in BFF README) |
 | CI secret scanning | 🔴 GAP — no `gitleaks`, `trufflehog`, or GitHub secret scanning | — | Enable GitHub Push Protection + a `gitleaks-action` workflow |
 | `.env.example` | ✅ present, no real values | `.env.example:1-5` | — |
 | Pre-commit hooks | 🔴 GAP — no `husky` or `.husky/` | — | Add a `pre-commit` that runs `gitleaks detect --staged` |

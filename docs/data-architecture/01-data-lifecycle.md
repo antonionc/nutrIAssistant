@@ -93,8 +93,8 @@ flowchart LR
 | Embeddings | `react-native-executorch`, ALL_MINILM_L6_V2 | `src/services/embeddings.ts:85-101` | 384-dim, `Float32Array`; no explicit L2 normalization |
 | PDF summarization | On-device LLM | `src/services/profileDocuments.ts:72-86` | 500-character cap; prompt forbids PII but no post-hoc validation |
 | SQL migrations | Custom runner, idempotent, transactional | `src/db/database.ts:88-145` | No down-migrations, no versioned metadata schema |
-| Spoonacular quota cache | AsyncStorage `sp_quota_cache_v2`, 30s TTL | `src/services/spoonacular.ts` | Reads the global counter from BFF's `/v1/spoonacular/quota` so the settings UI shows real usage, not per-device guesses |
-| Spoonacular quota cache | AsyncStorage | `src/services/spoonacular.ts:35-43` | Resets by local solar day — not UTC |
+| Spoonacular quota cache | AsyncStorage `sp_quota_cache_v2`, 30s TTL | `src/services/spoonacular.ts:35-43` | Reads the **global** counter from BFF's `/v1/spoonacular/quota` (single source of truth lives in `wrangler.toml` `SPOONACULAR_DAILY_LIMIT`). The cached snapshot drives the settings UI badge; on a 429 from the BFF the cache is invalidated and a `SpoonacularQuotaError` is surfaced. Resets by Cloudflare's local solar day, not UTC. |
+| Meal-plan thumbnail hydration | Two layers — fast: batched read-side join in `plannerDB.hydratePlanImages`; slow: per-card lazy enrichment in `MealCard.useResolvedRecipeImage` | `src/modules/planner/plannerDB.ts:48-69`, `src/components/cards/MealCard.tsx:140-199` | Old plan snapshots saved before Edamam populated `imageUrl` are backfilled at read time; cards whose live catalog row is also a stub trigger `enrichRecipeDetail`/`enrichSpoonacularDetail` lazily, so the thumbnail appears without the user opening the detail screen first. |
 
 ## 1.3. Analytics and AI phase
 
@@ -118,6 +118,7 @@ flowchart LR
 | Family export | Markdown with hidden JSON block | `src/services/familyExport.ts:36-69` | Export is not encrypted (local plaintext); ⚠️ protection is the user's responsibility |
 | Family import | Parse the JSON block | `src/services/familyExport.ts:72-96` | No integrity verification (no signature) |
 | AI actions | Apply `add_favorite`/`remove_favorite` | `src/modules/profiles/ProfilesContext.tsx:296-319` | Hallucinated IDs are silently ignored |
+| Favorites (dual bucket) | **Personal**: per-member `favoriteRecipeIds[]` in encrypted member row, mutated via `ProfilesContext.addFavorite/removeFavorite`. **Family**: global `recipes.is_favorite` flag toggled via `useRecipeDB().favorite()`. Recipe-detail screen shows the heart filled when the recipe lives in **either** bucket; the AI's `<actions>` block writes to the personal bucket of the active member; tapping the heart while filled clears **both** buckets (predictable unfavorite). | `src/modules/profiles/ProfilesContext.tsx:243-262`, `app/recipe/[id].tsx:70-176` | Two-bucket model lets a parent favorite a recipe for one child without surfacing it for the rest of the family; the global flag remains useful as a "household staple" tag. |
 | Local notifications | `expo-notifications` | `src/services/aiNotifications.ts:48-54` | Only model downloaded/ready |
 | Share / Print | `expo-sharing` | `app/settings.tsx:165-172` | Export only |
 

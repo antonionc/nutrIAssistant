@@ -45,7 +45,7 @@ flowchart TB
     end
 
     subgraph Cloud["☁️ Internet · non-PII only"]
-        BFF[Cloudflare BFF EU<br/>catalog proxy + R2 LLM mirror]:::ok
+        BFF[Cloudflare BFF EU<br/>api.nutriassistant.org<br/>catalog proxy + R2 LLM mirror]:::ok
         OFF[OpenFoodFacts FR<br/>via BFF]:::ext
         ED[Edamam US ⚠️ SCC<br/>via BFF]:::warn
         SP[Spoonacular US ⚠️ SCC<br/>via BFF]:::warn
@@ -62,7 +62,6 @@ flowchart TB
     end
 
     subgraph Future["🟢 TO-BE production"]
-        BFF[BFF Cloudflare EU<br/>secrets + rate limit]:::ext
         Tel[Non-PII telemetry<br/>Aptabase / PostHog EU]:::ext
         Sentry[Sentry self-hosted EU]:::ext
         Pro[Pro tier Mistral EU opt-in]:::ext
@@ -74,10 +73,9 @@ flowchart TB
     UI --> Sec
     UI --> Store
     AI --> Sec
-    UI -. only non-PII .-> Cloud
+    UI -. only non-PII, via BFF .-> Cloud
     Sec -. master key .-> KC
 
-    Cloud -. secrets in bundle today ⚠️ .-> BFF
     Device -. launch blockers .-> Comp
     Comp -. resolved .-> Future
 ```

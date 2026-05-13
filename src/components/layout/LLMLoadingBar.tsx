@@ -8,6 +8,10 @@ import { t } from '../../i18n'
 const BAR_HEIGHT = 2
 const ANIM_DURATION_MS = 200
 
+// 2 px progress strip pinned under the safe-area inset that mirrors the
+// on-device LLM download (~1 GB of Qwen 3 from R2 on first launch). Driven
+// by AIContext.modelStatus.downloadProgress; unmounts when load completes or
+// fails so it never lingers on a happy-path screen.
 export function LLMLoadingBar() {
   const { modelStatus } = useAIEngine()
   const { colors } = useTheme()

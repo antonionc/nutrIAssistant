@@ -141,13 +141,16 @@ The Worker is available at `http://localhost:8787`. KV bindings use the `preview
 
 | Where | What's in it | Committed? |
 |---|---|---|
-| `.env` (in app repo) | Old `EXPO_PUBLIC_*` vars | ❌ gitignored, deprecated once app is migrated |
+| `.env` (in app repo) | Only `EXPO_PUBLIC_BFF_BASE_URL` — a public URL, safe to bundle | ❌ gitignored (kept for symmetry with `.env.example`) |
 | `infra/bff/.dev.vars` | Local-dev Spoonacular + Edamam credentials | ❌ gitignored |
 | `infra/bff/.dev.vars.example` | Placeholder names only, no values | ✅ committed for onboarding |
-| `wrangler secret put` | Production secrets | n/a — server-side only, never in repo |
-| `wrangler.toml` `[vars]` | Non-sensitive config (rate-limit, env name) | ✅ committed |
+| `wrangler secret put` | Production secrets (`SPOONACULAR_API_KEY`, `EDAMAM_APP_ID`, `EDAMAM_APP_KEY`) | n/a — server-side only, never in repo |
+| `wrangler.toml` `[vars]` | Non-sensitive config (`EDAMAM_ACCOUNT_USER`, `SPOONACULAR_DAILY_LIMIT`, env name) | ✅ committed |
+| `infra/bff/src/env.ts` | TypeScript binding interface (`AppContext`) — what KV namespaces, R2 buckets, vars and secrets the Worker code expects | ✅ committed |
 
 **Never put a real secret in `wrangler.toml`.** If you do, rotate the credential immediately — `wrangler.toml` is in git.
+
+`SPOONACULAR_DAILY_LIMIT` in `wrangler.toml` is the **single source of truth** for the daily quota. The mobile app reads it live via `/v1/spoonacular/quota`; no quota constant ships in the bundle.
 
 ## Operations
 
@@ -328,16 +331,31 @@ Do NOT overwrite files in-place under the same R2 key. The route sets
 `cache-control: immutable, max-age=1y`, so a same-key replacement won't
 propagate to clients (or to the CF edge cache) until the cache expires.
 
-## Migration path (Phase 2, separate task)
+## Client-side integration
 
-Once the BFF is verified:
+All three upstreams now reach this BFF through a single shared client at
+[`src/services/bff/client.ts`](../../src/services/bff/client.ts). Provider
+services (`edamam.ts`, `spoonacular.ts`, `openFoodFacts.ts`) call `bffGet()`
+and translate the typed `BffError` / `BffQuotaExhaustedError` into
+provider-specific UX. There is no fetch wrapper, base URL constant, or error
+envelope duplicated in the per-provider files.
 
-1. Add `EXPO_PUBLIC_BFF_BASE_URL=https://api.nutriassistant.org` to the app `.env` (this one IS safe to bundle — it's a public URL).
-2. Replace upstream URLs in:
-   - `src/services/openFoodFacts.ts:3` → `${BFF}/v1/off/product/${barcode}`
-   - `src/services/edamam.ts` already goes through `${BFF}/v1/edamam/...` (this is the canonical pattern; copy it for OFF + Spoonacular).
-   - `src/services/spoonacular.ts:7` → remove `apiKey` param, hit `${BFF}/v1/spoonacular/...`
-3. Delete `EXPO_PUBLIC_SPOONACULAR_API_KEY` from the app `.env`.
-4. Rotate the upstream credentials at the providers (Spoonacular dashboard). Anyone who downloaded a previous binary still has the old keys; rotating invalidates them. Edamam credentials never shipped in any binary so no rotation needed.
+To add a new provider:
 
-The mappers (`mapNutriments`, `buildStub`, etc.) need no changes — the BFF returns the same shapes.
+1. Add the route under `infra/bff/src/routes/<provider>.ts` and wire it into `src/index.ts`.
+2. In the app, create `src/services/<provider>.ts` that calls `bffGet('/v1/<provider>/...')` and maps the response.
+3. If the provider has a quota, surface it via a `/v1/<provider>/quota` route and read it with `getSpoonacularQuotaSnapshot()`-style helper.
+
+The mappers (`mapNutriments`, `buildStub`, etc.) need no changes — the BFF returns upstream JSON unchanged.
+
+### Migration history
+
+| Date | Commit | Change |
+|---|---|---|
+| 2026-05-13 | `b87bf26` | BFF scaffolded on Cloudflare Workers |
+| 2026-05-13 | `39f9925` | Deployed to `api.nutriassistant.org` |
+| 2026-05-13 | `adb2483` | FatSecret replaced by Edamam Recipe Search v2 |
+| 2026-05-13 | `1647aac` | Spoonacular + OpenFoodFacts routed through BFF; **last upstream-direct call removed**, mobile bundle now ships zero third-party API keys |
+| 2026-05-13 | `c27c0d7` | Shared `bffGet()` client extracted (`src/services/bff/client.ts`) + 9-test suite |
+| 2026-05-13 | `ae7e019` | Credential rotation runbook added (above) |
+| 2026-05-13 | `7b4630d` | Streaming LLM response handling fixed in BFF; on-device model artifacts mirrored via R2 |

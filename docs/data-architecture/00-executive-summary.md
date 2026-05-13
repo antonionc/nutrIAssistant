@@ -104,7 +104,7 @@
 
 ### Top recommendations
 
-1. **Complete BFF migration** for Spoonacular and OpenFoodFacts (Edamam is already routed through the BFF; only `EXPO_PUBLIC_SPOONACULAR_API_KEY` remains in the bundle). The BFF runs on Cloudflare Workers at `api.nutriassistant.org`, code in `infra/bff/`.
+1. **✅ Done — BFF migration complete** (commits `b87bf26` → `1647aac` → `c27c0d7`, May 2026). All three catalogs (OFF, Edamam, Spoonacular) ride the Cloudflare Worker at `api.nutriassistant.org`; on-device LLM artifacts are mirrored from R2 via the same Worker. The mobile bundle ships **zero** third-party credentials. Next action carried over from this item: **schedule a quarterly rotation** of `SPOONACULAR_API_KEY` / `EDAMAM_APP_KEY` per [`infra/bff/README.md#rotating-a-provider-credential`](../../infra/bff/README.md#rotating-a-provider-credential).
 2. **Implement full deletion**: wipe SQLite + AsyncStorage + FileSystem `documentDirectory/profile-documents/` + the Keychain key `nutri_master_key_v1` + AsyncStorage model flag + `app_initialized`. Same code path for the "right to be forgotten".
 3. **Add the Sentry SDK** (or equivalent) with a `beforeSend` that strips PII and `enc:v1:` fields before sending. Critical for Art. 33 (breach notification within 72h).
 4. **Publish a privacy policy** and an in-app medical disclaimer, with explicit Art. 9.2.a consent before enabling the AI chat. Today the gate is age-based (`≥18`) and not by informed consent.

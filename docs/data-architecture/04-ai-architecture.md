@@ -2,7 +2,9 @@
 
 **Current state:** the product's AI runs **entirely on-device** (Qwen 3 1.7B Quantized + all-MiniLM-L6-v2). No cloud provider is called for inference (`grep -r "openai\|anthropic\|huggingface.inference" src/` returns nothing). The system is composed of six layers: topic gate, RAG over clinical PDFs, prompt builder, LLM generation, action parser, fact extractor. Weekly plan generation uses the LLM with an algorithmic fallback. The whole pipeline was designed for privacy (data never leaves the phone) and for latency/cost (zero inference cost, ~2-5 s per turn on modern hardware).
 
-**Model artifact delivery:** the `.pte` weights (~1.2 GB) and tokenizer JSONs are served by our Cloudflare Worker BFF (`/v1/llm/qwen3-1.7b/{model.pte,tokenizer.json,tokenizer_config.json}`) backed by R2. They were previously pulled directly from the HuggingFace CDN; mirroring through R2 gives us a stable POP near EU users (e.g. Madrid), control over availability during HF outages, and immutable 1-year edge cache. Inference itself is **still 100% on-device** — the BFF only hosts the static artifacts.
+**Model artifact delivery:** the `.pte` weights (~1.2 GB) and tokenizer JSONs are served by our Cloudflare Worker BFF (`/v1/llm/qwen3-1.7b/{model.pte,tokenizer.json,tokenizer_config.json}`) backed by R2 — see [`infra/bff/src/routes/llm.ts`](../../infra/bff/src/routes/llm.ts) and the [Mirroring the on-device LLM](../../infra/bff/README.md#mirroring-the-on-device-llm) runbook for the R2 layout. They were previously pulled directly from the HuggingFace CDN; mirroring through R2 gives us a stable POP near EU users (e.g. Madrid), control over availability during HF outages, and an immutable 1-year edge cache (`cache-control: public, max-age=31536000, immutable`). Because the cache headers are immutable, **upgrading the model means a new R2 namespace** (`qwen3-1.7b-v2/`, `qwen2.5-3b/`, …) and a matching bump of `KEY_MODEL_FIRST_LOAD` in `src/services/onDeviceLlm.ts`, not an in-place overwrite. Inference itself is **still 100% on-device** — the BFF only hosts the static artifacts.
+
+**Response rendering layer:** Streaming text from `generateOnDevice` is passed through `stripThinkingBlock` (drops `<think>…</think>` reasoning), then rendered by [`src/components/layout/MarkdownText.tsx`](../../src/components/layout/MarkdownText.tsx). MarkdownText is a custom renderer (not `react-native-markdown-display`) so we can theme headings, lists, inline code, fenced blocks, and links without dragging in a 400 kB dependency for a chat use case. During first-launch model download, [`src/components/layout/LLMLoadingBar.tsx`](../../src/components/layout/LLMLoadingBar.tsx) shows a 2 px progress strip driven by `subscribeLLMLoad` so the user has a non-blocking signal while ~1 GB streams in.
 
 ## 4.1. AI capability inventory
 
@@ -58,7 +60,8 @@ flowchart LR
         RP --> BP
         BP --> Gen[generateOnDevice<br/>Qwen 3 streaming]
         Gen -- token --> Strip[stripThinkingBlock]
-        Strip --> UI[setMessages display]
+        Strip --> MD[MarkdownText render<br/>headings/lists/code/links]
+        MD --> UI[setMessages display]
         Gen --> Parse[parseActions]
         Parse -- valid --> ApplyAct[applyAIActions]
         Parse --> FX[scheduleFactExtraction<br/>debounce 2s]
@@ -67,7 +70,9 @@ flowchart LR
     end
 ```
 
-### TO-BE (recommended for production)
+### TO-BE (PROPOSED — not implemented today)
+
+> ⚠️ **None of the components below ship in the current build.** Today's pipeline is the AS-IS diagram above: 100% on-device Qwen 3, no semantic cache, no cloud inference path. The BFF (`infra/bff/`) currently proxies **catalog APIs** (Edamam, Spoonacular, OpenFoodFacts) and **mirrors the static model artifacts** from R2, but does **not** route inference. The diagram below is a recommendation for a Pro tier; any future addition of cloud inference would require granular Art. 9.2.a consent (see §4.6).
 
 ```mermaid
 flowchart LR
@@ -80,14 +85,14 @@ flowchart LR
         Cache --> Resp
     end
 
-    subgraph BFF[BFF cloud]
+    subgraph BFF[BFF cloud — proposed]
         BFFGate[Auth + rate limit]
         SemCache[(Semantic cache<br/>Redis + pgvector)]
         Telemetry[Telemetry: lat, tokens, cost]
         ModelRouter{Model router}
     end
 
-    subgraph Models[Cloud models for fallback]
+    subgraph Models[Cloud models for fallback — proposed]
         Sonnet[Claude Sonnet 4.6]
         Local[Local Qwen 3]
     end

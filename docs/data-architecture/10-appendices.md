@@ -105,12 +105,12 @@
 ### ADR-001: Local-first architecture and prohibition of cloud AI
 
 **Status**: Adopted.
-**Date**: 2026-04-15 (commit `125606c` "Implement on-device Llama LLM").
+**Date**: 2026-04-15 (commit `125606c` "Implement on-device Llama LLM"). Model later swapped to Qwen 3 1.7B Quantized in commit `975baad` (2026-05-08) — the local-first decision was unchanged.
 **Context**: the app processes Art. 9 health data. Any transfer to a US AI provider (OpenAI, Anthropic) would require SCC + TIA + specific consent + recurring cost.
-**Decision**: all inference runs on the device. No cloud LLM provider is called (`grep` confirmed).
+**Decision**: all inference runs on the device. No cloud LLM provider is called (`grep -r "openai\|anthropic\|huggingface.inference" src/` returns nothing). The Cloudflare Worker BFF that ships static model artifacts from R2 (commit `7b4630d`) is **not** an inference path — it serves the same `.pte` weights HuggingFace would serve, only with EU edge caching and SLA control.
 **Positive consequences**: absolute privacy by design; €0 inference cost; commercial differentiator.
 **Negative consequences**: model capped at ~1.7B params (vs state-of-the-art 70B+); ~1 GB initial download; response quality below Claude/GPT-4.
-**Evidence**: `src/services/onDeviceLlm.ts:7-9`, project `local_ai_architecture.md` memory.
+**Evidence**: `src/services/onDeviceLlm.ts:7-9`, `infra/bff/src/routes/llm.ts`, project `local_ai_architecture.md` memory.
 
 ### ADR-002: Field-level encryption (not page-level)
 
