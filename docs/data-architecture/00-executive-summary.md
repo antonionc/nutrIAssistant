@@ -18,7 +18,7 @@
 - **Health (wearables):** `react-native-health` (Apple Health, optional) and `react-native-health-connect` (Google Health Connect, optional) loaded through defensive `require` (`src/modules/health/providers/appleHealth.ts:22-28`, `healthConnect.ts:23-29`). Not listed as explicit dependencies in `package.json` — presumed experimental or removed from the manifest.
 - **Camera and OCR:** `expo-camera` (EAN13/EAN8/UPC-A/UPC-E/QR barcode scanner — `app/scanner.tsx:158`).
 - **PDFs:** custom Expo native module `expo-pdf-text` (Swift in `modules/expo-pdf-text/ios/ExpoPdfTextModule.swift`, Kotlin in `modules/expo-pdf-text/android/src/main/java/expo/modules/pdftext/ExpoPdfTextModule.kt`) to extract text from clinical PDFs.
-- **External APIs:** three nutrition/recipe catalog providers (see [§2.2](./02-data-model-architecture.md#22-data-source-classification)): **OpenFoodFacts** (no auth, `src/services/openFoodFacts.ts:3`), **FatSecret** (OAuth2 client_credentials, `src/services/fatsecret.ts:7-12`), **Spoonacular** (API key, `src/services/spoonacular.ts:7`). TheMealDB code and catalog exist (`src/services/themealdb.ts`) but the source was purged and the data deleted in migration 009.
+- **External APIs:** three nutrition/recipe catalog providers (see [§2.2](./02-data-model-architecture.md#22-data-source-classification)): **OpenFoodFacts** (no auth, `src/services/openFoodFacts.ts:3`), **Edamam** Recipe Search v2 (`app_id` + `app_key` held server-side in the Cloudflare BFF, never in the bundle, `src/services/edamam.ts`), **Spoonacular** (API key still in bundle pending BFF migration, `src/services/spoonacular.ts:7`). FatSecret was removed in migration 013; TheMealDB earlier in migration 009.
 - **Telemetry / APM / analytics:** ⚠️ GAP — **no Sentry, Datadog, Amplitude, PostHog, Mixpanel, GA4 or Firebase Analytics**. The only observability is `console.log/warn/error` in code.
 - **CI/CD:** ⚠️ GAP — no workflows (GitHub Actions, EAS), `gitleaks`, SBOM, Snyk or Dependabot configured in the repo (`ls -la .github` does not exist; no workflow `.yml` files).
 - **Tests:** Jest + `jest-expo`. 9 files in `src/__tests__/` (`scripts/reset-project.js` excluded). No E2E or data-contract tests.
@@ -33,7 +33,7 @@
 **External data sources**
 
 - OpenFoodFacts (HTTPS REST, no auth) — barcode product scans (`src/services/openFoodFacts.ts:67-88`).
-- FatSecret (HTTPS OAuth2, EU/US, `oauth.fatsecret.com`) — Mediterranean catalog, recipes + nutrition (`src/services/fatsecret.ts:9-145`).
+- Edamam Recipe Search v2 (HTTPS, US-hosted) — Mediterranean catalog, recipes + nutrition (`src/services/edamam.ts`). The client only ever talks to the BFF (`api.nutriassistant.org/v1/edamam/*`); credentials live in Cloudflare's encrypted secret store.
 - Spoonacular (HTTPS API key, US) — multi-cuisine recipes + nutrition (`src/services/spoonacular.ts:7-310`).
 - TheMealDB (HTTPS API v2, `themealdb.com`) — code present but migration 009 wipes all records (`src/db/migrations/009_purge_themealdb.ts`).
 - Apple HealthKit (iOS native) — steps and active calories (`src/modules/health/providers/appleHealth.ts`).
@@ -82,7 +82,7 @@
 | Stack | ✅ | Expo SDK 55, React Native 0.83.6, TypeScript 5.9, expo-sqlite, AsyncStorage, expo-secure-store | n/a |
 | Primary storage | ✅ | Local SQLite + AsyncStorage + iOS Keychain/Android Keystore + FileSystem (`docs/`, `avatars/`) | 🟡 (partial encryption — critical fields only) |
 | Key store | ✅ | iOS Keychain / Android Keystore (hardware-backed when available) | 🟡 (no rotation) |
-| External providers | ✅ | OpenFoodFacts, FatSecret (EU/US), Spoonacular (US), HuggingFace CDN, Apple Health, Health Connect | 🔴 (no DPIA, no SCC, no TIA) |
+| External providers | ✅ | OpenFoodFacts, Edamam (via BFF), Spoonacular (US), HuggingFace CDN, Apple Health, Health Connect | 🔴 (no DPIA, no SCC, no TIA) |
 | AI model | ✅ | **100% on-device**: Qwen 3 1.7B Quantized (LLM) + all-MiniLM-L6-v2 (embeddings) | 🟢 (privacy-by-design) |
 | Field-level encryption at rest | ✅ | AES-256-GCM `@noble/ciphers`, 96-bit nonce, 128-bit tag | 🟡 (does not cover all columns) |
 | Encryption in transit | ✅ | OS-default TLS 1.2/1.3; no pinning | 🟡 |
@@ -96,7 +96,7 @@
 
 ### Critical findings (top 5)
 
-1. **🔴 Secrets in public bundle.** `EXPO_PUBLIC_FATSECRET_CLIENT_SECRET` and `EXPO_PUBLIC_SPOONACULAR_API_KEY` are compiled into the binary (`.env:5-7`, `src/services/fatsecret.ts:7-8`, `src/services/spoonacular.ts:7`). Anyone can extract them with `strings` from the IPA/APK. Mandatory mitigation before production: move behind a BFF (Backend-For-Frontend).
+1. **🟡 Secrets partially still in bundle.** `EXPO_PUBLIC_SPOONACULAR_API_KEY` is still compiled into the binary (`src/services/spoonacular.ts:7`). Anyone can extract it with `strings` from the IPA/APK. Spoonacular migration to the existing BFF (`api.nutriassistant.org`) is the pending mitigation. Edamam never shipped credentials in any binary (everything goes through the BFF). FatSecret was removed entirely in migration 013.
 2. **🔴 Total lack of observability.** No APM (Sentry/Datadog), no product analytics, no audit logs. Cannot satisfy GDPR Art. 33–34 (breach notification) without traceability.
 3. **🔴 Full data deletion not implemented.** The "Delete all data" button in `app/settings.tsx:517-524` shows an Alert, but the `onPress: () => {}` handler is empty. There is an explicit `// TODO: implement full data deletion` (`app/settings.tsx:516`). Blocks the right to erasure under Art. 17.
 4. **🟡 AI usage and limitations notice missing.** No in-app "not medical advice" disclaimer. The model prompt offers guidance based on conditions (hypertension, celiac, diabetes 1/2, etc. — `src/services/prompts/system.ts:17-26`) without explicit Art. 9 consent on legal basis.
@@ -104,7 +104,7 @@
 
 ### Top recommendations
 
-1. **Build a minimal BFF** on Cloudflare Workers / AWS Lambda + API Gateway that proxies FatSecret, Spoonacular and OpenFoodFacts, keeps secrets in Secret Manager, and applies per-device-id rate limits.
+1. **Complete BFF migration** for Spoonacular and OpenFoodFacts (Edamam is already routed through the BFF; only `EXPO_PUBLIC_SPOONACULAR_API_KEY` remains in the bundle). The BFF runs on Cloudflare Workers at `api.nutriassistant.org`, code in `infra/bff/`.
 2. **Implement full deletion**: wipe SQLite + AsyncStorage + FileSystem `documentDirectory/profile-documents/` + the Keychain key `nutri_master_key_v1` + AsyncStorage model flag + `app_initialized`. Same code path for the "right to be forgotten".
 3. **Add the Sentry SDK** (or equivalent) with a `beforeSend` that strips PII and `enc:v1:` fields before sending. Critical for Art. 33 (breach notification within 72h).
 4. **Publish a privacy policy** and an in-app medical disclaimer, with explicit Art. 9.2.a consent before enabling the AI chat. Today the gate is age-based (`≥18`) and not by informed consent.

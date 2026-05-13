@@ -2,6 +2,11 @@
 
 This area documents the data lifecycle, AI architecture, security model, privacy posture, governance, observability, and production-readiness of the NutrIAssistant app.
 
+> **Recent architectural changes (read before consuming the rest):**
+>
+> - **2026-05-13 — FatSecret → Edamam swap.** All FatSecret integration was removed (commit `adb2483`, DB migration 013 purges legacy `fs-*` recipes). Edamam Recipe Search v2 replaces it as the Mediterranean catalog source. Credentials are held server-side in the Cloudflare BFF (`api.nutriassistant.org`), never in the bundle. Sections below that still describe FatSecret OAuth, `EXPO_PUBLIC_FATSECRET_*` secrets, or `fs-*` recipe IDs are historical — treat them as describing the previous architecture.
+> - **2026-05-13 — Cloudflare BFF deployed.** `infra/bff/` proxies OpenFoodFacts, Edamam, and Spoonacular. Edamam is fully routed through the BFF; OFF and Spoonacular still call upstream directly from the app and are on the migration list. The "secrets in bundle" finding in §0 / §3 applies only to `EXPO_PUBLIC_SPOONACULAR_API_KEY` going forward.
+
 ## One-page picture
 
 If you only have time for one diagram, this is it.
@@ -40,7 +45,7 @@ flowchart TB
 
     subgraph Cloud["☁️ Internet · non-PII only"]
         OFF[OpenFoodFacts FR]:::ext
-        FS[FatSecret US ⚠️ SCC]:::warn
+        ED[Edamam US ⚠️ SCC]:::warn
         SP[Spoonacular US ⚠️ SCC]:::warn
         HF[HuggingFace CDN models]:::ext
     end
@@ -107,7 +112,7 @@ This is the honest snapshot: an exemplary local-first architecture, partial encr
 | Stack | ✅ Expo SDK 55, RN 0.83.6, TypeScript 5.9 | n/a |
 | Primary storage | ✅ SQLite + AsyncStorage + Keychain/Keystore + FileSystem | 🟡 partial encryption |
 | Key store | ✅ iOS Keychain / Android Keystore | 🟡 no rotation |
-| External providers | ✅ OpenFoodFacts, FatSecret, Spoonacular, HuggingFace, Apple Health, Health Connect | 🔴 no DPIA, no SCC, no TIA |
+| External providers | ✅ OpenFoodFacts, Edamam, Spoonacular, HuggingFace, Apple Health, Health Connect | 🔴 no DPIA, no SCC, no TIA |
 | AI model | ✅ **100% on-device** (Qwen 3 1.7B Q + MiniLM L6 v2) | 🟢 privacy-by-design |
 | Field-level encryption at rest | ✅ AES-256-GCM `@noble/ciphers` | 🟡 partial column coverage |
 | Encryption in transit | ✅ OS-default TLS 1.2/1.3, no pinning | 🟡 |
@@ -121,7 +126,7 @@ This is the honest snapshot: an exemplary local-first architecture, partial encr
 
 ## Critical findings (top 5)
 
-1. **🔴 Secrets in public bundle.** `EXPO_PUBLIC_FATSECRET_CLIENT_SECRET` and `EXPO_PUBLIC_SPOONACULAR_API_KEY` are compiled into the binary ([`.env:5-7`](../../.env), [`src/services/fatsecret.ts:7-8`](../../src/services/fatsecret.ts), [`src/services/spoonacular.ts:7`](../../src/services/spoonacular.ts)). Anyone can extract them with `strings` from the IPA/APK. Required mitigation before production: move behind a BFF.
+1. **🟡 Secrets partially still in bundle.** `EXPO_PUBLIC_SPOONACULAR_API_KEY` is still compiled into the binary ([`src/services/spoonacular.ts:7`](../../src/services/spoonacular.ts)) — Spoonacular migration to BFF is pending. Edamam credentials never shipped in any binary (only ever lived in Cloudflare's encrypted secret store via `infra/bff/`). FatSecret was removed entirely from the project.
 2. **🔴 No observability.** No APM (Sentry/Datadog), no product analytics, no audit logs. Impossible to satisfy GDPR Art. 33–34 (breach notification) without traceability.
 3. **🔴 Full data deletion not implemented.** The "Delete all data" button in [`app/settings.tsx:516-523`](../../app/settings.tsx) shows an Alert but the handler `onPress: () => {}` is empty. There is an explicit `// TODO: implement full data deletion`. Blocks the right to erasure under Art. 17.
 4. **🟡 No AI usage notice or limitations disclaimer.** No "not medical advice" disclaimer in the app. The system prompt offers guidance based on conditions (hypertension, celiac, diabetes 1/2, etc. — [`src/services/prompts/system.ts:17-26`](../../src/services/prompts/system.ts)) without explicit Art. 9 consent.
