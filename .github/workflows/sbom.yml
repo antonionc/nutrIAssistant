@@ -1,0 +1,56 @@
+name: Generate SBOM
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cyclonedx:
+    name: CycloneDX SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Generate CycloneDX SBOM for the mobile app
+        run: npx --yes @cyclonedx/cyclonedx-npm --output-file sbom-app.json
+
+      - name: Install BFF dependencies
+        working-directory: infra/bff
+        run: npm ci
+
+      - name: Generate CycloneDX SBOM for the BFF
+        working-directory: infra/bff
+        run: npx --yes @cyclonedx/cyclonedx-npm --output-file sbom-bff.json
+
+      - name: License whitelist check (app)
+        run: |
+          npx --yes license-checker --json --production --excludePackages "$(node -p "require('./package.json').name + '@' + require('./package.json').version")" > licenses-app.json
+          # Fail on any package licensed under a copyleft we will not ship.
+          if grep -E '"licenses": "(AGPL|GPL|LGPL)"' licenses-app.json > /dev/null; then
+            echo "::error::Detected AGPL/GPL/LGPL license in dependencies"
+            grep -E '"licenses": "(AGPL|GPL|LGPL)"' -B1 licenses-app.json
+            exit 1
+          fi
+
+      - name: Upload SBOMs as release assets
+        if: github.event_name == 'release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            sbom-app.json \
+            infra/bff/sbom-bff.json \
+            --clobber

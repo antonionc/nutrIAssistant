@@ -24,6 +24,7 @@ import { AboutMeSheet, AboutMeSheetRef } from '../../src/components/sheets/About
 import { MemorySheet, MemorySheetRef } from '../../src/components/sheets/MemorySheet'
 import { HeaderProfileAvatar } from '../../src/components/layout/HeaderProfileAvatar'
 import { countMemberMemoriesForMember } from '../../src/services/memoryStore'
+import { logger } from '../../src/utils/logger'
 
 // Custom pill back button shared by both render branches. Replaces the
 // default iOS pill that leaks the parent route name ("(tabs)") as a label.
@@ -81,7 +82,7 @@ export default function ProfileScreen() {
     try {
       setMemoryCount(await countMemberMemoriesForMember(id))
     } catch (e) {
-      console.warn('[profile] memory count failed:', e)
+      logger.warn('[profile] memory count failed:', e)
     }
   }, [id])
   useFocusEffect(
@@ -325,17 +326,16 @@ function Vitals({
   styles,
   tr,
 }: {
-  member: { weight: number; height: number; bloodPressure?: string; restingHeartRate?: number; hrv?: number; spO2?: number }
+  member: { weight: number; height: number }
   styles: ReturnType<typeof makeStyles>
   tr: ReturnType<typeof useTranslation>
 }) {
   const items: Array<{ label: string; value: string }> = []
   if (member.weight) items.push({ label: tr.profile.weight, value: `${member.weight} kg` })
   if (member.height) items.push({ label: tr.profile.height, value: `${member.height} cm` })
-  if (member.bloodPressure) items.push({ label: tr.profile.bloodPressure, value: member.bloodPressure })
-  if (member.restingHeartRate) items.push({ label: tr.profile.restingHR, value: `${member.restingHeartRate} bpm` })
-  if (member.hrv) items.push({ label: tr.profile.hrv, value: `${member.hrv} ms` })
-  if (member.spO2) items.push({ label: tr.profile.spO2, value: `${member.spO2} %` })
+  // bloodPressure / restingHeartRate / hrv / spO2 removed in Sprint 5.6
+  // (data minimization). Re-add only when a real downstream consumer
+  // for these vitals is being built.
 
   if (items.length === 0) return null
 

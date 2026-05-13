@@ -1,0 +1,39 @@
+version: 2
+updates:
+  # Mobile app dependencies (Expo / React Native).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - security
+    groups:
+      expo-sdk:
+        patterns:
+          - 'expo*'
+          - '@expo/*'
+      react-native:
+        patterns:
+          - 'react-native*'
+
+  # Cloudflare Worker BFF dependencies.
+  - package-ecosystem: npm
+    directory: /infra/bff
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - bff
+
+  # GitHub Actions versions.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels:
+      - ci

@@ -29,6 +29,7 @@ import { Recipe } from '../../src/types/recipes'
 import { AllergyPill } from '../../src/components/badges/AllergyPill'
 import { HeaderProfileAvatar } from '../../src/components/layout/HeaderProfileAvatar'
 import { useSelectedProfile } from '../../src/modules/profiles/SelectedProfileContext'
+import { logger } from '../../src/utils/logger'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -72,7 +73,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     getRandom(5).then(setFeaturedRecipes).catch((e) => {
-      console.warn('[Home] Error cargando recetas:', e)
+      logger.warn('[Home] Error cargando recetas:', e)
     })
   }, [])
 

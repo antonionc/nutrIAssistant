@@ -1,8 +1,10 @@
 import * as FileSystem from 'expo-file-system/legacy'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as Crypto from 'expo-crypto'
 import { ExpoResourceFetcher } from 'react-native-executorch-expo-resource-fetcher'
 import { OnDeviceLLMStatus } from '../types/ai'
 import { currentLang } from '../utils/locale'
+import { logger } from '../utils/logger'
 
 // react-native-executorch is required at runtime. In Expo Go (no native build)
 // the require throws — we surface that via getLLMStatus rather than falling
@@ -28,6 +30,28 @@ const LLM_BASE = `${BFF_BASE}/v1/llm/qwen3-1.7b`
 const MODEL_URL = `${LLM_BASE}/model.pte`
 const TOKENIZER_URL = `${LLM_BASE}/tokenizer.json`
 const TOKENIZER_CONFIG_URL = `${LLM_BASE}/tokenizer_config.json`
+
+// SHA256 integrity pins for the artifacts our app expects to consume.
+// The hashes are computed at upload time by the BFF runbook
+// (`infra/bff/README.md#mirroring-the-on-device-llm`) and pinned here.
+//
+// Why we pin the small files but not the .pte:
+//   - tokenizer.json + tokenizer_config.json fit comfortably in memory
+//     (<1 MB each) so we can compute SHA256 over the bytes via
+//     `Crypto.digestStringAsync`.
+//   - model.pte is ~1.2 GB. Streaming SHA256 in JS over 1.2 GB is
+//     prohibitively slow on-device and locks the bridge. Until we ship
+//     a native module that streams the hash, the .pte integrity relies
+//     on Cloudflare's TLS chain + R2 immutability + cache headers. The
+//     constant below is provisioned so the moment streaming-hash exists,
+//     the check turns on without touching any other file.
+//
+// LEAVE these as empty strings to mean "skip verification". A populated
+// hash MUST match exactly; mismatch deletes the artifact and forces a
+// re-download.
+export const EXPECTED_MODEL_PTE_SHA256 = '' // populated when streaming-hash native module exists
+export const EXPECTED_TOKENIZER_SHA256 = ''
+export const EXPECTED_TOKENIZER_CONFIG_SHA256 = ''
 
 let LLMModuleRef: LLMModuleClass | null = null
 try {
@@ -73,7 +97,7 @@ function notifyLoad(phase: LLMLoadPhase, progress: number): void {
     try {
       l(phase, progress)
     } catch (e) {
-      console.warn('[OnDeviceLLM] load listener threw:', e)
+      logger.warn('[OnDeviceLLM] load listener threw:', e)
     }
   }
 }
@@ -137,6 +161,52 @@ export async function isModelDownloaded(): Promise<boolean> {
   return (await AsyncStorage.getItem(KEY_MODEL_FIRST_LOAD)) === 'true'
 }
 
+/**
+ * Verifies the SHA256 of a small artifact (tokenizer JSONs). Returns true
+ * when the expected hash is empty (skip), when the file is missing, or
+ * when the hash matches. Returns false ONLY when the hash is set and
+ * differs — that is the tamper signal.
+ *
+ * Skipping when the file is missing is intentional: this function runs
+ * AFTER the executorch loader writes its artifacts into the document
+ * dir under names we cannot predict deterministically. If we cannot
+ * locate the file we cannot verify it; we lean on TLS/R2 immutability
+ * for that hop.
+ */
+export async function verifyArtifactSha256(
+  expectedHex: string,
+  fileUri: string,
+): Promise<boolean> {
+  if (!expectedHex) return true
+  try {
+    const info = await FileSystem.getInfoAsync(fileUri)
+    if (!info.exists) return true
+    // expo-crypto only digests strings, so we read the file as base64
+    // and hash that representation. The pin must be computed the same
+    // way (base64 of bytes → SHA256) when populated.
+    const base64 = await FileSystem.readAsStringAsync(fileUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    })
+    const actual = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      base64,
+      { encoding: Crypto.CryptoEncoding.HEX },
+    )
+    if (actual.toLowerCase() !== expectedHex.toLowerCase()) {
+      logger.error('[OnDeviceLLM] artifact hash mismatch', {
+        fileUri,
+        expected: expectedHex,
+        actual,
+      })
+      return false
+    }
+    return true
+  } catch (err) {
+    logger.warn('[OnDeviceLLM] hash verification failed', { fileUri, err })
+    return true // fail open — do not block load on verification infrastructure errors
+  }
+}
+
 export async function ensureModelAvailable(
   onPhase?: (phase: 'downloading' | 'loading', progress?: number) => void
 ): Promise<boolean> {
@@ -173,7 +243,7 @@ export async function ensureModelAvailable(
       notifyLoad('ready', 1)
       return true
     } catch (e) {
-      console.error('[OnDeviceLLM] Failed to load LLM:', e)
+      logger.error('[OnDeviceLLM] Failed to load LLM:', e)
       llmInstance = null
       // Tell subscribers the attempt is over so the UI bar doesn't stay
       // visible forever waiting for a 'ready' that will never come.

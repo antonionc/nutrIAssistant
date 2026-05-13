@@ -2,7 +2,27 @@ import { Recipe, RecipeCategory, RecipeIngredient } from '../types/recipes'
 import { NutritionalInfo } from '../types/nutrition'
 import { computeNutriScore } from './nutriscore'
 import { detectAllergensInIngredients } from '../modules/profiles/allergenEngine'
+import { z } from 'zod'
 import { bffGet } from './bff/client'
+import { logger } from '../utils/logger'
+
+// Permissive Zod schemas — detect catastrophic drift (no `hits`, no
+// `recipe`) without locking us into every detail of Edamam's payload.
+// `.passthrough()` keeps unknown fields, which is what we want — we
+// only validate the shape we care about.
+const edSearchSchema = z.object({
+  hits: z.array(z.object({ recipe: z.object({}).passthrough() })).optional(),
+}).passthrough()
+
+const edDetailSchema = z.object({
+  recipe: z.object({}).passthrough().optional(),
+}).passthrough()
+
+function logSchemaDrift(service: string, issues: z.ZodIssue[]): void {
+  logger.warn(`[${service}] upstream schema drift`, {
+    issues: issues.slice(0, 3).map((i) => ({ path: i.path, code: i.code })),
+  })
+}
 
 // All calls go through our BFF (https://api.nutriassistant.org). The BFF
 // injects the Edamam app_id / app_key / account-user header server-side, so
@@ -205,11 +225,17 @@ export async function searchMediterraneanRecipes(
       const params: Record<string, string> = { q: query.q }
       if (query.cuisineType) params.cuisineType = query.cuisineType
 
-      const data = await bffGet<EDSearchResponse>({
+      const raw = await bffGet<unknown>({
         service: 'Edamam',
         path: '/v1/edamam/recipes/search',
         params,
       })
+      const parsed = edSearchSchema.safeParse(raw)
+      if (!parsed.success) {
+        logSchemaDrift('Edamam', parsed.error.issues)
+        continue // skip this cuisine, keep iterating
+      }
+      const data = parsed.data as EDSearchResponse
 
       for (const hit of data.hits ?? []) {
         const raw = hit.recipe
@@ -246,7 +272,7 @@ export async function searchMediterraneanRecipes(
         seen.set(dedupeKey, recipe)
       }
     } catch (e) {
-      console.warn(`[Edamam] Search failed for "${query.q}":`, e)
+      logger.warn(`[Edamam] Search failed for "${query.q}":`, e)
     }
 
     // Conservative pacing — Edamam Developer tier is 10 req/min.
@@ -276,11 +302,16 @@ export interface EdamamRecipeDetail {
  */
 export async function getRecipeDetail(edamamId: string): Promise<EdamamRecipeDetail | null> {
   try {
-    const data = await bffGet<{ recipe: EDRecipe }>({
+    const fetched = await bffGet<unknown>({
       service: 'Edamam',
       path: `/v1/edamam/recipes/${edamamId}`,
     })
-    const raw = data.recipe
+    const parsed = edDetailSchema.safeParse(fetched)
+    if (!parsed.success || !parsed.data.recipe) {
+      logSchemaDrift('Edamam', parsed.success ? [] : parsed.error.issues)
+      return null
+    }
+    const raw = parsed.data.recipe as unknown as EDRecipe
     const ingredients = mapIngredients(raw)
     const allergenNames = detectAllergensInIngredients(ingredients.map((i) => i.name))
     const markedIngredients = ingredients.map((ing) => ({
@@ -299,7 +330,7 @@ export async function getRecipeDetail(edamamId: string): Promise<EdamamRecipeDet
       imageUrl: raw.image,
     }
   } catch (e) {
-    console.warn('[Edamam] getRecipeDetail failed:', e)
+    logger.warn('[Edamam] getRecipeDetail failed:', e)
     return null
   }
 }

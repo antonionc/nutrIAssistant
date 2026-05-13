@@ -1,5 +1,25 @@
+import { z } from 'zod'
 import { NutritionalInfo, NutriScore } from '../types/nutrition'
 import { bffGet } from './bff/client'
+import { logger } from '../utils/logger'
+
+// Zod schema for runtime validation of OFF responses. Catches upstream
+// schema drift (renamed/removed fields) so we degrade to "product not
+// found" rather than rendering UI with `undefined` everywhere.
+const offResponseSchema = z.object({
+  status: z.number(),
+  product: z
+    .object({
+      product_name: z.string().optional(),
+      brands: z.string().optional(),
+      nutriscore_grade: z.string().optional(),
+      allergens_tags: z.array(z.string()).optional(),
+      ingredients_text: z.string().optional(),
+      nutriments: z.record(z.string(), z.number()).optional(),
+      image_url: z.string().optional(),
+    })
+    .optional(),
+})
 
 // All calls go through the BFF (https://api.nutriassistant.org). The BFF
 // proxies OpenFoodFacts via the `.net` alias to avoid the CF↔CF HTTP 525
@@ -68,9 +88,9 @@ export interface OFFScanResult {
 }
 
 export async function getProductByBarcode(barcode: string): Promise<OFFScanResult | null> {
-  let data: OFFResponse
+  let raw: unknown
   try {
-    data = await bffGet<OFFResponse>({
+    raw = await bffGet<unknown>({
       service: 'OpenFoodFacts',
       path: `/v1/off/product/${barcode}`,
     })
@@ -79,6 +99,14 @@ export async function getProductByBarcode(barcode: string): Promise<OFFScanResul
     // UI can offer to add the product manually.
     return null
   }
+  const parsed = offResponseSchema.safeParse(raw)
+  if (!parsed.success) {
+    logger.warn('[OpenFoodFacts] upstream schema drift', {
+      issues: parsed.error.issues.slice(0, 3).map((i) => ({ path: i.path, code: i.code })),
+    })
+    return null
+  }
+  const data = parsed.data as OFFResponse
   if (data.status !== 1 || !data.product) return null
 
   const p = data.product

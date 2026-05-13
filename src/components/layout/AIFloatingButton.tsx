@@ -6,6 +6,7 @@ import { useTheme } from '../../theme/ThemeContext'
 import { useAIAssistant } from './AIAssistantHost'
 import { useSelectedProfile } from '../../modules/profiles/SelectedProfileContext'
 import { isAIAccessibleForMember } from '../../modules/ai-engine/aiAccess'
+import { useConsent } from '../../modules/consent/ConsentContext'
 
 const TAB_BAR_GAP = 76 // approximate height of the floating pill bar
 const SIDE_MARGIN = 16
@@ -17,11 +18,17 @@ export function AIFloatingButton() {
   const { isDark } = useTheme()
   const { open } = useAIAssistant()
   const { selected } = useSelectedProfile()
+  const { consent } = useConsent()
 
   // Hide the FAB entirely for under-18 users. Returning null instead of
   // greying it out makes it impossible to tap and matches the "the AI
   // simply doesn't exist for minors" intent.
   if (!isAIAccessibleForMember(selected)) return null
+
+  // Same idea, applied to the consent layer: if the user has revoked
+  // the AI consent, the entry point disappears. Re-enabling the toggle
+  // in Settings brings the FAB back without an app reload.
+  if (!consent.ai) return null
 
   const bottomOffset = insets.bottom + TAB_BAR_GAP + SIDE_MARGIN
 

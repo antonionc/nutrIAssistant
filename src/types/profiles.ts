@@ -54,10 +54,10 @@ export interface FamilyMember {
   dateOfBirth: string      // ISO YYYY-MM-DD
   weight: number              // kg
   height: number              // cm
-  bloodPressure?: string
-  restingHeartRate?: number   // bpm
-  hrv?: number                // ms
-  spO2?: number               // %
+  // Removed in Sprint 5.6 (data minimization, RGPD Art. 5.1.c):
+  // bloodPressure, restingHeartRate, hrv, spO2 were collected via UI
+  // but no engine consumed them. Reinstate only when a real consumer
+  // (e.g. cardio-risk feature) is being built.
   allergies: AllergenType[]
   conditions: string[]
   dietPreference: DietPreference

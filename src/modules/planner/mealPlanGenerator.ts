@@ -5,6 +5,7 @@ import {
   generateOnDevice,
   getLLMStatus,
 } from '../../services/onDeviceLlm'
+import { logger } from '../../utils/logger'
 
 const POOL_SIZE = 50
 const LLM_CANDIDATES = 14
@@ -125,12 +126,12 @@ async function pickWithLlm(
     const out = await generateOnDevice(prompt, SYSTEM_PROMPT)
     const indices = parseLlmIndices(out, candidates.length)
     if (!indices) {
-      console.warn(`[MealPlan] LLM ${category} output unparseable, falling back`)
+      logger.warn(`[MealPlan] LLM ${category} output unparseable, falling back`)
       return null
     }
     return indices.map((i) => candidates[i - 1])
   } catch (e) {
-    console.warn(`[MealPlan] LLM ${category} call failed:`, e)
+    logger.warn(`[MealPlan] LLM ${category} call failed:`, e)
     return null
   }
 }

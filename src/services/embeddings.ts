@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { logger } from '../utils/logger'
 
 // Mirrors the structure of onDeviceLlm.ts but for sentence embeddings.
 // `react-native-executorch` is required at runtime; in Expo Go (no native
@@ -69,7 +70,7 @@ export async function ensureEmbeddingsAvailable(
       await AsyncStorage.setItem(KEY_EMBEDDINGS_FIRST_LOAD, 'true')
       return true
     } catch (e) {
-      console.error('[Embeddings] Failed to load embeddings model:', e)
+      logger.error('[Embeddings] Failed to load embeddings model:', e)
       embeddingsInstance = null
       return false
     } finally {
@@ -95,7 +96,7 @@ export async function embedTextOrNull(text: string): Promise<Float32Array | null
   try {
     return await embeddingsInstance.forward(text)
   } catch (e) {
-    console.warn('[Embeddings] forward failed:', e)
+    logger.warn('[Embeddings] forward failed:', e)
     return null
   }
 }

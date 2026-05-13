@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { z } from 'zod'
 import { Recipe, RecipeCategory, RecipeIngredient } from '../types/recipes'
 import { NutritionalInfo } from '../types/nutrition'
 import { computeNutriScore } from './nutriscore'
 import { detectAllergensInIngredients } from '../modules/profiles/allergenEngine'
 import { bffGet, BffQuotaExhaustedError } from './bff/client'
+import { logger } from '../utils/logger'
 
 // All calls go through the BFF (https://api.nutriassistant.org). The BFF
 // holds the Spoonacular API key in Cloudflare's secret store and enforces
@@ -127,28 +129,9 @@ function inferCategory(dishTypes?: string[]): RecipeCategory {
 
 // ─── Cuisine catalogue ────────────────────────────────────────────────────────
 
-export const SPOONACULAR_CUISINE_QUERIES: { cuisine: string; flag: string }[] = [
-  { cuisine: 'mediterranean', flag: '🌊' },
-  { cuisine: 'italian',       flag: '🇮🇹' },
-  { cuisine: 'spanish',       flag: '🇪🇸' },
-  { cuisine: 'greek',         flag: '🇬🇷' },
-  { cuisine: 'french',        flag: '🇫🇷' },
-  { cuisine: 'moroccan',      flag: '🇲🇦' },
-  { cuisine: 'turkish',       flag: '🇹🇷' },
-  { cuisine: 'japanese',      flag: '🇯🇵' },
-  { cuisine: 'mexican',       flag: '🇲🇽' },
-  { cuisine: 'indian',        flag: '🇮🇳' },
-  { cuisine: 'chinese',       flag: '🇨🇳' },
-  { cuisine: 'thai',          flag: '🇹🇭' },
-  { cuisine: 'korean',        flag: '🇰🇷' },
-  { cuisine: 'american',      flag: '🇺🇸' },
-  { cuisine: 'middle eastern',flag: '🌙' },
-  { cuisine: 'caribbean',     flag: '🏝️' },
-  { cuisine: 'vietnamese',    flag: '🇻🇳' },
-  { cuisine: 'german',        flag: '🇩🇪' },
-  { cuisine: 'latin american',flag: '🌎' },
-  { cuisine: 'african',       flag: '🌍' },
-]
+// Single source of truth lives in `src/domain/masterData.ts`.
+// Re-exported here for back-compat with existing import sites.
+export { SPOONACULAR_CUISINE_QUERIES } from '../domain/masterData'
 
 function capitalise(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
@@ -173,7 +156,7 @@ function mapNutrition(nutrients?: SPNutrient[]): NutritionalInfo {
 // ─── BFF call wrapper (Spoonacular-specific quota handling) ──────────────────
 
 async function spoonacular<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-  return bffGet<T>({
+  const data = await bffGet<unknown>({
     service: 'Spoonacular',
     path,
     params,
@@ -181,7 +164,24 @@ async function spoonacular<T>(path: string, params: Record<string, string> = {})
     // counter immediately rather than after the next 30s tick.
     onQuotaExhausted: () => AsyncStorage.removeItem(QUOTA_CACHE_KEY),
   })
+  // Permissive schema validation — detects catastrophic drift (response
+  // is no longer an object) without locking the wrapper to each
+  // endpoint's specific shape. Per-endpoint validation can be added at
+  // call sites if/when a specific field is renamed upstream.
+  const parsed = spoonacularEnvelopeSchema.safeParse(data)
+  if (!parsed.success) {
+    logger.warn('[Spoonacular] upstream schema drift', {
+      path,
+      issues: parsed.error.issues.slice(0, 3).map((i) => ({ path: i.path, code: i.code })),
+    })
+    // Cast through unknown to honour the caller's expected T while
+    // still surfacing the empty shape for downstream defaults.
+    return ({} as unknown) as T
+  }
+  return parsed.data as T
 }
+
+const spoonacularEnvelopeSchema = z.object({}).passthrough()
 
 // ─── Stub builder ─────────────────────────────────────────────────────────────
 
@@ -322,10 +322,10 @@ export async function getSpoonacularRecipeDetail(
     }
   } catch (e) {
     if (e instanceof BffQuotaExhaustedError) {
-      console.warn('[Spoonacular] Daily quota exhausted, cannot fetch detail')
+      logger.warn('[Spoonacular] Daily quota exhausted, cannot fetch detail')
       return null
     }
-    console.warn('[Spoonacular] getRecipeDetail failed:', e)
+    logger.warn('[Spoonacular] getRecipeDetail failed:', e)
     return null
   }
 }

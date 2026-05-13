@@ -1,5 +1,6 @@
 import { Platform } from 'react-native'
 import { HealthData, HealthProvider } from '../types'
+import { logger } from '../../../utils/logger'
 
 // Dynamic require so the bundler tolerates the package being absent
 // (Expo Go, Android-only build, etc.). Only iOS native builds will load it.
@@ -53,7 +54,7 @@ export const AppleHealthProvider: HealthProvider = {
     return new Promise<boolean>((resolve) => {
       HK!.initHealthKit({ permissions: getPermissions() }, (err) => {
         if (err) {
-          console.warn('[AppleHealth] initHealthKit error:', err)
+          logger.warn('[AppleHealth] initHealthKit error:', err)
           resolve(false)
         } else {
           resolve(true)

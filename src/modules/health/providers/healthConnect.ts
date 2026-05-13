@@ -1,5 +1,6 @@
 import { Platform } from 'react-native'
 import { HealthData, HealthProvider } from '../types'
+import { logger } from '../../../utils/logger'
 
 type AnyHC = {
   initialize: () => Promise<boolean>
@@ -65,7 +66,7 @@ export const HealthConnectProvider: HealthProvider = {
       const granted = await HC.requestPermission(PERMS)
       return granted.length === PERMS.length
     } catch (e) {
-      console.warn('[HealthConnect] requestPermission error:', e)
+      logger.warn('[HealthConnect] requestPermission error:', e)
       return false
     }
   },
@@ -96,7 +97,7 @@ export const HealthConnectProvider: HealthProvider = {
         date: new Date().toISOString().slice(0, 10),
       }
     } catch (e) {
-      console.warn('[HealthConnect] fetchToday error:', e)
+      logger.warn('[HealthConnect] fetchToday error:', e)
       return null
     }
   },

@@ -38,6 +38,11 @@ import { pickAndSaveAvatar, deleteOldAvatar, getDefaultAvatarSource, getMemberAv
 import { useHealth } from '../src/modules/health/HealthContext'
 import { HealthProviderId } from '../src/modules/health/types'
 import { exportFamilyToMarkdown, importFamilyFromFile } from '../src/services/familyExport'
+import { exportAllUserData } from '../src/services/userDataExport'
+import { eraseAllUserData } from '../src/services/dataErasure'
+import { rotateMasterKey } from '../src/services/keyRotation'
+import { useConsent, ConsentToggle } from '../src/modules/consent/ConsentContext'
+import { router } from 'expo-router'
 import * as Sharing from 'expo-sharing'
 import { getRecipeCount, cleanDuplicateImageUrls } from '../src/modules/recipes/recipeDB'
 import Constants from 'expo-constants'
@@ -51,6 +56,7 @@ export default function SettingsScreen() {
   const { isSuperUser, canEdit } = useSelectedProfile()
   const superUserCount = profiles.filter((p) => p.isSuperUser).length
   const { preference: themePreference, setPreference: setThemePreference, colors } = useTheme()
+  const { consent: consentState, setToggle: setConsentToggle } = useConsent()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
   const [editingFamilyName, setEditingFamilyName] = useState(false)
@@ -175,6 +181,59 @@ export default function SettingsScreen() {
       Alert.alert(tr.settings.exportError, e instanceof Error ? e.message : tr.app.error)
     } finally {
       setIsExporting(false)
+    }
+  }
+
+  const [isRotatingKey, setIsRotatingKey] = useState(false)
+  const handleRotateKey = () => {
+    Alert.alert(tr.settings.rotateKeyConfirmTitle, tr.settings.rotateKeyConfirmMsg, [
+      { text: tr.app.cancel, style: 'cancel' },
+      {
+        text: tr.settings.rotateKeyConfirmBtn,
+        style: 'destructive',
+        onPress: async () => {
+          setIsRotatingKey(true)
+          try {
+            const result = await rotateMasterKey()
+            if (result.failed.length > 0) {
+              Alert.alert(tr.settings.rotateKeyFailTitle, tr.settings.rotateKeyFailMsg)
+            } else {
+              const total = Object.values(result.dbRowsUpdated).reduce((a, b) => a + b, 0) +
+                result.profilesUpdated + result.filesUpdated
+              Alert.alert(tr.settings.rotateKeyOkTitle, tr.settings.rotateKeyOkMsg(total))
+            }
+          } catch (err) {
+            Alert.alert(tr.settings.rotateKeyFailTitle, tr.settings.rotateKeyFailMsg)
+          } finally {
+            setIsRotatingKey(false)
+          }
+        },
+      },
+    ])
+  }
+
+  const [isExportingFullData, setIsExportingFullData] = useState(false)
+  const handleExportAllData = async () => {
+    setIsExportingFullData(true)
+    try {
+      const { uri, manifest } = await exportAllUserData(appVersion)
+      const canShare = await Sharing.isAvailableAsync()
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/zip',
+          dialogTitle: tr.settings.exportAllDialogTitle,
+          UTI: 'public.zip-archive',
+        })
+      } else {
+        Alert.alert(
+          tr.settings.fileSavedTitle,
+          tr.settings.fileSavedMsg(uri) + '\n\n' + tr.settings.exportAllRowCounts(JSON.stringify(manifest.rowCounts)),
+        )
+      }
+    } catch (e) {
+      Alert.alert(tr.settings.exportError, e instanceof Error ? e.message : tr.app.error)
+    } finally {
+      setIsExportingFullData(false)
     }
   }
 
@@ -480,6 +539,19 @@ export default function SettingsScreen() {
               <Text style={styles.primaryBtnText}>{tr.settings.exportBtn}</Text>
             )}
           </TouchableOpacity>
+          <View style={styles.divider} />
+          <Text style={styles.hint}>{tr.settings.exportAllHint}</Text>
+          <TouchableOpacity
+            style={[styles.linkBtn, isExportingFullData && { opacity: 0.7 }]}
+            onPress={handleExportAllData}
+            disabled={isExportingFullData}
+          >
+            {isExportingFullData ? (
+              <ActivityIndicator color={Colors.infoBlue} />
+            ) : (
+              <Text style={styles.linkBtnText}>{tr.settings.exportAllBtn}</Text>
+            )}
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.linkBtn, isImporting && { opacity: 0.7 }]}
             onPress={handleImportFamily}
@@ -500,6 +572,30 @@ export default function SettingsScreen() {
         <>
         <SectionHeader title={tr.settings.sectDataPrivacy} colors={colors} />
         <View style={styles.card}>
+          {/* GDPR Art. 7.3 — withdrawable consent. Each toggle revokes
+              the corresponding processing purpose; the affected feature
+              entry points (FAB IA, personalized recipes, document
+              parsing) react to the flag at runtime via useConsent(). */}
+          <Text style={styles.hint}>{tr.consent.sectionHint}</Text>
+          {(['health', 'ai', 'documents'] as ConsentToggle[]).map((key) => (
+            <View key={key} style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>{tr.consent.toggles[key].label}</Text>
+                <Text style={styles.hint}>{tr.consent.toggles[key].desc}</Text>
+              </View>
+              <Switch
+                value={consentState[key]}
+                onValueChange={(v) => setConsentToggle(key, v)}
+                trackColor={{ true: Colors.healthGreen, false: colors.border }}
+              />
+            </View>
+          ))}
+          {consentState.grantedAt && (
+            <Text style={[styles.hint, { fontSize: 11 }]}>
+              {tr.consent.grantedAtLabel(consentState.grantedAt)}
+            </Text>
+          )}
+          <View style={styles.divider} />
           <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>{tr.settings.shareAnonymousData}</Text>
@@ -512,11 +608,74 @@ export default function SettingsScreen() {
             />
           </View>
           <View style={styles.divider} />
-          {/* TODO: implement full data deletion (profiles, meal plans, inventory, DB reset) */}
+          <TouchableOpacity
+            style={styles.linkBtn}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onPress={() => router.push('/audit-log' as any)}
+          >
+            <Text style={styles.linkBtnText}>{tr.auditLog.openBtn}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.linkBtn}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onPress={() => router.push('/legal/privacy' as any)}
+          >
+            <Text style={styles.linkBtnText}>{tr.privacyPolicy.openBtn}</Text>
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          <Text style={styles.hint}>{tr.settings.rotateKeyHint}</Text>
+          <TouchableOpacity
+            style={[styles.linkBtn, isRotatingKey && { opacity: 0.7 }]}
+            onPress={handleRotateKey}
+            disabled={isRotatingKey}
+          >
+            {isRotatingKey ? (
+              <ActivityIndicator color={Colors.infoBlue} />
+            ) : (
+              <Text style={styles.linkBtnText}>{tr.settings.rotateKeyBtn}</Text>
+            )}
+          </TouchableOpacity>
+          <View style={styles.divider} />
+          {/* GDPR Art. 17 right to erasure. Two-step confirmation: the first
+              Alert explains what's about to happen; the second is an
+              "are you absolutely sure?" final gate before the destructive
+              call. After erasure we navigate to onboarding — the database
+              schema persists (we DELETE FROM rather than DROP) so the user
+              can start fresh without re-running migrations. */}
           <TouchableOpacity style={styles.dangerBtn} onPress={() =>
             Alert.alert(tr.settings.deleteAllDataTitle, tr.settings.deleteAllDataMsg, [
               { text: tr.app.cancel, style: 'cancel' },
-              { text: tr.settings.deleteAllBtn, style: 'destructive', onPress: () => {} },
+              {
+                text: tr.settings.deleteAllBtn,
+                style: 'destructive',
+                onPress: () => {
+                  Alert.alert(tr.settings.deleteAllConfirmTitle, tr.settings.deleteAllConfirmMsg, [
+                    { text: tr.app.cancel, style: 'cancel' },
+                    {
+                      text: tr.settings.deleteAllConfirmBtn,
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          const result = await eraseAllUserData()
+                          if (result.partialFailures.length === 0) {
+                            Alert.alert(tr.settings.deleteAllSuccessTitle, tr.settings.deleteAllSuccessMsg, [
+                              { text: 'OK', onPress: () => router.replace('/onboarding') },
+                            ])
+                          } else {
+                            Alert.alert(
+                              tr.settings.deleteAllPartialTitle,
+                              tr.settings.deleteAllPartialMsg(result.partialFailures.join(', ')),
+                              [{ text: 'OK', onPress: () => router.replace('/onboarding') }],
+                            )
+                          }
+                        } catch {
+                          Alert.alert(tr.settings.deleteAllErrorTitle, tr.settings.deleteAllErrorMsg)
+                        }
+                      },
+                    },
+                  ])
+                },
+              },
             ])
           }>
             <Text style={styles.dangerBtnText}>{tr.settings.deleteAllDataBtn}</Text>

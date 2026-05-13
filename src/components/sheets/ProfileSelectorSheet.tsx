@@ -17,6 +17,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 import { useProfiles } from '../../modules/profiles/ProfilesContext'
 import { useSelectedProfile } from '../../modules/profiles/SelectedProfileContext'
 import { getMemberAvatarSource } from '../../services/avatarService'
+import { logger } from '../../utils/logger'
 
 let BottomSheet: any = null
 let BottomSheetScrollView: any = null
@@ -25,7 +26,7 @@ try {
   BottomSheet = bs.default
   BottomSheetScrollView = bs.BottomSheetScrollView
 } catch {
-  console.log('[ProfileSelectorSheet] @gorhom/bottom-sheet no disponible')
+  logger.info('[ProfileSelectorSheet] @gorhom/bottom-sheet no disponible')
 }
 
 export interface ProfileSelectorSheetRef {

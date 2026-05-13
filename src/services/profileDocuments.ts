@@ -7,6 +7,9 @@ import { generateOnDevice } from './onDeviceLlm'
 import { embedTextOrNull } from './embeddings'
 import { insertDocChunk, deleteDocChunksForDoc } from './memoryStore'
 import { currentLang } from '../utils/locale'
+import { logger } from '../utils/logger'
+import { writeEncryptedFile, readEncryptedToTemp, isEncryptedPath } from './secureFileStore'
+import { recordAuditEvent, pseudonymise } from './auditLog'
 
 const PROFILE_DOCS_PREFIX = 'profile-documents/'
 const SUMMARY_MAX_CHARS = 500
@@ -37,8 +40,10 @@ const DOC_SUMMARY_SYSTEM_PROMPT_EN = `/no_think
 You are a medical-nutrition assistant. Summarize the following clinical/health document in English, in at most 4 short sentences (max 500 characters total). Focus the summary on actionable data: allergies, intolerances, diagnosed conditions, dietary restrictions, out-of-range lab values, relevant medication. DO NOT include personally identifying data (name, exact date, record number). If the document contains no clear medical information, reply: "No clinically relevant data."`
 
 // Picks a PDF from the user's files, copies it into the per-member documents
-// dir, and returns a ProfileDocument with aiSummaryStatus = 'pending'.
-// Returns null if the user cancels.
+// dir AS AN ENCRYPTED .pdf.enc FILE, and returns a ProfileDocument whose
+// `filePath` points to the encrypted blob. Returns null if the user cancels.
+// The picker's cache copy of the source PDF is deleted after encryption
+// to minimise the plaintext footprint on disk.
 export async function pickAndCopyDocument(
   memberId: string,
   category: DocumentCategory = 'lab_report'
@@ -53,9 +58,33 @@ export async function pickAndCopyDocument(
   await ensureDir(memberId)
   const id = generateId('doc')
   const filename = asset.name ?? `${id}.pdf`
-  const relPath = `${PROFILE_DOCS_PREFIX}${memberId}/${id}.pdf`
-  const destAbs = `${FileSystem.documentDirectory}${relPath}`
-  await FileSystem.copyAsync({ from: asset.uri, to: destAbs })
+  const baseRelPath = `${PROFILE_DOCS_PREFIX}${memberId}/${id}.pdf`
+  const baseAbs = `${FileSystem.documentDirectory}${baseRelPath}`
+  // writeEncryptedFile appends the `.enc` suffix, so the final on-disk
+  // path is `<id>.pdf.enc`. We persist that as the `filePath` so every
+  // subsequent read knows it's ciphertext without having to probe disk.
+  const encAbs = await writeEncryptedFile(asset.uri, baseAbs)
+  const relPath = encAbs.replace(FileSystem.documentDirectory ?? '', '')
+
+  // Best-effort: remove the picker's cache copy so the plaintext PDF does
+  // not linger after upload. cacheDirectory is volatile but we still wipe
+  // it proactively.
+  try {
+    await FileSystem.deleteAsync(asset.uri, { idempotent: true })
+  } catch {
+    /* ignored — cache cleanup is best-effort */
+  }
+
+  // Audit event. The filename is omitted on purpose: original PDF names
+  // routinely embed patient names, dates of birth, or test IDs. The
+  // memberId and docId are pseudonymised (SHA256 + salt, truncated to
+  // 48 bits) so an attacker with the master key cannot rebuild a
+  // who-uploaded-what dictionary from the audit log alone.
+  await recordAuditEvent('pdf_uploaded', {
+    memberRef: await pseudonymise(memberId),
+    docRef: await pseudonymise(id),
+    category,
+  })
 
   return {
     id,
@@ -67,11 +96,37 @@ export async function pickAndCopyDocument(
   }
 }
 
+// Centralised helper: opens the on-disk file (encrypted or legacy plain)
+// and yields a plaintext path the caller can pass to extractPdfText or any
+// other native reader. The caller MUST invoke `dispose()` in a `finally`
+// block — failure to do so leaves a plaintext PDF in cacheDirectory until
+// the OS cleans it.
+async function withPlaintextDocument<T>(
+  absPath: string,
+  body: (plaintextUri: string) => Promise<T>,
+): Promise<T> {
+  if (!isEncryptedPath(absPath)) {
+    // Legacy plaintext install — no decrypt needed, but the boot-time
+    // migration in `secureFileStore.migratePlaintextDocumentsToEncrypted`
+    // will eventually rewrite these.
+    return body(absPath)
+  }
+  const { tempUri, dispose } = await readEncryptedToTemp(absPath)
+  try {
+    return await body(tempUri)
+  } finally {
+    await dispose()
+  }
+}
+
 // Extracts text from a stored PDF and asks the on-device LLM to produce a
 // short summary. Throws if the PDF can't be read or the LLM call fails.
+// PDFs at rest are encrypted; we decrypt to a short-lived plaintext file
+// in cacheDirectory for the duration of the PDF-text extraction call,
+// then delete it via `dispose()`.
 export async function summarizeDocument(doc: ProfileDocument): Promise<string> {
   const abs = resolveDocumentUri(doc.filePath)
-  const rawText = await extractPdfText(abs)
+  const rawText = await withPlaintextDocument(abs, (plaintextUri) => extractPdfText(plaintextUri))
   const lang = currentLang()
   if (!rawText || rawText.trim().length === 0) {
     return lang === 'en' ? 'No clinically relevant data.' : 'Sin datos clínicos relevantes.'
@@ -126,7 +181,7 @@ export async function indexDocumentForRetrieval(
   doc: ProfileDocument
 ): Promise<number> {
   const abs = resolveDocumentUri(doc.filePath)
-  const rawText = await extractPdfText(abs)
+  const rawText = await withPlaintextDocument(abs, (plaintextUri) => extractPdfText(plaintextUri))
   if (!rawText || rawText.trim().length === 0) return 0
 
   // Replace any old chunks for this doc — re-index is idempotent.
@@ -138,7 +193,7 @@ export async function indexDocumentForRetrieval(
     const embedding = await embedTextOrNull(chunks[i])
     if (!embedding) {
       // Embeddings unavailable — bail; partial indexing would mislead retrieval.
-      console.warn('[profileDocuments] embeddings unavailable, skipping indexing')
+      logger.warn('[profileDocuments] embeddings unavailable, skipping indexing')
       return 0
     }
     await insertDocChunk(memberId, doc.id, i, chunks[i], embedding)
@@ -153,7 +208,7 @@ export async function deleteDocumentFile(filePath: string): Promise<void> {
     const abs = resolveDocumentUri(filePath)
     await FileSystem.deleteAsync(abs, { idempotent: true })
   } catch (e) {
-    console.warn('[profileDocuments] deleteDocumentFile failed:', e)
+    logger.warn('[profileDocuments] deleteDocumentFile failed:', e)
   }
 }
 

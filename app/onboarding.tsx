@@ -32,6 +32,8 @@ import { FamilyMember, AllergenType, DietPreference, MemberRole } from '../src/t
 import { Colors, Typography, Spacing, BorderRadius } from '../src/theme'
 import { useTheme, ThemeColors } from '../src/theme/ThemeContext'
 import { EU_14_ALLERGENS } from '../src/seed/allergen-rules'
+import { useConsent } from '../src/modules/consent/ConsentContext'
+import { recordAuditEvent } from '../src/services/auditLog'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +44,7 @@ type Step =
   | { kind: 'memberBasic'; index: number }
   | { kind: 'memberHealth'; index: number }
   | { kind: 'memberDone'; index: number }
+  | { kind: 'consent' }
   | { kind: 'allDone' }
 
 type MemberDraft = Omit<FamilyMember, 'id' | 'createdAt' | 'updatedAt'>
@@ -78,6 +81,11 @@ function blankDraft(): MemberDraft {
 
 export default function OnboardingScreen() {
   const { completeOnboarding, importFamily } = useProfiles()
+  const { acceptInitial: acceptInitialConsent } = useConsent()
+  const [consentToggles, setConsentToggles] = useState({ health: true, ai: true, documents: true })
+  // Per-member parental consent for under-14 minors (Spain GDPR-K).
+  // Indexed by member draft index. Required to advance past memberHealth.
+  const [parentalConsentByIndex, setParentalConsentByIndex] = useState<Record<number, boolean>>({})
   const { colors } = useTheme()
   const tr = useTranslation()
   const styles = useMemo(() => makeStyles(colors), [colors])
@@ -142,9 +150,13 @@ export default function OnboardingScreen() {
       useNativeDriver: true,
     }).start()
     const timer = setTimeout(() => {
+      // After the last member, route through the GDPR Art. 9.2.a consent
+      // screen before the success state. The consent toggles gate the
+      // app's data-processing features; we must record them BEFORE the
+      // user starts using the app.
       const next = step.index + 1 < memberCount
         ? { kind: 'memberBasic' as const, index: step.index + 1 }
-        : { kind: 'allDone' as const }
+        : { kind: 'consent' as const }
       goTo(next)
     }, 1600)
     return () => clearTimeout(timer)
@@ -371,7 +383,18 @@ export default function OnboardingScreen() {
       updateDraft(index, { conditions })
     }
 
-    const canAdvance = draft.dateOfBirth.length >= 10 && draft.weight > 0 && draft.height > 0
+    // Under-14 minors need verifiable parental consent (Spain GDPR-K).
+    // The checkbox is rendered only when the calculated age is < 14, so
+    // adult members are unaffected. Lack of parental consent blocks
+    // advancement.
+    const memberAge = draft.dateOfBirth.length >= 10 ? getAge(draft.dateOfBirth) : null
+    const isMinor = memberAge !== null && memberAge < 14
+    const hasParentalConsent = parentalConsentByIndex[index] === true
+    const canAdvance =
+      draft.dateOfBirth.length >= 10 &&
+      draft.weight > 0 &&
+      draft.height > 0 &&
+      (!isMinor || hasParentalConsent)
 
     return (
       <ScrollView
@@ -519,9 +542,43 @@ export default function OnboardingScreen() {
           </View>
         )}
 
+        {isMinor && (
+          <TouchableOpacity
+            onPress={() =>
+              setParentalConsentByIndex((prev) => ({ ...prev, [index]: !prev[index] }))
+            }
+            activeOpacity={0.7}
+            style={[styles.summaryRow, hasParentalConsent && styles.summaryRowAdmin]}
+          >
+            <View style={styles.summaryTextCol}>
+              <Text style={styles.summaryName}>{tr.parentalConsent.label}</Text>
+              <Text style={styles.summaryMeta}>{tr.parentalConsent.text}</Text>
+            </View>
+            <Ionicons
+              name={hasParentalConsent ? 'checkmark-circle' : 'ellipse-outline'}
+              size={22}
+              color={hasParentalConsent ? Colors.healthGreen : colors.textMuted}
+            />
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={[styles.primaryBtn, !canAdvance && styles.primaryBtnDisabled]}
-          onPress={() => canAdvance && goTo({ kind: 'memberDone', index })}
+          onPress={async () => {
+            if (!canAdvance) return
+            if (isMinor) {
+              // `memberIndex` is the position in the in-memory drafts
+              // array, not a persistent identifier — safe to log raw.
+              // `age` is a small integer (low cardinality, not useful
+              // alone) so we keep it for forensic value.
+              await recordAuditEvent('parental_consent_granted', {
+                memberIndex: index,
+                age: memberAge,
+                policyVersion: 'v1',
+              })
+            }
+            goTo({ kind: 'memberDone', index })
+          }}
           activeOpacity={0.85}
           disabled={!canAdvance}
         >
@@ -559,6 +616,68 @@ export default function OnboardingScreen() {
       else next.add(i)
       return next
     })
+  }
+
+  function renderConsent() {
+    const canContinue = consentToggles.health // health is the bloqueante toggle
+    return (
+      <View style={styles.stepContainer}>
+        <Text style={styles.stepTitle}>{tr.consent.title}</Text>
+        <Text style={styles.stepBody}>{tr.consent.body}</Text>
+
+        <View style={styles.membersSummary}>
+          {(['health', 'ai', 'documents'] as const).map((key) => {
+            const isOn = consentToggles[key]
+            return (
+              <TouchableOpacity
+                key={key}
+                style={[styles.summaryRow, isOn && styles.summaryRowAdmin]}
+                onPress={() =>
+                  setConsentToggles((prev) => ({ ...prev, [key]: !prev[key] }))
+                }
+                activeOpacity={0.7}
+              >
+                <View style={styles.summaryTextCol}>
+                  <Text style={styles.summaryName}>{tr.consent.toggles[key].label}</Text>
+                  <Text style={styles.summaryMeta}>{tr.consent.toggles[key].desc}</Text>
+                </View>
+                <Ionicons
+                  name={isOn ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={22}
+                  color={isOn ? Colors.healthGreen : colors.textMuted}
+                />
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+
+        <Text style={[styles.stepBody, { fontSize: 11, opacity: 0.7 }]}>
+          {tr.consent.footnote}
+        </Text>
+
+        <TouchableOpacity
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onPress={() => router.push('/legal/privacy' as any)}
+        >
+          <Text style={[styles.stepBody, { color: Colors.healthGreen, textDecorationLine: 'underline' }]}>
+            {tr.consent.privacyLinkLabel}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.primaryBtn, !canContinue && styles.primaryBtnDisabled]}
+          onPress={async () => {
+            if (!canContinue) return
+            await acceptInitialConsent(consentToggles)
+            goTo({ kind: 'allDone' })
+          }}
+          disabled={!canContinue}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.primaryBtnText}>{tr.consent.continueBtn}</Text>
+        </TouchableOpacity>
+      </View>
+    )
   }
 
   function renderAllDone() {
@@ -637,6 +756,7 @@ export default function OnboardingScreen() {
       case 'memberBasic':  return 0.1 + (step.index / memberCount) * 0.8
       case 'memberHealth': return 0.1 + ((step.index + 0.5) / memberCount) * 0.8
       case 'memberDone':   return 0.1 + ((step.index + 1) / memberCount) * 0.8
+      case 'consent':      return 0.95
       case 'allDone':      return 1
     }
   }
@@ -662,6 +782,7 @@ export default function OnboardingScreen() {
       case 'memberBasic':  return renderMemberBasic(step.index)
       case 'memberHealth': return renderMemberHealth(step.index)
       case 'memberDone':   return renderMemberDone(step.index)
+      case 'consent':      return renderConsent()
       case 'allDone':      return renderAllDone()
     }
   }

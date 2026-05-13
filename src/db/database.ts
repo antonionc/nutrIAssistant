@@ -11,6 +11,10 @@ import { migration009 } from './migrations/009_purge_themealdb'
 import { migration010 } from './migrations/010_drop_unused_tables'
 import { migration011 } from './migrations/011_memory_layer'
 import { migration012 } from './migrations/012_drop_app_metadata'
+import { migration013 } from './migrations/013_purge_fatsecret'
+import { migration014 } from './migrations/014_audit_log'
+import { migration015 } from './migrations/015_member_index_with_fks'
+import { logger } from '../utils/logger'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATABASE LAYER — RULES FOR EDITORS
@@ -76,6 +80,11 @@ const MIGRATIONS: Migration[] = [
   { name: '010_drop_unused_tables', sql: migration010 },
   { name: '011_memory_layer', sql: migration011 },
   { name: '012_drop_app_metadata', sql: migration012 },
+  { name: '013_purge_fatsecret', sql: migration013 },
+  { name: '014_audit_log', sql: migration014 },
+  // 015 is a fn migration because it toggles PRAGMA foreign_keys
+  // (illegal inside a transaction). Same pattern as 008.
+  { name: '015_member_index_with_fks', fn: migration015 },
 ]
 
 // SQLite reports duplicate-column ALTERs as "duplicate column name: <name>".
@@ -102,7 +111,7 @@ export async function runMigrations(): Promise<void> {
   } catch {
     // Stale migrations table from a previous dev session — reset it.
     // Safe today only because every migration is idempotent (see rule 3).
-    console.warn('[DB] Stale migrations table detected, resetting')
+    logger.warn('[DB] Stale migrations table detected, resetting')
     await database.execAsync('DROP TABLE IF EXISTS migrations')
     await database.execAsync(`
       CREATE TABLE migrations (
@@ -140,7 +149,7 @@ export async function runMigrations(): Promise<void> {
       'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
       [migration.name, new Date().toISOString()]
     )
-    console.log(`[DB] Migration ${migration.name} completed`)
+    logger.info(`[DB] Migration ${migration.name} completed`)
   }
 }
 

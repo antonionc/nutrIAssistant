@@ -22,6 +22,7 @@ import { Recipe } from '../../types/recipes'
 import { FamilyMember } from '../../types/profiles'
 import { useProfiles } from '../../modules/profiles/ProfilesContext'
 import { getFavoriteRecipes, getRecipesByIds, toggleFavorite } from '../../modules/recipes/recipeDB'
+import { logger } from '../../utils/logger'
 
 let BottomSheet: any = null
 let BottomSheetScrollView: any = null
@@ -30,7 +31,7 @@ try {
   BottomSheet = bs.default
   BottomSheetScrollView = bs.BottomSheetScrollView
 } catch {
-  console.log('[FavoritesSheet] @gorhom/bottom-sheet no disponible')
+  logger.info('[FavoritesSheet] @gorhom/bottom-sheet no disponible')
 }
 
 export interface FavoritesSheetRef {
@@ -68,7 +69,7 @@ export const FavoritesSheet = forwardRef<FavoritesSheetRef, Props>(
         setMemberRecipes(perMember)
         setFamilyRecipes(family)
       } catch (e) {
-        console.warn('[FavoritesSheet] failed to load favorites:', e)
+        logger.warn('[FavoritesSheet] failed to load favorites:', e)
       } finally {
         setLoading(false)
       }

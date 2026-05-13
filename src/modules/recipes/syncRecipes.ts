@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { logger } from '../../utils/logger'
 import { searchMediterraneanRecipes, getRecipeDetail } from '../../services/edamam'
 import {
   searchAllSpoonacularByCuisine,
@@ -85,11 +86,11 @@ async function translateSpoonacularNames(
         await updateRecipeTranslation(id, { nameEs })
       }
     } catch (e) {
-      console.warn('[Translate] Batch failed:', e)
+      logger.warn('[Translate] Batch failed:', e)
     }
     await new Promise((r) => setTimeout(r, 100))
   }
-  console.log(`[Translate] Finished translating ${recipes.length} Spoonacular recipe names`)
+  logger.info(`[Translate] Finished translating ${recipes.length} Spoonacular recipe names`)
 }
 
 export async function syncSpoonacularRecipes(
@@ -129,7 +130,7 @@ export async function syncSpoonacularRecipes(
       // names appear progressively as each cuisine finishes.
       if (fresh.length > 0) {
         translateSpoonacularNames(fresh.map((r) => ({ id: r.id, name: r.name }))).catch(
-          (e) => console.warn('[Translate] Background translation error:', e)
+          (e) => logger.warn('[Translate] Background translation error:', e)
         )
       }
     } catch (e) {
@@ -138,7 +139,7 @@ export async function syncSpoonacularRecipes(
         onProgress?.(0.88, 'Límite diario de Spoonacular alcanzado.')
         break
       }
-      console.warn(`[Spoonacular] Search failed for "${cuisine}":`, e)
+      logger.warn(`[Spoonacular] Search failed for "${cuisine}":`, e)
     }
   }
 
@@ -241,7 +242,7 @@ export async function enrichSpoonacularDetail(
     if (detail.instructions.length > 0) {
       translateInstructions(detail.instructions)
         .then((es) => updateRecipeTranslation(recipeId, { instructionsEs: es }))
-        .catch((e) => console.warn('[Translate] Instructions failed:', e))
+        .catch((e) => logger.warn('[Translate] Instructions failed:', e))
     }
 
     return true

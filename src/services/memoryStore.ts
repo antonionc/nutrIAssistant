@@ -1,6 +1,7 @@
 import { getDatabase } from '../db/database'
 import { generateId } from '../utils/idUtils'
 import { encrypt, decrypt, encryptBytes, decryptBytes } from './encryption'
+import { logger } from '../utils/logger'
 
 // Persistence layer for the assistant's memory:
 //   - member_memories: durable facts ("dislikes cilantro", "trains 3x/week")
@@ -160,7 +161,7 @@ export async function getDocChunksForMember(memberId: string): Promise<DocChunkR
         createdAt: r.created_at,
       })
     } catch (e) {
-      console.warn('[memoryStore] dropping corrupt chunk', r.id, e)
+      logger.warn('[memoryStore] dropping corrupt chunk', { id: r.id, err: e })
     }
   }
   return out
@@ -180,7 +181,7 @@ function safeDecrypt(blob: string): string {
   try {
     return decrypt(blob)
   } catch (e) {
-    console.warn('[memoryStore] decrypt failed (corrupt or wrong key)', e)
+    logger.warn('[memoryStore] decrypt failed (corrupt or wrong key)', e)
     return ''
   }
 }

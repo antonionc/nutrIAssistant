@@ -27,6 +27,7 @@ import {
 } from '../../services/profileDocuments'
 import { deleteDocChunksForDoc } from '../../services/memoryStore'
 import { useTranslation, type Translations } from '../../i18n'
+import { logger } from '../../utils/logger'
 
 let BottomSheet: any = null
 let BottomSheetScrollView: any = null
@@ -35,7 +36,7 @@ try {
   BottomSheet = bs.default
   BottomSheetScrollView = bs.BottomSheetScrollView
 } catch {
-  console.log('[DocumentsSheet] @gorhom/bottom-sheet no disponible')
+  logger.info('[DocumentsSheet] @gorhom/bottom-sheet no disponible')
 }
 
 export interface DocumentsSheetRef {
@@ -84,11 +85,11 @@ export const DocumentsSheet = forwardRef<DocumentsSheetRef, Props>(
             })
           })
           .catch(async (e) => {
-            console.warn('[DocumentsSheet] summarize failed:', e)
+            logger.warn('[DocumentsSheet] summarize failed:', e)
             await updateDocument(member.id, doc.id, { aiSummaryStatus: 'failed' })
           })
         indexDocumentForRetrieval(member.id, doc).catch((e) =>
-          console.warn('[DocumentsSheet] indexing failed:', e)
+          logger.warn('[DocumentsSheet] indexing failed:', e)
         )
       } catch (e) {
         setUploading(false)

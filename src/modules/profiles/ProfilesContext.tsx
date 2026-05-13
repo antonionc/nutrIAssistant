@@ -20,6 +20,7 @@ import { computeDailyCalorieTarget, computeMacroTargets } from './calorieCalcula
 import { getAge } from '../../utils/ageUtils'
 import { generateId } from '../../utils/idUtils'
 import { resolveAvatarUri } from '../../services/avatarService'
+import { logger } from '../../utils/logger'
 
 // Removes avatarUrl for any member whose image file no longer exists on disk.
 // Returns the cleaned array and a flag indicating whether anything changed.
@@ -116,7 +117,7 @@ export function ProfilesProvider({ children }: { children: React.ReactNode }) {
           setFamilyNameState(fn)
         }
       } catch (e) {
-        console.error('[Profiles] Failed to load profiles, starting fresh:', e)
+        logger.error('[Profiles] Failed to load profiles, starting fresh:', e)
         setNeedsOnboarding(true)
       } finally {
         setIsLoading(false)

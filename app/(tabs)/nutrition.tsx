@@ -32,6 +32,7 @@ import { Recipe } from '../../src/types/recipes'
 import { getRandomRecipes } from '../../src/modules/recipes/recipeDB'
 import { MEAL_LABELS } from '../../src/constants/mealTypes'
 import { HeaderProfileAvatar } from '../../src/components/layout/HeaderProfileAvatar'
+import { logger } from '../../src/utils/logger'
 
 function getDayOptions(): PillOption[] {
   return Array.from({ length: 7 }, (_, i) => {
@@ -193,7 +194,7 @@ export default function NutritionScreen() {
       await handleGeneratePlan()
       Alert.alert(tr.nutrition.uploadSuccess, tr.nutrition.uploadSuccessDesc)
     } catch (error) {
-      console.error('[Nutrition] School menu upload failed:', error)
+      logger.error('[Nutrition] School menu upload failed:', error)
       const message =
         error instanceof SchoolMenuUploadError
           ? tr.nutrition[

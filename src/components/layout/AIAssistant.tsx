@@ -32,6 +32,7 @@ import { AIMessage } from '../../types/ai'
 import { useAIEngine } from '../../modules/ai-engine/AIContext'
 import { useTranslation } from '../../i18n'
 import { MarkdownText } from './MarkdownText'
+import { logger } from '../../utils/logger'
 
 // BCP-47 tag for voice recognition + TTS. Falls back to es-ES when the
 // device locale is anything other than English (matches the i18n fallback).
@@ -54,7 +55,7 @@ try {
   BottomSheetScrollView = bs.BottomSheetScrollView
   BottomSheetTextInput = bs.BottomSheetTextInput
 } catch {
-  console.log('[AIAssistant] @gorhom/bottom-sheet no disponible — rebuild con npx expo run:ios')
+  logger.info('[AIAssistant] @gorhom/bottom-sheet no disponible — rebuild con npx expo run:ios')
 }
 
 // Voice recognition — graceful fallback if native module not available
@@ -74,7 +75,7 @@ let Voice: {
 try {
   Voice = require('@react-native-voice/voice').default
 } catch {
-  console.log('[AIAssistant] @react-native-voice/voice no disponible — modo solo texto')
+  logger.info('[AIAssistant] @react-native-voice/voice no disponible — modo solo texto')
 }
 
 // Quality preference order for TTS voice selection
@@ -162,7 +163,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
         })
 
         setTtsVoice(candidates[0].identifier)
-        console.log(`[TTS] Using voice: ${candidates[0].name} (${candidates[0].quality}, ${candidates[0].language})`)
+        logger.info(`[TTS] Using voice: ${candidates[0].name} (${candidates[0].quality}, ${candidates[0].language})`)
       }).catch(() => {/* use default voice */})
     }, [])
 
@@ -221,7 +222,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
           setTimeout(() => setVoiceError(null), 4000)
         }
         setIsListening(false)
-        console.warn('[Voice] Error:', code, e.error?.message)
+        logger.warn('[Voice] Error', { code, errorMessage: e.error?.message })
       }
 
       return () => {
@@ -348,7 +349,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
         const msg = e instanceof Error ? e.message : tr.ai.errorStartMic
         setVoiceError(msg)
         setTimeout(() => setVoiceError(null), 4000)
-        console.warn('[Voice] start() failed:', e)
+        logger.warn('[Voice] start() failed:', e)
       }
     }, [isListening, voiceAvailable])
 
@@ -433,6 +434,14 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
                 <Text style={ts.clearText}>{tr.ai.clear}</Text>
               </TouchableOpacity>
             </View>
+          </View>
+
+          {/* Medical disclaimer — persistent, non-dismissible. GDPR Art. 22
+              transparency notice for automated decision-style suggestions
+              about Art. 9 health data. Must not be hideable on first open;
+              we keep it on every reopen for the same reason. */}
+          <View style={vs.disclaimerBanner}>
+            <Text style={ts.disclaimerText}>{tr.ai.disclaimerShort}</Text>
           </View>
 
           {/* Voice error banner */}
@@ -571,6 +580,11 @@ function makeStyles(colors: ThemeColors) {
     headerRight: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' } as ViewStyle,
     headerBtn: { padding: Spacing.xs, borderRadius: BorderRadius.sm } as ViewStyle,
     headerBtnActive: { backgroundColor: `${Colors.healthGreen}20` } as ViewStyle,
+    disclaimerBanner: {
+      backgroundColor: `${Colors.goldenAmber}12`,
+      paddingHorizontal: Spacing.md, paddingVertical: 6,
+      borderBottomWidth: 1, borderBottomColor: `${Colors.goldenAmber}25`,
+    } as ViewStyle,
     errorBanner: {
       backgroundColor: `${Colors.errorRed}15`, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
       borderBottomWidth: 1, borderBottomColor: `${Colors.errorRed}30`,
@@ -633,6 +647,7 @@ function makeStyles(colors: ThemeColors) {
     welcomeText: { ...Typography.body, color: colors.textSecondary, textAlign: 'center' } as TextStyle,
     botName: { ...Typography.overline, color: Colors.forestGreen } as TextStyle,
     cursor: { color: Colors.healthGreen, fontSize: 16 } as TextStyle,
+    disclaimerText: { ...Typography.caption, color: colors.textMuted, fontSize: 11, lineHeight: 14 } as TextStyle,
     errorText: { ...Typography.caption, color: Colors.errorRed } as TextStyle,
     actionText: { ...Typography.caption, color: Colors.forestGreen, fontFamily: Typography.heading3.fontFamily } as TextStyle,
     factPrompt: { ...Typography.caption, color: Colors.forestGreen, fontFamily: Typography.heading3.fontFamily } as TextStyle,

@@ -22,6 +22,7 @@ import { isAIAccessibleForMember } from './aiAccess'
 import { t } from '../../i18n'
 import { parseActions, describeAction, stripThinkingBlock } from '../../services/aiActions'
 import { getAllRecipes, getRecipesByIds } from '../recipes/recipeDB'
+import { logger } from '../../utils/logger'
 
 export interface PendingFact {
   text: string
@@ -105,7 +106,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
       const status = await getLLMStatus()
       setModelStatus(status)
     } catch (e) {
-      console.error('[AIEngine] Failed to get LLM status:', e)
+      logger.error('[AIEngine] Failed to get LLM status:', e)
     }
   }, [])
 
@@ -146,7 +147,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
             ...facts.map((f) => ({ text: f.text, category: f.category, memberId })),
           ])
         } catch (e) {
-          console.warn('[AIEngine] fact extraction error:', e)
+          logger.warn('[AIEngine] fact extraction error:', e)
         } finally {
           llmBusyRef.current = false
         }
@@ -380,7 +381,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
     try {
       await addMemberMemory(fact.memberId, fact.text, fact.category)
     } catch (e) {
-      console.warn('[AIEngine] failed to persist fact:', e)
+      logger.warn('[AIEngine] failed to persist fact:', e)
     }
     setPendingFacts((prev) => prev.filter((f) => f !== fact))
   }, [])

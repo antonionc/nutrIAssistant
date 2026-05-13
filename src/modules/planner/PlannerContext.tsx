@@ -25,6 +25,7 @@ import {
 } from '../../services/prompts/schoolMenuExtraction'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { selectWeekRecipes } from './mealPlanGenerator'
+import { logger } from '../../utils/logger'
 
 function getWeekDates(startDate?: string): string[] {
   const start = startDate ? new Date(startDate) : new Date()
@@ -235,7 +236,7 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
 
         setWeekPlans(newPlans)
       } catch (error) {
-        console.error('[Planner] Generation failed:', error)
+        logger.error('[Planner] Generation failed:', error)
       } finally {
         setIsGenerating(false)
       }
@@ -330,11 +331,12 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       // Small models (~1.7B) produce date+description arrays far more reliably
       // than full nutrition/allergen objects. Fill defaults for the dropped fields.
       if (!entries) {
-        console.info(
-          '[Planner] First-pass school-menu parse failed — falling back to the simpler-schema retry. ' +
-            'This is an expected recovery path; the upload will still succeed if the retry parses cleanly. ' +
-            'First 2000 chars of original response:\n' +
-            response.slice(0, 2000)
+        // Do NOT log the response body — it can contain child names, school
+        // identifiers and other PII extracted from the menu PDF. Only the
+        // length is needed to diagnose truncation vs. unparseable shape.
+        logger.warn(
+          '[Planner] First-pass school-menu parse failed; retrying with simpler schema',
+          { responseLength: response.length }
         )
         response = await runLLM(SCHOOL_MENU_EXTRACTION_PROMPT_SIMPLE)
         const simple = parseSchoolMenuResponse(response)
@@ -350,11 +352,9 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (!entries) {
-        console.error(
-          '\n===== [Planner] LLM response STILL unparseable after retry. Giving up. =====\n' +
-            'First 2000 chars of retry response:\n' +
-            response.slice(0, 2000) +
-            '\n=================================================='
+        logger.error(
+          '[Planner] School-menu retry still unparseable; aborting upload',
+          { responseLength: response.length }
         )
         throw new SchoolMenuUploadError('llm_parse')
       }

@@ -1,6 +1,7 @@
 import { generateOnDevice } from './onDeviceLlm'
 import { MemoryCategory } from './memoryStore'
 import { currentLang } from '../utils/locale'
+import { logger } from '../utils/logger'
 
 // Background pass that asks the LLM to extract durable facts from the most
 // recent user/assistant exchange. Designed to be:
@@ -90,7 +91,7 @@ export async function extractFactsFromTurn(
       const raw = await generateOnDevice(exchange, systemPrompt)
       return clipFacts(tryParseJson(raw))
     } catch (e) {
-      console.warn('[factExtractor] extraction failed:', e)
+      logger.warn('[factExtractor] extraction failed:', e)
       return []
     } finally {
       inflight = null
