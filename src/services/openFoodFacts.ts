@@ -1,10 +1,9 @@
 import { NutritionalInfo, NutriScore } from '../types/nutrition'
+import { bffGet } from './bff/client'
 
 // All calls go through the BFF (https://api.nutriassistant.org). The BFF
 // proxies OpenFoodFacts via the `.net` alias to avoid the CF↔CF HTTP 525
 // pathology and adds edge caching (24h TTL on barcode lookups).
-const BFF_BASE = process.env.EXPO_PUBLIC_BFF_BASE_URL ?? 'https://api.nutriassistant.org'
-const PRODUCT_PATH = '/v1/off/product'
 
 interface OFFNutriments {
   'energy-kcal_100g'?: number
@@ -69,10 +68,17 @@ export interface OFFScanResult {
 }
 
 export async function getProductByBarcode(barcode: string): Promise<OFFScanResult | null> {
-  const url = `${BFF_BASE}${PRODUCT_PATH}/${barcode}`
-  const resp = await fetch(url)
-  if (!resp.ok) return null
-  const data: OFFResponse = await resp.json()
+  let data: OFFResponse
+  try {
+    data = await bffGet<OFFResponse>({
+      service: 'OpenFoodFacts',
+      path: `/v1/off/product/${barcode}`,
+    })
+  } catch {
+    // Network / 502 / etc. — surface as "no product found" so the scanner
+    // UI can offer to add the product manually.
+    return null
+  }
   if (data.status !== 1 || !data.product) return null
 
   const p = data.product

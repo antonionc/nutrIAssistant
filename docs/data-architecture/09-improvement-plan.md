@@ -5,7 +5,7 @@
 | # | Finding | Section | Severity | Effort | Impact | Attack order |
 |---|---|---|---|---|---|---|
 | 1 | Full data erasure not implemented (empty handler) | [§5.4](./05-privacy-model.md#54-data-subject-rights-implemented-in-the-app) | **🔴 High** | S | Critical (blocks launch under GDPR Art. 17) | 1 |
-| 2 | `EXPO_PUBLIC_*` with FatSecret + Spoonacular secrets in the bundle | [§3.6](./03-security-encryption.md#36-secrets-management-in-the-repo) | **🔴 High** | M (requires BFF) | Critical (API-revocation risk) | 2 |
+| 2 | ~~`EXPO_PUBLIC_*` with FatSecret + Spoonacular secrets in the bundle~~ ✅ **Resolved** — all upstreams now reached via BFF, zero third-party API keys in the bundle | [§3.6](./03-security-encryption.md#36-secrets-management-in-the-repo) | ✅ Done | M | Critical | — |
 | 3 | Privacy policy not published | [§5.5](./05-privacy-model.md#55-gdpr-roadmap-8-steps--current-status) step 3 | **🔴 High** | S | Critical (App Store block) | 3 |
 | 4 | No Sentry / observability → Art. 33 impossible | [§7](./07-observability.md) | **🔴 High** | S | Critical | 4 |
 | 5 | Medical disclaimer missing in chat | [§4.6](./04-ai-architecture.md#46-ai-governance) | **🔴 High** | S | High (Art. 22 + civil liability) | 5 |
@@ -18,7 +18,7 @@
 | 12 | Automatic retention (sweeper) | [§2.9](./02-data-model-architecture.md#29-table--pii-catalog), [§5.3](./05-privacy-model.md#53-gdpr-principles-applied-to-the-design) | **🟡 Medium** | M | High (Art. 5.1.e) | 12 |
 | 13 | Privacy Nutrition Labels + Data Safety Section | [§8.2-8.3](./08-production-readiness.md#82-apple-app-store-compliance) | **🟡 Medium-High** | S | Critical (store block) | 13 |
 | 14 | Model Card published for the deployed AI | [§4.6](./04-ai-architecture.md#46-ai-governance) | **🟡 Medium** | S | Medium | 14 |
-| 15 | SCC with FatSecret + Spoonacular + Transfer Impact Assessment | [§5.6](./05-privacy-model.md#56-international-transfers-schrems-ii) | **🟡 Medium-High** | M | High | 15 |
+| 15 | SCC with Edamam + Spoonacular + Transfer Impact Assessment | [§5.6](./05-privacy-model.md#56-international-transfers-schrems-ii) | **🟡 Medium-High** | M | High | 15 |
 | 16 | Dependabot + CI secret scanning | [§3.6](./03-security-encryption.md#36-secrets-management-in-the-repo), [§3.7](./03-security-encryption.md#37-dependencies-and-supply-chain) | **🟡 Medium** | S | Medium | 16 |
 | 17 | CycloneDX SBOM + license check | [§3.7](./03-security-encryption.md#37-dependencies-and-supply-chain) | **🟢 Low-Medium** | S | Low-Medium | 17 |
 | 18 | ROPA (Records of Processing Activities) | [§5.5](./05-privacy-model.md#55-gdpr-roadmap-8-steps--current-status) step 4 | **🟡 Medium-High** | S | High | 18 |
@@ -57,7 +57,7 @@ gantt
     section Store compliance
     Privacy Nutrition Labels       :c1, after a2, 2d
     Data Safety Section            :c2, after a2, 2d
-    SCC FatSecret + Spoonacular    :c3, after b2, 5d
+    SCC Edamam + Spoonacular       :c3, after b2, 5d
     Published Model Card           :c4, 2026-05-25, 3d
 
     section Quality

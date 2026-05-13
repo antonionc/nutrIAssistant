@@ -163,7 +163,7 @@ THIS WEEK'S PLAN:
 2026-05-13: oats with banana / seafood paella / -
 2026-05-14: greek yogurt / quinoa salad / vegetable soup
 
-AVAILABLE RECIPES: id=fs-12345 "Stewed lentils"; id=fs-67890 "Baked salmon with vegetables"
+AVAILABLE RECIPES: id=em-a1b2c3 "Stewed lentils"; id=em-d4e5f6 "Baked salmon with vegetables"
 
 GUIDELINES:
 - ALWAYS check allergens and conditions before suggesting anything; when in doubt, flag a WARNING.
@@ -185,7 +185,7 @@ Mapped to the **DAMA wheel**:
 |---|---|---|---|
 | **Traceability of which data backed a recommendation** | 🟡 Partial — the prompt is deterministic and built by `buildSystemPrompt`, but the per-turn prompt snapshot is not persisted | `src/services/prompts/system.ts:163-264` | Persist hash + length + active sections in an encrypted `ai_turns_audit` table |
 | **Mechanisms against hallucination** | 🟡 In place: tolerant parser (`tryParseActionList`), `memberId`/`recipeId` validation (`applyAIActions` ignores unknown IDs), `/no_think` directive, `stripThinkingBlock`, prompt hard cap | `src/services/aiActions.ts:36-57`, `src/modules/profiles/ProfilesContext.tsx:296-319` | Add post-checks: if the response mentions an allergen the user has listed, flag a warning |
-| **Bias monitoring (diets, cultures, restrictions)** | 🔴 GAP — not measured. The Spoonacular catalog has 20 predefined cuisines (`src/services/spoonacular.ts:105-126`), biasing toward Western/Mediterranean | `src/services/fatsecret.ts:22-38` (Mediterranean explicitly biased) | Define a balanced golden set across religious restrictions (halal, kosher), cultures, and dietary restrictions |
+| **Bias monitoring (diets, cultures, restrictions)** | 🔴 GAP — not measured. The Spoonacular catalog has 20 predefined cuisines (`src/services/spoonacular.ts`), biasing toward Western/Mediterranean | `src/services/edamam.ts` (Mediterranean explicitly biased via `cuisineType=mediterranean,italian,french,middle eastern`) | Define a balanced golden set across religious restrictions (halal, kosher), cultures, and dietary restrictions |
 | **Model documentation (Model Cards)** | 🔴 GAP — no Model Card | — | Publish a Model Card for "Qwen 3 1.7B Quantized as deployed in NutrIAssistant", citing origin, known metrics (HF), limitations |
 | **GDPR Art. 22 compliance** | 🟡 Partial — the LLM produces **suggestions** (not automated decisions that significantly affect the person). Actions (`add_favorite`) are cosmetic | `src/services/aiActions.ts:7-9` | Add explicit chat banner: *"Responses are guidance, not medical advice. Consult a healthcare professional."* + fact-extractor opt-out + global chat opt-out |
 | **AI usage and limitations notice** | 🔴 GAP — no UI disclaimer | Search in `src/components/layout/AIAssistant.tsx` (not inspected in detail) | Add fixed copy at the top of the chat and in onboarding |

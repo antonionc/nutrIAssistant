@@ -23,7 +23,7 @@
 | Health data (steps, kcal) | **Health — Art. 9** | 9.2.a + 9.2.h | Daily-energy estimation | Refreshes on request | Local | Apple/Google (OS-bounded) | Today only (`startOfTodayIso`, `appleHealth.ts:38-42`) |
 | `meal_plans` with `school_menu_context` | Child PII | 9.2.a + parental consent | Family personalization | 90 d proposed | Local | No | Description + ingredients only |
 | `scan_history` | Non-PII (scanned products) | 6.1.b | Traceability | 180 d proposed | Local | No | — |
-| FatSecret tokens | Technical credential | 6.1.f (legitimate interest) | Third-party auth | OAuth expiration | **Ship in client bundle to provider** | **FatSecret (US)** | Token-based, no PII |
+| Edamam credentials | Technical credential | 6.1.f (legitimate interest) | Third-party API auth | Static, rotatable via wrangler | **Server-side only (BFF Cloudflare secret store)** | n/a — never on device | App key only, no PII |
 | Spoonacular API key | Technical credential | 6.1.f | API access | Persistent | **Ships in client bundle** | **Spoonacular (US)** | — |
 | HuggingFace CDN | Public models | 6.1.f | Initial download | Permanent cache | **HuggingFace (US)** | **Yes** ⚠️ | — |
 
@@ -108,13 +108,13 @@ async function fullWipe() {
 | Provider | Country | Data transferred | Required safeguards | Status |
 |---|---|---|---|---|
 | OpenFoodFacts | France (EU) | Barcode (no PII) | None special (intra-EU) | ✅ |
-| FatSecret | United States | OAuth token + search queries (no user PII) | SCC + TIA | 🔴 Not signed |
+| Edamam | United States | Search queries (no user PII) | SCC + TIA | 🔴 Not signed |
 | Spoonacular | United States | API key + search queries (no user PII) | SCC + TIA | 🔴 Not signed |
 | HuggingFace CDN | United States | `.pte` model download (no PII) | n/a (public-asset download) | ✅ (public asset) |
 | Apple Health | iCloud (EU if EU user) | Health metrics | Apple DPA | ✅ (Apple's responsibility) |
 | Google Health Connect | On-device | n/a | n/a | ✅ |
 
-**Main risk**: although the FatSecret and Spoonacular queries do not carry user PII, they do carry search context. A query like *"gluten-free, low-sodium recipes for diabetics"* infers aggregate health conditions. **Recommendation**: an EU BFF that strips context before relaying.
+**Main risk**: although the Edamam and Spoonacular queries do not carry user PII, they do carry search context. A query like *"gluten-free, low-sodium recipes for diabetics"* infers aggregate health conditions. **Mitigation in place**: the Cloudflare BFF in `api.nutriassistant.org` proxies all calls, so user IPs and device identifiers do not reach the providers. A further step (strip the search expression of identifying context before relaying) is still possible if needed.
 
 **EU-only alternatives for cloud AI** (once opt-in is introduced):
 

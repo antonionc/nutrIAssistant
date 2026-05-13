@@ -29,7 +29,7 @@ flowchart TB
     NIA[/<b>NutrIAssistant</b><br/>iOS + Android mobile app<br/>local-first, on-device AI/]:::system
 
     OFF([🥫 OpenFoodFacts<br/>barcode → product]):::external
-    FS([🍝 FatSecret<br/>OAuth2 · Mediterranean catalog]):::external
+    ED([🥗 Edamam<br/>via BFF · Mediterranean catalog]):::external
     SP([🍲 Spoonacular<br/>API key · multi-cuisine catalog]):::external
     HF([🤖 HuggingFace CDN<br/>.pte model downloads]):::external
     AH([❤️ Apple HealthKit<br/>iOS native]):::external
@@ -53,7 +53,7 @@ flowchart TB
 
 **Reading keys:**
 
-- **Personal data leaves the device zero times**. Calls to OFF/FatSecret/Spoonacular are *anonymous catalog queries*, not PII transmissions.
+- **Personal data leaves the device zero times**. All catalog calls are routed through the BFF (`api.nutriassistant.org`) which forwards anonymous queries to OFF / Edamam / Spoonacular; no PII transits.
 - HealthKit and Health Connect are **OS APIs**, not external services — data does not traverse the internet beyond what Apple/Google decide based on OS-level user consent.
 - The dashed line to AEPD is **reactive** (only in case of a breach), not continuous.
 - References: [§2.1](./02-data-model-architecture.md#21-logical-architecture-diagram-as-is), [§5.6](./05-privacy-model.md#56-international-transfers-schrems-ii), [§5.5](./05-privacy-model.md#55-gdpr-roadmap-8-steps--current-status).
@@ -101,7 +101,7 @@ flowchart TB
             FX[factExtractor.ts]:::svc
             Act[aiActions.ts]:::svc
             PD[profileDocuments.ts]:::svc
-            Net[openFoodFacts.ts<br/>fatsecret.ts · spoonacular.ts]:::svc
+            Net[openFoodFacts.ts<br/>edamam.ts · spoonacular.ts<br/>via bff/client.ts]:::svc
         end
 
         subgraph Storage["Storage"]
@@ -402,7 +402,7 @@ sequenceDiagram
     RL->>Seed: seedRecipesIfNeeded()
     Seed-->>RL: ok
     par Background tasks (do not block UI)
-        RL->>Sync: isSynced + syncRecipes (FatSecret)
+        RL->>Sync: isSynced + syncRecipes (Edamam via BFF)
         RL->>LLM: isModelDownloaded
         LLM-->>RL: false (first time)
         RL->>Notif: notifyDownloadStarted
@@ -770,7 +770,7 @@ mindmap
       grocery_items
       scan_history (unlinked)
     Technical
-      FatSecret tokens
+      (none — all in BFF)
       Spoonacular API keys
       .pte model cache
       AsyncStorage flags
@@ -825,7 +825,7 @@ mindmap
       liquid-glass Swift iOS 26
     External APIs
       OpenFoodFacts FR
-      FatSecret US OAuth2
+      Edamam (via BFF)
       Spoonacular US API key
       TheMealDB legacy
     Internationalization
@@ -1005,7 +1005,7 @@ pie title 44 console.* calls across 22 files
     "recipes (sync, seed)" : 4
     "profiles (context, storage)" : 4
     "db (database, dbUtils)" : 4
-    "network-catalog (fatsecret, spoonacular)" : 4
+    "network-catalog (edamam, spoonacular, bff client)" : 4
     "health (apple, connect)" : 3
     "pdf (profileDocuments)" : 2
     "planner (context)" : 2
@@ -1017,7 +1017,7 @@ pie title 44 console.* calls across 22 files
 
 ```mermaid
 pie title Expected distribution of recipes.source_api
-    "fatsecret (Mediterranean seed + sync)" : 60
+    "edamam (Mediterranean seed + sync)" : 60
     "spoonacular (multi-cuisine sync)" : 25
     "user_created (user recipes)" : 10
     "ai_generated (future LLM)" : 4
@@ -1080,7 +1080,7 @@ timeline
         : Granular consent UI 5 toggles
         : DPIA draft outsourced
     Week 5-6
-        : SCC signed with FatSecret + Spoonacular
+        : SCC signed with Edamam + Spoonacular
         : Encrypt PDFs at rest
         : Encrypt remaining Art. 9 fields
     Week 7-8
@@ -1124,7 +1124,7 @@ AI chat,Art. 9 memories encrypted SQLite,15
 Apple Health Health Connect,Art. 9 steps RAM,10
 Apple Health Health Connect,Art. 9 active kcal RAM,10
 Barcode scan,Non-PII catalog to OpenFoodFacts,20
-Recipe sync,Non-PII catalog to FatSecret Spoonacular,30
+Recipe sync,Non-PII catalog to Edamam Spoonacular via BFF,30
 
 Basic PII AsyncStorage,Local-device only,12
 Art. 9 conditions encrypted,Local-device only,8
@@ -1137,7 +1137,7 @@ Art. 9 memories encrypted SQLite,Local-device only,15
 Art. 9 steps RAM,Local-device only,10
 Art. 9 active kcal RAM,Local-device only,10
 Non-PII catalog to OpenFoodFacts,External service non-PII only,20
-Non-PII catalog to FatSecret Spoonacular,External service non-PII only,30
+Non-PII catalog to Edamam Spoonacular via BFF,External service non-PII only,30
 ```
 
 **Reading keys:**
@@ -1159,7 +1159,7 @@ For concepts that Mermaid does not render elegantly (overlapping trust boundarie
 │  INTERNET ZONE (untrusted) — TLS terminated at the client, no pinning    │
 │                                                                          │
 │   ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐             │
-│   │OpenFoodFa.│  │ FatSecret │  │Spoonacular│  │HuggingFace│             │
+│   │OpenFoodFa.│  │  Edamam   │  │Spoonacular│  │HuggingFace│             │
 │   │ (FR / EU) │  │  (US ⚠️)  │  │  (US ⚠️)  │  │  (US ⚠️)  │             │
 │   └─────┬─────┘  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘             │
 │         │              │              │              │                   │
@@ -1231,7 +1231,7 @@ AsyncStorage (key/value, serialized JSON):
 ├── family_name                         → plaintext string
 ├── app_initialized                     → "true"|"false"
 ├── health_active_provider              → "apple_health"|"health_connect"|null
-├── fs_token / fs_token_expiry          ← cached FatSecret OAuth
+├── sp_quota_cache_v2                   ← cached BFF /v1/spoonacular/quota response (30s TTL)
 ├── sp_daily_calls                      ← Spoonacular daily counter
 ├── on_device_model_first_loaded_…     ← AI model flag
 └── on_device_embeddings_first_loaded   ← embeddings flag

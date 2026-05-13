@@ -28,7 +28,7 @@ flowchart TB
 
     subgraph Vendors["☁️ Providers (DPA sub-processors)"]
         OFF[OpenFoodFacts]
-        FS[FatSecret API US ⚠️ SCC]
+        ED[Edamam API US ⚠️ SCC]
         SP[Spoonacular API US ⚠️ SCC]
         HF[HuggingFace CDN US ⚠️]
         Mistral[Mistral La Plateforme EU ✅ opt-in]
@@ -73,7 +73,7 @@ flowchart TB
 |---|---|---|
 | **5. Legal** | 🔴 Privacy policy not published | Draft and publish at `nutriassistant.ai/privacy`, link from Settings and App Store Connect |
 | **1.5 Developer Information** | 🟡 Settings has contact but lacks a canonical URL | Improve `app/settings.tsx:531-534` with a direct link to a support page |
-| **Privacy Nutrition Labels (App Privacy Details)** | 🔴 Not declared — since it is on-device only, declare correctly: "Data Not Collected" in most categories, but **declare** the OFF/FatSecret/Spoonacular calls as third-party endpoints | Complete the mapping of [§5.1](./05-privacy-model.md#51-personal-data-inventory) ↔ Apple categories (Health & Fitness; Sensitive Info; Identifiers; Diagnostics; Usage Data) |
+| **Privacy Nutrition Labels (App Privacy Details)** | 🔴 Not declared — since it is on-device only, declare correctly: "Data Not Collected" in most categories, but **declare** that catalog queries reach OFF / Edamam / Spoonacular via our `api.nutriassistant.org` BFF | Complete the mapping of [§5.1](./05-privacy-model.md#51-personal-data-inventory) ↔ Apple categories (Health & Fitness; Sensitive Info; Identifiers; Diagnostics; Usage Data) |
 | **App Tracking Transparency (ATT)** | ✅ Not applicable — no cross-app tracking | n/a |
 | **HealthKit** | ✅ `NSHealthShareUsageDescription` declared, no write (`app.json:18-19, 22-25`) | Document in App Store Connect that HealthKit data never leaves the device |
 | **Apple Intelligence / Foundation Models** | n/a — we use Qwen 3, not Foundation Models | n/a |
@@ -140,9 +140,9 @@ flowchart TB
 | Local SQLite | n/a (per device) | Keep. Add optional replication via Postgres + RxDB | For sync across family devices |
 | AsyncStorage for profiles | n/a | Move progressively to SQLite | Better concurrency and querying |
 | On-device image processing | ⚠️ Does not yet exist | Backend image pipeline (Cloud Run / Lambda) with a small vision model | Food recognition from photo when prioritized |
-| Recipe-catalog sync | Latency with FatSecret/Spoonacular | Own CDN (Cloudflare R2) with a curated catalog refreshed nightly | Better UX, lower cost |
+| Recipe-catalog sync | Latency with Edamam/Spoonacular (already proxied through the BFF with edge caching) | Own CDN (Cloudflare R2) with a curated catalog refreshed nightly | Better UX, lower cost |
 | Messaging queue | n/a | Pub/Sub or NATS, only if server-side telemetry is introduced | Decouple ingestion from processing |
-| Cache layer | AsyncStorage for tokens; FatSecret SDK does not cache responses | Redis EU + semantic cache of cloud AI responses | If cloud Pro AI is introduced |
+| Cache layer | BFF edge cache (Cloudflare `caches.default`) for catalog responses; AsyncStorage 30s TTL for Spoonacular quota | Redis EU + semantic cache of cloud AI responses | If cloud Pro AI is introduced |
 | Rate limiting | Local (Spoonacular calls/day) | BFF with per-device-id token bucket | Anti-abuse |
 | AI anti-abuse | n/a | Pattern detection (high QPS, adversarial prompts) | When cloud exists |
 

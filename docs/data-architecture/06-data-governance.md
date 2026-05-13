@@ -126,9 +126,9 @@ Evidence: `src/modules/planner/mealPlanGenerator.ts:29-163`, `src/modules/planne
 | Health-condition catalog | Master | `CONDITIONS_LIST` in `app/settings.tsx:50` + `CONDITION_GUIDANCE` in `src/services/prompts/system.ts:17-26` | Product team | In code. ⚠️ Two sources; potential divergence |
 | Family-role catalog | Master | `MemberRole` (`src/types/profiles.ts:1`) | Product team | In code |
 | Quantity-unit catalog | Master | `QuantityUnit` (`src/types/inventory.ts:6`) | Product team | In code |
-| Cuisine-with-flag catalog | Reference | `AREA_FLAGS` (`src/services/themealdb.ts:51-80`), `SPOONACULAR_CUISINE_QUERIES` (`src/services/spoonacular.ts:105-126`), `MEDITERRANEAN_QUERIES` (`src/services/fatsecret.ts:22-38`) | Product team | In code. **⚠️ Three parallel lists** — divergence risk |
+| Cuisine-with-flag catalog | Reference | `AREA_FLAGS` (`src/services/themealdb.ts:51-80`), `SPOONACULAR_CUISINE_QUERIES` (`src/services/spoonacular.ts:105-126`), `EDAMAM_QUERIES` (`src/services/edamam.ts`) | Product team | In code. **⚠️ Three parallel lists** — divergence risk |
 | Retailers catalog (future) | Master | `RETAILERS` in `src/constants/retailers.ts:10-17` | Product team | In code |
-| Recipe-category mapping catalog | Reference | `RECIPE_TYPE_TO_CATEGORY` (FatSecret, `src/services/fatsecret.ts:42-47`), `DISH_TYPE_TO_CATEGORY` (Spoonacular, `src/services/spoonacular.ts:85-93`), `CATEGORY_MAP` (TheMealDB, `src/services/themealdb.ts:8-13`) | Product team | In code |
+| Recipe-category mapping catalog | Reference | `MEAL_TYPE_TO_CATEGORY` / `DISH_TYPE_TO_CATEGORY` (Edamam, `src/services/edamam.ts`), `DISH_TYPE_TO_CATEGORY` (Spoonacular, `src/services/spoonacular.ts:85-93`), `CATEGORY_MAP` (TheMealDB, `src/services/themealdb.ts:8-13`) | Product team | In code |
 | Allergen-keyword catalog | Reference | `ALLERGEN_KEYWORDS` in `src/seed/allergen-rules.ts` (not opened) and `ALLERGEN_PATTERNS` in `src/services/themealdb.ts:84-94` | Product team | In code. ⚠️ Two distinct engines |
 | Nutritional-equivalence table | Reference | `CATEGORY_NUTRITION` in `src/services/themealdb.ts:16-31` (heuristic to substitute missing data) | Product team | In code. ⚠️ Estimated values, not from an official source |
 | Languages | Reference | `src/i18n/en.ts`, `src/i18n/es.ts` | Product team | In code |
@@ -157,7 +157,7 @@ Evidence: `src/modules/planner/mealPlanGenerator.ts:29-163`, `src/modules/planne
 | 3 | `height` ∈ [30, 260] cm | Validity | Critical |
 | 4 | Every allergen in `family_profiles.allergies` ∈ EU_14_ALLERGENS | Consistency | Critical |
 | 5 | Every condition in `family_profiles.conditions` ∈ CONDITIONS_LIST | Consistency | High |
-| 6 | Every `recipes.source_api` ∈ {fatsecret, spoonacular, themealdb, user_created, ai_generated} | Validity | High |
+| 6 | Every `recipes.source_api` ∈ {edamam, spoonacular, themealdb, user_created, ai_generated} | Validity | High |
 | 7 | Every `meal_plans.date` unique | Uniqueness | Critical (enforced by UNIQUE constraint) |
 | 8 | Every `doc_chunks.member_id` exists in `family_profiles` (RAM lookup) | Integrity | High |
 | 9 | Sum of recipe macros vs `calories` (4×prot + 4×carb + 9×fat ≈ kcal ± 15%) | Consistency | Medium |
@@ -220,14 +220,14 @@ Evidence: `src/modules/planner/mealPlanGenerator.ts:29-163`, `src/modules/planne
 | Third party | Data we send | Data we receive | Needs DSA | Status |
 |---|---|---|---|---|
 | OpenFoodFacts | Barcodes | Product + nutrition + allergens | No (public data) | n/a |
-| FatSecret | Search queries + OAuth credentials | Recipes, nutrition | Yes (commercial provider) | 🔴 Not signed — only FatSecret TOS accepted on account creation |
+| Edamam | Search queries (credentials held server-side in BFF) | Recipes, nutrition | Yes (commercial provider) | 🔴 Not signed — only Edamam TOS accepted on account creation |
 | Spoonacular | Queries + API key | Recipes, nutrition | Yes | 🔴 Not signed |
 | HuggingFace | User-Agent + IP (initial download) | `.pte` models and tokenizers | Public | n/a (transparency recommended) |
 | Apple | Nothing explicit | HealthKit events | Apple DPA (Apple is the controller) | ✅ (upon app publication) |
 | Google | Nothing explicit | Health Connect records | Google Play DPA | ✅ (upon app publication) |
 | Future BFF cloud provider | Anonymized telemetry + internal tokens | n/a | Yes | n/a (does not yet exist) |
 
-**Recommendation**: sign Standard Contractual Clauses (SCC) with FatSecret and Spoonacular if international transfer is confirmed, and formalize the DSA list in `docs/legal/DATA_SHARING.md` before launch.
+**Recommendation**: sign Standard Contractual Clauses (SCC) with Edamam and Spoonacular if international transfer is confirmed, and formalize the DSA list in `docs/legal/DATA_SHARING.md` before launch.
 
 **Prioritized recommendations (section 6):**
 

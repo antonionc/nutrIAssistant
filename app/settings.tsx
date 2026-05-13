@@ -33,11 +33,7 @@ import {
   SOURCE_LABELS,
   DEFAULT_SOURCES_CONFIG,
 } from '../src/modules/recipes/recipeSourcesConfig'
-import {
-  getSpoonacularCallsToday,
-  getSpoonacularCallsRemaining,
-  SPOONACULAR_DAILY_LIMIT,
-} from '../src/services/spoonacular'
+import { getSpoonacularQuotaSnapshot } from '../src/services/spoonacular'
 import { pickAndSaveAvatar, deleteOldAvatar, getDefaultAvatarSource, getMemberAvatarSource } from '../src/services/avatarService'
 import { useHealth } from '../src/modules/health/HealthContext'
 import { HealthProviderId } from '../src/modules/health/types'
@@ -64,24 +60,27 @@ export default function SettingsScreen() {
   const [syncMessage, setSyncMessage] = useState('')
   const [recipeCount, setRecipeCount] = useState(0)
   const [sourcesConfig, setSourcesConfig] = useState<Record<RecipeSourceKey, RecipeSourceInfo>>(DEFAULT_SOURCES_CONFIG)
+  // Quota numbers reflect the BFF's global counter, not per-device usage.
+  // Initial limit of 0 is replaced on first refreshSourceStats() call below.
   const [spCallsToday, setSpCallsToday] = useState(0)
-  const [spCallsRemaining, setSpCallsRemaining] = useState(SPOONACULAR_DAILY_LIMIT)
+  const [spCallsRemaining, setSpCallsRemaining] = useState(0)
+  const [spDailyLimit, setSpDailyLimit] = useState(0)
   const [isCleaningImages, setIsCleaningImages] = useState(false)
   const [isWipingDB, setIsWipingDB] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
 
   const refreshSourceStats = async () => {
-    const [config, count, callsToday, callsRemaining] = await Promise.all([
+    const [config, count, quota] = await Promise.all([
       getSourcesConfig(),
       getRecipeCount(),
-      getSpoonacularCallsToday(),
-      getSpoonacularCallsRemaining(),
+      getSpoonacularQuotaSnapshot(),
     ])
     setSourcesConfig(config)
     setRecipeCount(count)
-    setSpCallsToday(callsToday)
-    setSpCallsRemaining(callsRemaining)
+    setSpCallsToday(quota.used)
+    setSpCallsRemaining(quota.remaining)
+    setSpDailyLimit(quota.limit)
   }
 
   useEffect(() => {
@@ -376,8 +375,8 @@ export default function SettingsScreen() {
             const lastSyncLine = lastSyncDate
               ? `${tr.settings.lastSync(lastSyncDate)}${config.syncedCount > 0 ? tr.settings.recipesSynced(config.syncedCount) : ''}`
               : null
-            const callsLine = key === 'spoonacular' && config.enabled
-              ? tr.settings.callsToday(spCallsToday, SPOONACULAR_DAILY_LIMIT)
+            const callsLine = key === 'spoonacular' && config.enabled && spDailyLimit > 0
+              ? tr.settings.callsToday(spCallsToday, spDailyLimit)
               : null
 
             return (

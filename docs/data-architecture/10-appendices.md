@@ -94,7 +94,7 @@
 - **ExecuTorch** — PyTorch. https://pytorch.org/executorch/
 - **all-MiniLM-L6-v2 Model Card**. https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
 - **OpenFoodFacts API v2** — https://wiki.openfoodfacts.org/API
-- **FatSecret Platform API** — https://platform.fatsecret.com/api/
+- **Edamam Recipe Search API v2** — https://developer.edamam.com/edamam-docs-recipe-api
 - **Spoonacular Food API** — https://spoonacular.com/food-api
 - **Expo SDK 55 Documentation** — https://docs.expo.dev/
 - **React Native 0.83 Release Notes** — https://reactnative.dev/blog
@@ -171,7 +171,7 @@
 **Positive consequences**: development speed, zero infra.
 **Negative consequences**: **secrets exposed in the binary**. Any attacker can extract them and exhaust quotas or commit billing fraud.
 **Retirement plan**: implement a BFF on Cloudflare Workers before the open beta. This ADR will be replaced by ADR-009 (BFF) when closed.
-**Evidence**: `.env:5-7`, `src/services/fatsecret.ts:7-8`, `src/services/spoonacular.ts:7`.
+**Evidence (historical)**: `.env:5-7`, `src/services/fatsecret.ts:7-8`, `src/services/spoonacular.ts:7`. **Status (current)**: ADR-007 is **retired**. As of commit `1647aac`, no `EXPO_PUBLIC_*` API secrets ship in the bundle — every upstream is reached only through the BFF at `api.nutriassistant.org`. See ADR-009 (BFF) — to be authored — for the replacement architecture.
 
 ### ADR-008: Hard cap of 4,500 characters on the prompt
 

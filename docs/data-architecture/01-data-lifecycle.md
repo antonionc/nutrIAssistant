@@ -8,7 +8,7 @@ flowchart LR
         U[User: forms, camera, voice]
         D[Clinical PDFs]
         H[Apple Health / Health Connect]
-        E[Nutrition APIs: OFF, FatSecret, Spoonacular]
+        E[Nutrition APIs: OFF, Edamam, Spoonacular via BFF]
         M[HuggingFace CDN: .pte models]
     end
 
@@ -75,7 +75,7 @@ flowchart LR
 | Apple Health | `react-native-health` (dynamic require) | `src/modules/health/providers/appleHealth.ts:23-89` | Only reads `Steps` and `ActiveEnergyBurned`; no HR, HRV, or VO2max |
 | Health Connect | `react-native-health-connect` (dynamic require) | `src/modules/health/providers/healthConnect.ts:24-103` | Same subset as Apple |
 | OpenFoodFacts | `fetch` JSON | `src/services/openFoodFacts.ts:67-88` | No local cache (every scan is online) |
-| FatSecret | OAuth2 client_credentials + `fetch` | `src/services/fatsecret.ts:110-145` | Credentials in `EXPO_PUBLIC_*` (risk in [§3.6](./03-security-encryption.md#36-secrets-management-in-the-repo)) |
+| Edamam Recipe Search v2 | API key (held in BFF secret store) + `fetch` via `bff/client.ts` | `src/services/edamam.ts` | Edamam's pagination URLs leak `app_id`/`app_key`; the BFF deep-walks responses and rewrites every `_links.*.href` to a BFF URL before returning |
 | Spoonacular | API key + `fetch` with daily quota | `src/services/spoonacular.ts:35-47,150-158` | Same credentials problem |
 | `.pte` models (HuggingFace) | `react-native-executorch` + `ExpoResourceFetcher` | `src/services/onDeviceLlm.ts:28,110-118` | No SHA verification before loading |
 
@@ -86,14 +86,14 @@ flowchart LR
 
 | Current component | Technology | Relevant files | Gaps |
 |---|---|---|---|
-| NutriScore (calculation) | Pure function over `NutritionalInfo` | `src/services/nutriscore.ts` (referenced from scanner and FatSecret) | Simplified algorithm; ⚠️ missing official 2023 Santé Publique France version |
+| NutriScore (calculation) | Pure function over `NutritionalInfo` | `src/services/nutriscore.ts` (referenced from scanner, Edamam, and Spoonacular) | Simplified algorithm; ⚠️ missing official 2023 Santé Publique France version |
 | Allergen detection | Regex/keyword over the EU-14 list | `src/seed/allergen-rules.ts`, `src/modules/profiles/allergenEngine.ts:5-105` | Soft warnings only for hypertension (`allergenEngine.ts:55-69`); missing coverage for celiac, diabetes |
 | Field-level encryption | AES-GCM-256, `enc:v1:` prefix | `src/services/encryption.ts:56-75`, `src/modules/profiles/profileStorage.ts:14-37` | Only covers `aboutMeNotes`, `conditions`, `member_memories.text`, `doc_chunks.text` and `doc_chunks.embedding`. Does not cover: `weight`, `height`, `bloodPressure`, `hrv`, `spO2`, `dateOfBirth`, `allergies`. |
 | PDF chunking | Sentence-aware splitter | `src/services/profileDocuments.ts:92-118` | No overlap; 80-450 char chunks |
 | Embeddings | `react-native-executorch`, ALL_MINILM_L6_V2 | `src/services/embeddings.ts:85-101` | 384-dim, `Float32Array`; no explicit L2 normalization |
 | PDF summarization | On-device LLM | `src/services/profileDocuments.ts:72-86` | 500-character cap; prompt forbids PII but no post-hoc validation |
 | SQL migrations | Custom runner, idempotent, transactional | `src/db/database.ts:88-145` | No down-migrations, no versioned metadata schema |
-| FatSecret token cache | AsyncStorage | `src/services/fatsecret.ts:110-145` | No TTL safety net (only provider expiry) |
+| Spoonacular quota cache | AsyncStorage `sp_quota_cache_v2`, 30s TTL | `src/services/spoonacular.ts` | Reads the global counter from BFF's `/v1/spoonacular/quota` so the settings UI shows real usage, not per-device guesses |
 | Spoonacular quota cache | AsyncStorage | `src/services/spoonacular.ts:35-43` | Resets by local solar day — not UTC |
 
 ## 1.3. Analytics and AI phase
@@ -130,6 +130,6 @@ flowchart LR
 **Phase-1 prioritized recommendations:**
 
 1. Document this cycle in `CLAUDE.md` as an architecture contract (future devs must respect local-first).
-2. Implement a **nightly on-device batch** to sync FatSecret over Wi-Fi (placeholder exists in `app/_layout.tsx:115-122` but does not respect network state or time of day).
+2. Implement a **nightly on-device batch** to refresh Edamam catalog over Wi-Fi (placeholder exists in `app/_layout.tsx:115-122` but does not respect network state or time of day).
 3. Add an **idempotency check** to PDF ingestion (same hash → no re-indexing).
 4. Introduce **structured (non-PII) events** in the Analytics → Exploitation cycle to feed [§7](./07-observability.md).

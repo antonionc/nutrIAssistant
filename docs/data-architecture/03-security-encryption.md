@@ -40,8 +40,8 @@ Active and well-designed (see table above). **It is the primary protection mecha
 
 | Concept | Implementation | Evidence |
 |---|---|---|
-| Credentials (FatSecret, Spoonacular) | `EXPO_PUBLIC_*` in bundle (plaintext inside the IPA/APK) | `.env:5-7`, `src/services/fatsecret.ts:7-8`, `src/services/spoonacular.ts:7` |
-| Runtime tokens (FatSecret OAuth) | AsyncStorage in plaintext | `src/services/fatsecret.ts:11-12,139-142` |
+| Credentials (Edamam, Spoonacular) | Cloudflare Worker secret store, set via `wrangler secret put`; never in bundle, never in repo | `infra/bff/` — `EDAMAM_APP_ID`, `EDAMAM_APP_KEY`, `SPOONACULAR_API_KEY` |
+| Runtime tokens | n/a — Edamam uses simple API key, Spoonacular uses API key; no OAuth state on device | — |
 | Master cryptographic key | iOS Keychain / Android Keystore (via `expo-secure-store`) | `src/services/encryption.ts:35-46` |
 | Hardware-backed | Device-dependent; `expo-secure-store` uses Keychain Class A on iOS and Android Keystore (HW-backed when the device supports it) | — |
 | Rotation | ⚠️ GAP — no scheduled rotation | — |
@@ -85,7 +85,7 @@ Active and well-designed (see table above). **It is the primary protection mecha
 | PII-access audit log | 🔴 GAP — does not exist | — |
 | Anomaly detection | 🔴 GAP | — |
 | Alerts | 🔴 GAP | — |
-| Per-service cost and usage | 🟡 Spoonacular counts calls/day (`src/services/spoonacular.ts:35-43`). FatSecret does not | — |
+| Per-service cost and usage | 🟡 Spoonacular global quota counter in BFF KV (`/v1/spoonacular/quota`); Edamam metered via free-tier monthly cap; OFF unmetered | `infra/bff/src/lib/spoonacularQuota.ts` |
 
 **This gap is the most severe risk from a GDPR perspective:** without traceability, you cannot demonstrate accountability (Art. 5.2), detect breaches (Art. 33), or evidence legitimate access to Art. 9 data.
 
@@ -99,7 +99,7 @@ Active and well-designed (see table above). **It is the primary protection mecha
 
 | Threat | Applied description | Likelihood | Impact | Current mitigation | Recommended mitigation |
 |---|---|---|---|---|---|
-| **Spoofing** | Attacker obtains IPA/APK + decompiles + extracts `EXPO_PUBLIC_*` → calls FatSecret/Spoonacular as if it were the app | High (keys are in the bundle) | Cost (bill shock) + suspension under TOS | Local Spoonacular quota (`spoonacular.ts:35-47`) | BFF (recommendation [§3.6](#36-secrets-management-in-the-repo)); per-device rate limit + WAF |
+| **Spoofing** | Attacker decompiles IPA/APK looking for API keys to extract | Low — no `EXPO_PUBLIC_*` API keys ship in the bundle anymore | n/a (mitigation now in place) | All upstream calls go through the BFF; credentials never leave Cloudflare's secret store | Add per-IP rate limit and WAF rules on `api.nutriassistant.org` if abuse patterns emerge |
 | **Tampering** | Attacker modifies the SQLite DB via jailbreak/root | Low on stock device, high with jailbreak | Compromise of planning and memories | Field-level encryption (prevents reading); ⚠️ does not prevent rewriting | SQLCipher to encrypt full pages |
 | **Tampering** | `.pte` model tampered with on the CDN → poisoned responses | Very low (HF CDN with TLS) | Critical (harmful suggestions) | ⚠️ GAP — no SHA256 verification | Whitelisted hashes + fetch with verification |
 | **Repudiation** | User denies having added allergens or changed a plan | Medium | Low | ⚠️ GAP — no audit log | Encrypted local audit log |
@@ -107,7 +107,7 @@ Active and well-designed (see table above). **It is the primary protection mecha
 | **Information Disclosure** | Clinical PDFs in `documentDirectory` not encrypted | High if the bundle is physically extracted | Critical | ⚠️ GAP | Encrypt PDFs on disk; decrypt into `cacheDirectory` right before `extractPdfText` |
 | **Information Disclosure** | Embedding inversion attack: recover text from leaked embeddings | Low | Medium | Embeddings are encrypted | Same + never expose embeddings outside |
 | **Information Disclosure** | LLM leaks one family's data to another (cross-tenant) | Zero (local, one family per device) | n/a | Physical isolation | — |
-| **DoS** | Loop calls to FatSecret → credentials revoked | Medium | App broken for everyone until the next release | Local backoff and rate limit | BFF with rate limit |
+| **DoS** | Loop calls to Edamam or Spoonacular through the BFF | Low — BFF enforces per-IP rate limit + global daily quota | App degrades gracefully (429 surfaced as `Quota exhausted`) | BFF rate limit middleware + KV-backed daily counters | Move from KV fixed-window to platform `RateLimit` binding if hot spots appear |
 | **DoS** | Recursive LLM generation (KV overflow) | Medium (used to happen with Llama 3.2 1B) | Broken UX | Prompt hard-cap at 4,500 chars + history cap at 4 turns + retry guard | `src/services/prompts/system.ts:52`, `src/modules/ai-engine/AIContext.tsx:43,194-210` |
 | **Elevation of Privilege** | A non-super-user profile triggers the DB wipe | Low (UI gate) | Critical | UI switch (`isSuperUser` gate) | ⚠️ The gate is UI-only; an attacker with runtime access could call `wipeAndResetRecipes` directly. Implement the gate in the service too |
 
@@ -130,7 +130,7 @@ Active and well-designed (see table above). **It is the primary protection mecha
 | Vulnerability scanning | 🔴 GAP — no Dependabot/Snyk/Renovate | — | Enable Dependabot security updates on GitHub |
 | License audit | 🔴 GAP — `license-checker` is not run | — | Add `npm run licenses` that fails on non-whitelisted licenses (AGPL, etc.) |
 | AI model provenance | 🔴 GAP — origin and hash are not verified | — | Pin the SHA256 of each `.pte` and tokenizer in code + verify on load |
-| Nutrition-source provenance | ✅ traced by `sourceApi` in `recipes` (`fatsecret|spoonacular|themealdb|user_created|ai_generated`) | `src/types/recipes.ts:38` | Document Data Sharing Agreements ([§6.7](./06-data-governance.md#67-data-sharing-agreements-with-third-parties)) |
+| Nutrition-source provenance | ✅ traced by `sourceApi` in `recipes` (`edamam|spoonacular|themealdb|user_created|ai_generated`) | `src/types/recipes.ts:38` | Document Data Sharing Agreements ([§6.7](./06-data-governance.md#67-data-sharing-agreements-with-third-parties)) |
 
 **Prioritized recommendations:**
 

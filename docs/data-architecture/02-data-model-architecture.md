@@ -42,7 +42,7 @@ flowchart TB
             Act[aiActions.ts]
             PDF[profileDocuments.ts]
             OFF[openFoodFacts.ts]
-            FS[fatsecret.ts]
+            ED[edamam.ts]
             SP[spoonacular.ts]
         end
 
@@ -78,7 +78,7 @@ flowchart TB
 
     subgraph Cloud["☁️ External services (read-only)"]
         OFFCloud[(OpenFoodFacts\nworld.openfoodfacts.org)]
-        FSCloud[(FatSecret\nplatform.fatsecret.com)]
+        EDCloud[(Edamam\napi.edamam.com)]
         SPCloud[(Spoonacular\napi.spoonacular.com)]
         HF[(HuggingFace CDN\nmodel .pte files)]
         Apple[(Apple Health Kit)]
@@ -104,7 +104,7 @@ Unified table by source:
 | Voice | Active | Audio → transcription | OS speech-recognition latency | Real-time | `package.json:23` (no service that consumes it — ⚠️ placeholder feature) |
 | Barcodes EAN/UPC/QR | Passive (decodes what's pointed at) | Semi-structured (string) | <500 ms | Real-time | `app/scanner.tsx:158` |
 | OpenFoodFacts | Active (pull) | Semi-structured (JSON) | 200-800 ms | Real-time per scan | `src/services/openFoodFacts.ts:67-88` |
-| FatSecret | Active (pull batch) | Semi-structured (JSON, heterogeneous nesting, `toArray` quirk) | 300-1500 ms / 200 ms between calls | Batch (bulk sync) | `src/services/fatsecret.ts:273-321` |
+| Edamam Recipe Search v2 (via BFF) | Active (pull batch) | Semi-structured (JSON, `hits[].recipe`) | 300-1500 ms / 250 ms between calls | Batch (bulk sync) | `src/services/edamam.ts` |
 | Spoonacular | Active (pull batch) | Semi-structured (JSON) | 300-1500 ms; quota 10,000/day | Batch (bulk sync) | `src/services/spoonacular.ts:10,196-229` |
 | Clinical PDFs | Active (upload) | Unstructured (PDF) → plain text | 1-5 s per document (native extraction) | Real-time on-demand | `src/services/profileDocuments.ts:42-67,72-86` |
 | Apple Health | Active (pull) | Native structured (callbacks) | <1 s for the current day | Near real-time | `src/modules/health/providers/appleHealth.ts:65-89` |
@@ -115,7 +115,7 @@ Unified table by source:
 ## 2.3. Ingestion modes
 
 - **Batch one-shot**: initial download of the LLM and embeddings (`app/_layout.tsx:132-145`). Once in the user's lifetime per model, controlled by the AsyncStorage flag `on_device_model_first_loaded_qwen3_1_7b_q`. Rationale: ~1 GB cannot ship on every launch.
-- **Scheduled background batch**: FatSecret sync after login (`app/_layout.tsx:116-122`). Fires without checking Wi-Fi or charging state (⚠️ fix recommendation in [§9](./09-improvement-plan.md)).
+- **Scheduled background batch**: Edamam sync on first launch (`app/_layout.tsx:116-122`). Fires without checking Wi-Fi or charging state (⚠️ fix recommendation in [§9](./09-improvement-plan.md)).
 - **On-demand batch**: manual source sync from Settings (`app/settings.tsx:91-110`), wipe & re-seed (`app/settings.tsx:131-155`).
 - **Real-time (interactive)**: every chat turn, every scan, every user action (pantry CRUD, grocery check-off, etc.).
 - **Near real-time**: Apple Health / Health Connect refresh when activating the provider or on `HealthContext.refresh()` (`src/modules/health/HealthContext.tsx:39-55`).
@@ -140,7 +140,7 @@ Although the prototype is monolithic, we can map its elements onto the medallion
 
 | Layer | Meaning | Equivalent in NutrIAssistant AS-IS | TO-BE proposal |
 |---|---|---|---|
-| **Bronze (raw)** | Untouched raw data | OFF/FatSecret/Spoonacular JSON responses in RAM, raw text extracted from PDFs in `rawText` (`src/services/profileDocuments.ts:74`), raw LLM outputs before stripping | S3/GCS bucket, append-only, jsonl per provider + raw_pdf_text per document. 30-day retention. |
+| **Bronze (raw)** | Untouched raw data | OFF/Edamam/Spoonacular JSON responses in RAM (proxied through the BFF), raw text extracted from PDFs in `rawText` (`src/services/profileDocuments.ts:74`), raw LLM outputs before stripping | S3/GCS bucket, append-only, jsonl per provider + raw_pdf_text per document. 30-day retention. |
 | **Silver (standardized)** | Clean, typed, deduplicated | Output of `mapNutriments`, `mapNutrition`, `parseInstructions`, computed NutriScore, normalized allergens (`src/services/openFoodFacts.ts:34-48`, `src/services/spoonacular.ts:134-146`) | Tables `silver.recipes`, `silver.products`, `silver.health_signals` in Postgres + dbt tests |
 | **Gold Unified** | Business model ready to serve | On-device SQLite tables (`recipes`, `inventory_items`, `meal_plans`, …) | Postgres with the same shape + per-device edge replication |
 | **Gold Analytics (OLAP)** | Aggregations for insights | ⚠️ GAP in AS-IS | Snowflake/BigQuery with cubes `family_demographics`, `recipe_popularity`, `allergen_distribution` |
@@ -225,7 +225,7 @@ erDiagram
         int prep_time
         int cook_time
         int servings
-        string source_api "fatsecret|spoonacular|themealdb|user_created|ai_generated"
+        string source_api "edamam|spoonacular|themealdb|user_created|ai_generated"
         json nutritional_info
         json allergens
         string nutriscore "A|B|C|D|E"
@@ -339,7 +339,7 @@ Legend: **PII** (personal data) / **Art. 9** (special categories: health, religi
 | `doc_chunks.embedding` | Embeddings | RAG | **Yes (can invert content)** | **Yes** | ✅ AES-GCM | Same |
 | `conversation_summaries.encrypted_summary` | LLM (pending process) | Long-term memory | Yes | **Yes** | ✅ AES-GCM | 30 d |
 | Avatars | Picker | UI personalization | Yes | No | No (FileSystem) | Until deleted |
-| FatSecret tokens (AsyncStorage `fs_token`) | OAuth | Third-party auth | Technical credential | No | No | Until expiration (`expires_in`) |
+| Spoonacular quota cache (AsyncStorage `sp_quota_cache_v2`) | BFF quota response | UI display of global usage | Non-PII counter | No | No | 30s TTL |
 | Cached `.pte` model | HuggingFace CDN | Inference | No | No | No | Permanent (cleanup on model change) |
 
 **Prioritized recommendations:**

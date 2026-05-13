@@ -36,10 +36,10 @@ Distribution of the 44 current logs by emitting module. This is the **only obser
 | `ai-engine` | `src/modules/ai-engine/AIContext.tsx`, `src/services/onDeviceLlm.ts`, `src/services/factExtractor.ts`, `src/services/embeddings.ts`, `src/services/memoryStore.ts`, `src/modules/planner/mealPlanGenerator.ts` | 16 | `warn`, `error` | `[OnDeviceLLM] Failed to load LLM:` (`src/services/onDeviceLlm.ts:123`), `[MealPlan] LLM ${category} output unparseable, falling back` (`src/modules/planner/mealPlanGenerator.ts:128`) |
 | `profiles` | `src/modules/profiles/ProfilesContext.tsx`, `src/modules/profiles/profileStorage.ts` | 4 | `error`, `warn` | `[profileStorage] Corrupt profiles data, resetting:` (`src/modules/profiles/profileStorage.ts:58`) |
 | `health` | `src/modules/health/providers/appleHealth.ts`, `src/modules/health/providers/healthConnect.ts` | 3 | `warn` | `[AppleHealth] initHealthKit error:` (`src/modules/health/providers/appleHealth.ts:55`) |
-| `network/catalog` | `src/services/fatsecret.ts`, `src/services/spoonacular.ts` | 4 | `warn` | `[Spoonacular] Daily limit reached, cannot fetch detail` (`src/services/spoonacular.ts:268`) |
+| `network/catalog` | `src/services/edamam.ts`, `src/services/spoonacular.ts`, `src/services/bff/client.ts` | 4 | `warn` | `[Spoonacular] Daily quota exhausted, cannot fetch detail` (`src/services/spoonacular.ts`) |
 | `pdf` | `src/services/profileDocuments.ts` | 2 | `warn` | `[profileDocuments] embeddings unavailable, skipping indexing` (`src/services/profileDocuments.ts:141`) |
 | `planner` | `src/modules/planner/PlannerContext.tsx` | 2 | `warn` | — |
-| `recipes` | `src/modules/recipes/syncRecipes.ts`, `src/modules/recipes/seedRecipes.ts` | 4 | `log`, `warn` | `[Init] Starting background FatSecret sync...` (`app/_layout.tsx:118`) |
+| `recipes` | `src/modules/recipes/syncRecipes.ts`, `src/modules/recipes/seedRecipes.ts` | 4 | `log`, `warn` | `[Init] Starting background Edamam sync...` (`app/_layout.tsx:118`) |
 | `ui` (sheets / assistant) | `src/components/sheets/*`, `src/components/layout/AIAssistant.tsx` | 5 | `error` | — |
 | **Total** | 22 files | **44** | — | — |
 
@@ -223,7 +223,7 @@ Sentry.init({
 | D7 | **Compliance & DSR** | DPO | 1h | Open DSRs, mean response time, % users with fresh consent (<13m), deletions executed | Audit log + BFF |
 | D8 | **Cost & quotas** | Engineering | 5m | Calls/day per provider, Spoonacular quota %, $ Sentry, monthly infra $ | Prometheus + cost APIs |
 | D9 | **On-device privacy** | Engineering + DPO | 1h | % users on v2 encryption (post-rotation), decryption-failure rate, regenerated-key rate | Custom events |
-| D10 | **External-API health** | Engineering | 1m | OFF success rate, FatSecret OAuth refresh failures, Spoonacular P95 latency | Custom events |
+| D10 | **External-API health** | Engineering | 1m | OFF success rate, Edamam P95 latency, Spoonacular P95 latency | Custom events |
 
 ### 7.2.2. Wireframe — D5 Engagement (sketch)
 
@@ -334,7 +334,7 @@ Sentry.init({
 | AI chat TTFB | First-token latency | **P50 < 3s, P95 < 8s** | "lat-violations" 5% budget | — | P95 > 12s sustained 15m |
 | AI chat throughput | Sustained tokens/s | **P50 > 25 t/s** | 5% | — | < 15 t/s sustained 30m |
 | RAG retrieval | % queries with embedding generated OK | **99%** | 1% | — | < 95% ⇒ alert |
-| Catalog sync (FatSecret) | Success rate of a sync | **98%** | 14d/year | — | 3 consecutive failures ⇒ alert |
+| Catalog sync (Edamam) | Success rate of a sync | **98%** | 14d/year | — | 3 consecutive failures ⇒ alert |
 | OFF lookup (scan) | Median latency | **P50 < 800ms, P95 < 3s** | 10% | "scan resolves <3s" in marketing | P95 > 5s sustained 15m |
 | GDPR full erasure | Time from tap to complete wipe on device | **P95 < 30s** | n/a | **< 72h (Art. 17 legal commitment)** | Wipe fails ⇒ S1 |
 | DSR response time | Time from request to delivery | **P95 < 7 days** | n/a | **30 days (Art. 12.3 legal max)** | > 20 days ⇒ DPO alert |
@@ -367,7 +367,7 @@ For `App crash-free sessions = 99.5%`:
 Events that **do not consume error budget** (document and exclude in post-mortems):
 
 - Planned maintenance window announced >72h in advance.
-- Outage of an external provider (OpenFoodFacts, FatSecret, Spoonacular) confirmed on their status page.
+- Outage of an external provider (OpenFoodFacts, Edamam, Spoonacular) confirmed on their status page.
 - HuggingFace CDN outage during the initial model download (out of our control for new users, but **retries do consume budget**).
 - Force-update (major AI model change) requiring re-download: counts as a **planned window**.
 
@@ -385,9 +385,9 @@ Events that **do not consume error budget** (document and exclude in post-mortem
 
 | Sev | Criterion | Concrete NutrIAssistant example | Initial response | Fix / mitigation | Communication |
 |---|---|---|---|---|---|
-| **S1 — critical** | PII exposed, data breach, globally unusable app, legal violation | (a) Log bucket leaks decryptable `enc:v1:` content; (b) 100% crash on open; (c) BFF exposes FatSecret tokens | **< 30 min** | EAS Update hotfix (JS) **< 24h**; malicious-binary block in stores if applicable | **AEPD < 72h**, affected users **without delay**, full team page |
+| **S1 — critical** | PII exposed, data breach, globally unusable app, legal violation | (a) Log bucket leaks decryptable `enc:v1:` content; (b) 100% crash on open; (c) BFF response leaks Edamam `app_key` or Spoonacular API key | **< 30 min** | EAS Update hotfix (JS) **< 24h**; malicious-binary block in stores if applicable | **AEPD < 72h**, affected users **without delay**, full team page |
 | **S2 — high** | Core feature broken, no data loss, no legal risk | (a) AI chat loops on "preparing model" due to `llmBusyRef` bug; (b) scanner does not detect codes; (c) weekly plan does not generate | **< 2 h** | Fix **< 72h** | In-app banner + status page |
-| **S3 — medium** | Secondary feature broken | (a) Markdown export duplicates members; (b) FatSecret sync fails 3× in a row; (c) avatar import does not copy the file | **< 24 h** | Fix **< 1 week** | Note in release notes |
+| **S3 — medium** | Secondary feature broken | (a) Markdown export duplicates members; (b) Edamam sync fails 3× in a row; (c) avatar import does not copy the file | **< 24 h** | Fix **< 1 week** | Note in release notes |
 | **S4 — low** | Cosmetic bug, no functional impact | (a) Broken spacing in a setting; (b) typo in i18n | **< 1 week** | Next release | None |
 
 ### 7.4.2. Response flow — diagram
@@ -501,7 +501,7 @@ What failed in monitoring/alerts.
 |---|---|---|---|
 | Apple Developer Program | **99 USD** | Mandatory to publish on App Store | — |
 | Google Play Developer | **25 USD** (one-shot) | Mandatory to publish on Play Store | — |
-| FatSecret API | 0 USD | Free tier subject to TOS | `src/services/fatsecret.ts:9-12` |
+| Edamam Recipe Search v2 | 0 USD (Developer tier) | 10 req/min, monthly cap. Held server-side in CF secret store. | `src/services/edamam.ts` |
 | OpenFoodFacts | 0 EUR | Public API, no auth | `src/services/openFoodFacts.ts:3` |
 | Spoonacular API | ⚠️ **Paid plan needed** | `SPOONACULAR_DAILY_LIMIT = 10_000` (`src/services/spoonacular.ts:10`). The free plan is **150 points/day**, not 10,000 → the app **assumes** the dev has a paid plan ($29 - $149/month by package) | `src/services/spoonacular.ts:10` |
 | HuggingFace CDN | 0 USD | Public downloads, no cost for the repo | `src/services/onDeviceLlm.ts:28-32` |
@@ -544,7 +544,7 @@ What failed in monitoring/alerts.
 | Lever | When to enable | Expected savings |
 |---|---|---|
 | Semantic cache of AI responses (Pro tier opt-in) | When cloud AI is introduced | 60-80% of inference cost |
-| Catalog cache in R2 (instead of pulling FatSecret/Spoonacular per device) | When concurrent syncs saturate the quota | Up to 100% of Spoonacular quota |
+| Catalog cache in R2 (instead of pulling Edamam/Spoonacular per device) | When concurrent syncs saturate the quota | Up to 100% of Spoonacular quota |
 | Aggressive Sentry sampling in prod | From 50k MAU | 70% of Sentry cost |
 | 7-day Loki retention instead of 30 | From 100k MAU | 75% of log storage cost |
 | Switch to private EU HuggingFace Inference Endpoints | If cloud Pro LLM is introduced | Better EU latency + sovereignty |
@@ -636,7 +636,7 @@ CREATE INDEX idx_audit_ts ON audit_log(ts);
 | Allergen ∈ EU_14 | `quality.allergen_valid_rate` | In `addProfile` / `updateProfile` | < 99.99% (closed catalog) |
 | Condition ∈ CONDITIONS_LIST | `quality.condition_valid_rate` | Same | Same |
 | Valid `source_api` | `quality.recipe_source_valid_rate` | In recipe upsert | < 99.99% |
-| Macros ≈ kcal ± 15% | `quality.recipe_macro_consistent_rate` | In FatSecret/Spoonacular sync | < 90% |
+| Macros ≈ kcal ± 15% | `quality.recipe_macro_consistent_rate` | In Edamam/Spoonacular sync | < 90% |
 | Embedding generated OK | `quality.embedding_success_rate` | In PDF indexing | < 95% |
 | Top-1 chunk cosine retrievable | `quality.retrieval_above_threshold_rate` | In each `retrievePdfChunks` | < 60% (potential RAG failure) |
 | LLM parses actions | `quality.llm_actions_parse_rate` | In `parseActions` | < 80% (model degradation) |

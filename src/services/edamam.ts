@@ -2,11 +2,11 @@ import { Recipe, RecipeCategory, RecipeIngredient } from '../types/recipes'
 import { NutritionalInfo } from '../types/nutrition'
 import { computeNutriScore } from './nutriscore'
 import { detectAllergensInIngredients } from '../modules/profiles/allergenEngine'
+import { bffGet } from './bff/client'
 
 // All calls go through our BFF (https://api.nutriassistant.org). The BFF
 // injects the Edamam app_id / app_key / account-user header server-side, so
 // no Edamam credentials live in this binary.
-const BFF_BASE = process.env.EXPO_PUBLIC_BFF_BASE_URL ?? 'https://api.nutriassistant.org'
 
 // ─── Mediterranean search catalog ────────────────────────────────────────────
 
@@ -190,18 +190,6 @@ function mapIngredients(recipe: EDRecipe): RecipeIngredient[] {
   }))
 }
 
-// ─── BFF fetch helper ────────────────────────────────────────────────────────
-
-async function bffGet<T>(path: string, params: Record<string, string>): Promise<T> {
-  const url = new URL(`${BFF_BASE}${path}`)
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
-  const resp = await fetch(url.toString())
-  if (!resp.ok) {
-    throw new Error(`[Edamam] BFF ${path} returned ${resp.status}`)
-  }
-  return resp.json() as Promise<T>
-}
-
 // ─── Public: bulk Mediterranean search ───────────────────────────────────────
 
 export async function searchMediterraneanRecipes(
@@ -217,7 +205,11 @@ export async function searchMediterraneanRecipes(
       const params: Record<string, string> = { q: query.q }
       if (query.cuisineType) params.cuisineType = query.cuisineType
 
-      const data = await bffGet<EDSearchResponse>('/v1/edamam/recipes/search', params)
+      const data = await bffGet<EDSearchResponse>({
+        service: 'Edamam',
+        path: '/v1/edamam/recipes/search',
+        params,
+      })
 
       for (const hit of data.hits ?? []) {
         const raw = hit.recipe
@@ -284,7 +276,10 @@ export interface EdamamRecipeDetail {
  */
 export async function getRecipeDetail(edamamId: string): Promise<EdamamRecipeDetail | null> {
   try {
-    const data = await bffGet<{ recipe: EDRecipe }>(`/v1/edamam/recipes/${edamamId}`, {})
+    const data = await bffGet<{ recipe: EDRecipe }>({
+      service: 'Edamam',
+      path: `/v1/edamam/recipes/${edamamId}`,
+    })
     const raw = data.recipe
     const ingredients = mapIngredients(raw)
     const allergenNames = detectAllergensInIngredients(ingredients.map((i) => i.name))

@@ -2,10 +2,11 @@
 
 This area documents the data lifecycle, AI architecture, security model, privacy posture, governance, observability, and production-readiness of the NutrIAssistant app.
 
-> **Recent architectural changes (read before consuming the rest):**
+> **Recent architectural milestones:**
 >
-> - **2026-05-13 — FatSecret → Edamam swap.** All FatSecret integration was removed (commit `adb2483`, DB migration 013 purges legacy `fs-*` recipes). Edamam Recipe Search v2 replaces it as the Mediterranean catalog source. Credentials are held server-side in the Cloudflare BFF (`api.nutriassistant.org`), never in the bundle. Sections below that still describe FatSecret OAuth, `EXPO_PUBLIC_FATSECRET_*` secrets, or `fs-*` recipe IDs are historical — treat them as describing the previous architecture.
-> - **2026-05-13 — Full BFF migration complete.** `infra/bff/` proxies OpenFoodFacts, Edamam, and Spoonacular. **All three upstreams are now reached via the BFF; the app no longer holds any third-party API key.** The `EXPO_PUBLIC_SPOONACULAR_API_KEY` referenced in §0 / §3 is gone from `.env` and the bundle — the Spoonacular daily quota is now tracked globally by the BFF and surfaced to the client via `GET /v1/spoonacular/quota`. The "secrets in public bundle" finding (top-5 critical, §0) is **resolved**.
+> - **2026-05-13 — BFF deployed** (`api.nutriassistant.org`). `infra/bff/` proxies OpenFoodFacts, Edamam, and Spoonacular. Zero third-party API keys ship in the mobile bundle — all credentials live in Cloudflare's encrypted secret store. The "secrets in public bundle" finding (originally top-5 critical, §0) is **resolved**. See [`infra/bff/README.md`](../../infra/bff/README.md) for the BFF architecture.
+> - **2026-05-13 — FatSecret retired**, replaced by Edamam Recipe Search v2 as the Mediterranean catalog source. DB migration 013 purges legacy `fs-*` recipes. Edamam credentials never shipped in any binary; they only ever lived in the BFF.
+> - **2026-05-13 — Shared BFF client extracted** to `src/services/bff/client.ts`. Provides one place for retry / timeout / telemetry instead of duplicating fetch wrappers per provider. Tested at `src/__tests__/services/bff/client.test.ts`.
 
 ## One-page picture
 
@@ -126,7 +127,7 @@ This is the honest snapshot: an exemplary local-first architecture, partial encr
 
 ## Critical findings (top 5)
 
-1. **🟡 Secrets partially still in bundle.** `EXPO_PUBLIC_SPOONACULAR_API_KEY` is still compiled into the binary ([`src/services/spoonacular.ts:7`](../../src/services/spoonacular.ts)) — Spoonacular migration to BFF is pending. Edamam credentials never shipped in any binary (only ever lived in Cloudflare's encrypted secret store via `infra/bff/`). FatSecret was removed entirely from the project.
+1. **✅ Secrets in public bundle (RESOLVED).** All three upstreams (OFF, Edamam, Spoonacular) are reached only through the BFF at `api.nutriassistant.org`. The bundle now holds zero third-party API keys. Rotating the Spoonacular API key at the provider remains advisable (older IPA copies still carry the old key).
 2. **🔴 No observability.** No APM (Sentry/Datadog), no product analytics, no audit logs. Impossible to satisfy GDPR Art. 33–34 (breach notification) without traceability.
 3. **🔴 Full data deletion not implemented.** The "Delete all data" button in [`app/settings.tsx:516-523`](../../app/settings.tsx) shows an Alert but the handler `onPress: () => {}` is empty. There is an explicit `// TODO: implement full data deletion`. Blocks the right to erasure under Art. 17.
 4. **🟡 No AI usage notice or limitations disclaimer.** No "not medical advice" disclaimer in the app. The system prompt offers guidance based on conditions (hypertension, celiac, diabetes 1/2, etc. — [`src/services/prompts/system.ts:17-26`](../../src/services/prompts/system.ts)) without explicit Art. 9 consent.
