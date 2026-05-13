@@ -83,7 +83,7 @@ export function useRecipeDB() {
       // Lazy-load full detail for stub recipes (first open only)
       if (recipe.instructions.length === 0 && recipe.sourceId) {
         let ok = false
-        if (recipe.sourceApi === 'fatsecret') {
+        if (recipe.sourceApi === 'edamam') {
           ok = await enrichRecipeDetail(recipe.id, recipe.sourceId)
         } else if (recipe.sourceApi === 'spoonacular') {
           ok = await enrichSpoonacularDetail(recipe.id, recipe.sourceId)

@@ -116,7 +116,7 @@ export async function getRecipeById(id: string): Promise<Recipe | null> {
 }
 
 // Only recipes from verified, traceable sources are shown to users.
-const VERIFIED_SOURCES = `source_api IN ('fatsecret', 'spoonacular', 'themealdb', 'user_created')`
+const VERIFIED_SOURCES = `source_api IN ('edamam', 'spoonacular', 'themealdb', 'user_created')`
 
 export async function searchRecipes(
   query: string,

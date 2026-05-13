@@ -196,7 +196,7 @@ const UNIT_MAP: Record<string, string> = {
 import { getLocales } from 'expo-localization'
 
 /**
- * Locale-aware ingredient name display. Recipe sources (FatSecret /
+ * Locale-aware ingredient name display. Recipe sources (Edamam /
  * Spoonacular) return English; on Spanish devices we map to Spanish via
  * INGREDIENT_MAP. On English devices we return the source string as-is.
  *

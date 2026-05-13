@@ -5,12 +5,12 @@ Backend-For-Frontend on Cloudflare Workers. Sits between the mobile app and thre
 ```
 ┌─────────────────┐  HTTPS  ┌────────────────────┐  HTTPS+secret  ┌─────────────────────┐
 │  NutrIAssistant │ ───────►│  Cloudflare Worker │ ──────────────►│  OpenFoodFacts /    │
-│  (iOS/Android)  │         │  api.nutriassis-   │                │  FatSecret /        │
-│                 │◄─────── │  tant.org          │◄────────────── │  Spoonacular        │
+│  (iOS/Android)  │         │  api.nutriassis-   │                │  Spoonacular /      │
+│                 │◄─────── │  tant.org          │◄────────────── │  Edamam             │
 └─────────────────┘         └────────────────────┘                └─────────────────────┘
        ▲                            │
        │ public route               │ secrets in CF env
-       │ no secrets in bundle       │ KV-cached OAuth token
+       │ no secrets in bundle       │ rewritten pagination URLs
        │                            │ KV daily quota counter
                                     │ edge-cached responses
 ```
@@ -19,9 +19,9 @@ Backend-For-Frontend on Cloudflare Workers. Sits between the mobile app and thre
 
 | Concern | Before (direct calls) | After (BFF) |
 |---|---|---|
-| Secrets in IPA/APK | 🔴 FatSecret + Spoonacular keys baked into the bundle | ✅ Only `api.nutriassistant.org` shipped (public URL) |
+| Secrets in IPA/APK | 🔴 Spoonacular + Edamam keys baked into the bundle | ✅ Only `api.nutriassistant.org` shipped (public URL) |
 | API quota abuse | 🔴 One compromised key → bill shock | ✅ Per-IP rate limit + global daily quota cap |
-| Token caching | Per-device in AsyncStorage | ✅ Global in Cloudflare KV (one OAuth refresh for all users) |
+| Pagination credential leak | 🔴 Edamam responses embed `app_key` in `_links.next.href` | ✅ Deep-walked + rewritten to BFF URLs |
 | Catalog response cost | Every device hits upstream | ✅ 1-24h edge cache shared across users |
 | Schrems II posture | Devices in EU calling US APIs directly | ✅ EU Worker proxies; user traffic stays in EU |
 | Operational visibility | None | ✅ Worker Analytics + structured logs |
@@ -32,9 +32,9 @@ Backend-For-Frontend on Cloudflare Workers. Sits between the mobile app and thre
 |---|---|---|
 | `GET /v1/health` | — | none |
 | `GET /v1/off/product/:barcode` | OpenFoodFacts | 24h |
-| `GET /v1/fatsecret/recipes/search?q=...&max_results=...` | FatSecret `/recipes/search/v3` | 1h |
-| `GET /v1/fatsecret/recipes/:id` | FatSecret `/recipe/v2` | 6h |
-| `GET /v1/spoonacular/complex-search?cuisine=...&number=...&offset=...&sort=...` | Spoonacular `/recipes/complexSearch` | 1h |
+| `GET /v1/edamam/recipes/search?q=…&cuisineType=…&mealType=…&diet=…&health=…` | Edamam `/api/recipes/v2` | 1h |
+| `GET /v1/edamam/recipes/:id` | Edamam `/api/recipes/v2/:id` | 6h |
+| `GET /v1/spoonacular/complex-search?cuisine=…&number=…&offset=…&sort=…` | Spoonacular `/recipes/complexSearch` | 1h |
 | `GET /v1/spoonacular/recipes/:id?includeNutrition=true` | Spoonacular `/recipes/:id/information` | 6h |
 | `GET /v1/spoonacular/quota` | — (KV read) | none |
 
@@ -75,10 +75,13 @@ Each command prints an `id`. Paste them into `wrangler.toml` replacing the `REPL
 These NEVER touch git — they go straight to Cloudflare's encrypted secret store:
 
 ```bash
-npx wrangler secret put FATSECRET_CLIENT_ID
-npx wrangler secret put FATSECRET_CLIENT_SECRET
 npx wrangler secret put SPOONACULAR_API_KEY
+npx wrangler secret put EDAMAM_APP_ID
+npx wrangler secret put EDAMAM_APP_KEY
 ```
+
+Edamam's `Edamam-Account-User` is not a secret (just a username identifier
+for free-tier metering) and lives in `wrangler.toml` under `[vars]`.
 
 Each prompts you to paste the value, then stores it server-side. The Cloudflare dashboard only ever shows the variable name, never the value.
 
@@ -129,7 +132,7 @@ The Worker is available at `http://localhost:8787`. KV bindings use the `preview
 | Where | What's in it | Committed? |
 |---|---|---|
 | `.env` (in app repo) | Old `EXPO_PUBLIC_*` vars | ❌ gitignored, deprecated once app is migrated |
-| `infra/bff/.dev.vars` | Local-dev FatSecret + Spoonacular credentials | ❌ gitignored |
+| `infra/bff/.dev.vars` | Local-dev Spoonacular + Edamam credentials | ❌ gitignored |
 | `infra/bff/.dev.vars.example` | Placeholder names only, no values | ✅ committed for onboarding |
 | `wrangler secret put` | Production secrets | n/a — server-side only, never in repo |
 | `wrangler.toml` `[vars]` | Non-sensitive config (rate-limit, env name) | ✅ committed |
@@ -153,31 +156,22 @@ errors on the zone-to-zone path. The `.net` alias resolves to the same
 backend without the CF front. The `off.ts` route uses `.net` for this
 reason.
 
-### FatSecret: requires Cloudflare egress IPs in the allowlist
+### Edamam: response leaks credentials in pagination links
 
-FatSecret's API enforces an IP allowlist (configured per developer
-application). Calls from non-allowlisted IPs return:
+Edamam's Recipe Search v2 embeds the raw `app_id` and `app_key` in every
+`_links.*.href` URL (top-level `next` link and per-recipe `self` link).
+Forwarding the response untouched would defeat the BFF's whole purpose.
 
-```json
-{ "error": { "code": 21, "message": "Invalid IP address detected: 'X.Y.Z.W'" } }
-```
+`routes/edamam.ts` deep-walks the response and rewrites every Edamam URL
+to its BFF equivalent, stripping the credential query params. Verified
+with `grep -c 'app_key' response.json` returning 0 on real searches.
 
-Workers run on Cloudflare's edge, so the egress IP is one of CF's published
-ranges. Two options:
+### Edamam: `Edamam-Account-User` header is mandatory
 
-1. **Permissive (prototype):** in the FatSecret developer console
-   (`platform.fatsecret.com/my-account/api-key-management`), set the
-   allowlist to `0.0.0.0/0`. Quick, but anyone with the key can call the
-   API. Acceptable while keys are wrapped by this BFF.
-2. **Tighter:** paste Cloudflare's IPv4 ranges from
-   `https://www.cloudflare.com/ips/` into the FatSecret allowlist. 15
-   `/12`–`/22` CIDRs cover all egress paths. Re-check yearly; CF can add
-   ranges. Best balance for production.
-3. **Strict (paid):** enable Cloudflare *Dedicated Egress IPs* ($5/mo) and
-   allowlist only those two static IPs. Most defensible posture.
-
-Until one of these is configured, `/v1/fatsecret/*` will return HTTP 502
-with `fatsecret_upstream_403`.
+Free-tier metering relies on the `Edamam-Account-User` header — every
+Recipe Search v2 call must include it. The BFF injects this from the
+`EDAMAM_ACCOUNT_USER` var in `wrangler.toml`. Without it, Edamam returns
+HTTP 401 even with valid `app_id`/`app_key`.
 
 ### Spoonacular: global daily quota
 
@@ -190,8 +184,9 @@ once the cap is hit. Override via `SPOONACULAR_DAILY_LIMIT` in
 
 - **Rate limit** is per-IP, fixed-window 1-minute, KV-backed. Best-effort under bursty load (KV is eventually consistent). For stricter guarantees, switch to the platform `RateLimit` binding (Workers Paid, $5/mo) — same interface, just swap the middleware.
 - **Edge cache** is Cloudflare's free `caches.default`. Keyed by full URL including query string. Non-200 responses are NOT cached (so an upstream outage cannot poison the cache).
-- **Token cache:** FatSecret OAuth bearer token lives in `TOKEN_CACHE_KV`, refreshed 5 min before expiry. One refresh per ~24h serves the entire user base.
+- **Edamam response sanitization:** Edamam embeds raw `app_id`/`app_key` in every `_links.*.href`. `routes/edamam.ts` deep-walks the response and rewrites those URLs to BFF equivalents before returning to the client.
 - **Spoonacular quota** is global, not per-device. The old per-device counter was security theater (a malicious user could just reset their device). With BFF tracking, we know the real upstream usage and can disable proactively before bill shock.
+- **`TOKEN_CACHE_KV`** is retained (formerly held FatSecret OAuth tokens). Not actively used today but free and convenient for future OAuth-style providers.
 
 ## Migration path (Phase 2, separate task)
 
@@ -200,9 +195,9 @@ Once the BFF is verified:
 1. Add `EXPO_PUBLIC_BFF_BASE_URL=https://api.nutriassistant.org` to the app `.env` (this one IS safe to bundle — it's a public URL).
 2. Replace upstream URLs in:
    - `src/services/openFoodFacts.ts:3` → `${BFF}/v1/off/product/${barcode}`
-   - `src/services/fatsecret.ts:7-12` → remove OAuth code entirely, hit `${BFF}/v1/fatsecret/...`
+   - `src/services/edamam.ts` already goes through `${BFF}/v1/edamam/...` (this is the canonical pattern; copy it for OFF + Spoonacular).
    - `src/services/spoonacular.ts:7` → remove `apiKey` param, hit `${BFF}/v1/spoonacular/...`
-3. Delete `FATSECRET_CLIENT_ID`, `FATSECRET_CLIENT_SECRET`, `SPOONACULAR_API_KEY` from the app `.env`.
-4. Rotate the upstream credentials at the providers (FatSecret + Spoonacular dashboards). Anyone who downloaded a previous binary still has the old keys; rotating invalidates them.
+3. Delete `EXPO_PUBLIC_SPOONACULAR_API_KEY` from the app `.env`.
+4. Rotate the upstream credentials at the providers (Spoonacular dashboard). Anyone who downloaded a previous binary still has the old keys; rotating invalidates them. Edamam credentials never shipped in any binary so no rotation needed.
 
-The mappers (`mapNutriments`, `toArray`, `buildStub`, etc.) need no changes — the BFF returns the same shapes.
+The mappers (`mapNutriments`, `buildStub`, etc.) need no changes — the BFF returns the same shapes.

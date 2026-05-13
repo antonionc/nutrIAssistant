@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { searchMediterraneanRecipes, getRecipeDetail } from '../../services/fatsecret'
+import { searchMediterraneanRecipes, getRecipeDetail } from '../../services/edamam'
 import {
   searchAllSpoonacularByCuisine,
   getSpoonacularRecipeDetail,
@@ -18,7 +18,8 @@ import {
 import { markSourceSynced, RecipeSourceKey } from './recipeSourcesConfig'
 
 // Bump whenever sync logic changes to force a re-download.
-const SYNC_VERSION = '7'
+// v8 = Mediterranean recipes sourced from Edamam (replaced FatSecret).
+const SYNC_VERSION = '8'
 
 const KEY_RECIPES_SYNCED    = 'recipes_synced'
 const KEY_SYNC_VERSION      = 'recipes_sync_version'
@@ -43,12 +44,12 @@ export async function markSynced(): Promise<void> {
   await AsyncStorage.setItem(KEY_RECIPES_SYNC_DATE, new Date().toISOString())
 }
 
-// ─── FatSecret sync ───────────────────────────────────────────────────────────
+// ─── Edamam sync ──────────────────────────────────────────────────────────────
 
-export async function syncFatSecretRecipes(
+export async function syncEdamamRecipes(
   onProgress?: SyncProgressCallback
 ): Promise<number> {
-  onProgress?.(0, 'Conectando con FatSecret...')
+  onProgress?.(0, 'Conectando con Edamam...')
 
   const recipes = await searchMediterraneanRecipes((msg) => { onProgress?.(0.5, msg) })
 
@@ -59,14 +60,14 @@ export async function syncFatSecretRecipes(
   await cleanDuplicateImageUrls()
 
   await markSynced()
-  await markSourceSynced('fatsecret', recipes.length)
+  await markSourceSynced('edamam', recipes.length)
 
   onProgress?.(1, `¡${recipes.length} recetas mediterráneas descargadas!`)
   return recipes.length
 }
 
 // Backward-compat alias
-export const syncRecipes = syncFatSecretRecipes
+export const syncRecipes = syncEdamamRecipes
 
 // ─── Spoonacular sync ─────────────────────────────────────────────────────────
 
@@ -185,13 +186,13 @@ export async function syncSource(
   onProgress?: SyncProgressCallback
 ): Promise<number> {
   switch (key) {
-    case 'fatsecret':   return syncFatSecretRecipes(onProgress)
+    case 'edamam':      return syncEdamamRecipes(onProgress)
     case 'spoonacular': return syncSpoonacularRecipes(onProgress)
     case 'themealdb':   return syncTheMealDB(onProgress)
   }
 }
 
-// ─── FatSecret lazy-load ──────────────────────────────────────────────────────
+// ─── Edamam lazy-load ─────────────────────────────────────────────────────────
 
 const enrichInFlight = new Set<string>()
 

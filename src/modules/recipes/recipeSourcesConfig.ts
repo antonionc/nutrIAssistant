@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-export type RecipeSourceKey = 'fatsecret' | 'spoonacular' | 'themealdb'
+export type RecipeSourceKey = 'edamam' | 'spoonacular' | 'themealdb'
 
 export interface RecipeSourceInfo {
   enabled: boolean
@@ -9,25 +9,35 @@ export interface RecipeSourceInfo {
 }
 
 export const SOURCE_LABELS: Record<RecipeSourceKey, { name: string; description: string; emoji: string }> = {
-  fatsecret:   { name: 'FatSecret',    description: 'Recetas mediterráneas y europeas',      emoji: '🥗' },
+  edamam:      { name: 'Edamam',       description: 'Recetas mediterráneas y europeas',      emoji: '🥗' },
   spoonacular: { name: 'Spoonacular',  description: 'Base de datos mundial de recetas',       emoji: '🌍' },
   themealdb:   { name: 'TheMealDB',    description: 'Recetas internacionales con imágenes',   emoji: '🍽️' },
 }
 
 export const DEFAULT_SOURCES_CONFIG: Record<RecipeSourceKey, RecipeSourceInfo> = {
-  fatsecret:   { enabled: true,  lastSyncedAt: null, syncedCount: 0 },
+  edamam:      { enabled: true,  lastSyncedAt: null, syncedCount: 0 },
   spoonacular: { enabled: false, lastSyncedAt: null, syncedCount: 0 },
   themealdb:   { enabled: true,  lastSyncedAt: null, syncedCount: 0 },
 }
 
 const SOURCES_CONFIG_KEY = 'recipe_sources_config'
 
+interface LegacyStoredConfig {
+  fatsecret?: Partial<RecipeSourceInfo>
+  edamam?: Partial<RecipeSourceInfo>
+  spoonacular?: Partial<RecipeSourceInfo>
+  themealdb?: Partial<RecipeSourceInfo>
+}
+
 export async function getSourcesConfig(): Promise<Record<RecipeSourceKey, RecipeSourceInfo>> {
   const raw = await AsyncStorage.getItem(SOURCES_CONFIG_KEY)
   if (!raw) return { ...DEFAULT_SOURCES_CONFIG }
-  const stored = JSON.parse(raw) as Partial<Record<RecipeSourceKey, RecipeSourceInfo>>
+  const stored = JSON.parse(raw) as LegacyStoredConfig
+  // Migrate legacy `fatsecret` slot to `edamam` so existing installs keep
+  // the user's enabled/syncedAt state across the source swap.
+  const edamamStored = stored.edamam ?? stored.fatsecret
   return {
-    fatsecret:   { ...DEFAULT_SOURCES_CONFIG.fatsecret,   ...(stored.fatsecret   ?? {}) },
+    edamam:      { ...DEFAULT_SOURCES_CONFIG.edamam,      ...(edamamStored      ?? {}) },
     spoonacular: { ...DEFAULT_SOURCES_CONFIG.spoonacular, ...(stored.spoonacular ?? {}) },
     themealdb:   { ...DEFAULT_SOURCES_CONFIG.themealdb,   ...(stored.themealdb   ?? {}) },
   }

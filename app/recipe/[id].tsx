@@ -31,8 +31,11 @@ import { NutriScoreBadge } from '../../src/components/charts/NutriScoreBadge'
 import { MacroBar } from '../../src/components/charts/MacroBar'
 import { FamilyCompatibilityRow } from '../../src/components/badges/CompatibilityBadge'
 
+// "Powered by Edamam" is the exact phrasing required by Edamam's free-tier
+// TOS for attribution on any screen that displays their recipe data.
+// Other sources are labelled with their plain name.
 const SOURCE_LABEL: Partial<Record<string, string>> = {
-  fatsecret:    'FatSecret',
+  edamam:       'Powered by Edamam',
   spoonacular:  'Spoonacular',
   themealdb:    'TheMealDB',
   ai_generated: '✨ AI',

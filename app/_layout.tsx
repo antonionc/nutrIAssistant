@@ -111,11 +111,11 @@ export default function RootLayout() {
         await runMigrations()
         await seedRecipesIfNeeded()
 
-        // Download FatSecret Mediterranean recipes in the background if the
+        // Download Edamam Mediterranean recipes in the background if the
         // DB is not yet fully synced (new install or sync version bumped).
         isSynced().then((synced) => {
           if (!synced) {
-            console.log('[Init] Starting background FatSecret sync...')
+            console.log('[Init] Starting background Edamam sync...')
             syncRecipes().catch((e) =>
               console.warn('[Init] Background recipe sync failed:', e)
             )

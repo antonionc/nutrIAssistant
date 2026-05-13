@@ -37,6 +37,7 @@ preview_id = "07c0942456684965a72a707f3dbd6ebf"
 [vars]
 SPOONACULAR_DAILY_LIMIT = "10000"
 RATE_LIMIT_PER_MINUTE = "60"
+EDAMAM_ACCOUNT_USER = "cspitzer"
 ENVIRONMENT = "production"
 
 # Per-environment overrides (run with `wrangler deploy --env staging`).
@@ -49,4 +50,5 @@ routes = [
 [env.staging.vars]
 SPOONACULAR_DAILY_LIMIT = "1000"
 RATE_LIMIT_PER_MINUTE = "120"
+EDAMAM_ACCOUNT_USER = "cspitzer"
 ENVIRONMENT = "staging"

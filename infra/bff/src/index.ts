@@ -4,8 +4,8 @@ import { errorHandler } from './middleware/errors'
 import { rateLimit } from './middleware/rateLimit'
 import { healthRoute } from './routes/health'
 import { offRoute } from './routes/off'
-import { fatsecretRoute } from './routes/fatsecret'
 import { spoonacularRoute } from './routes/spoonacular'
+import { edamamRoute } from './routes/edamam'
 
 const app = new Hono<AppContext>()
 
@@ -16,8 +16,8 @@ app.use('/v1/*', rateLimit)
 
 app.route('/v1/health', healthRoute)
 app.route('/v1/off', offRoute)
-app.route('/v1/fatsecret', fatsecretRoute)
 app.route('/v1/spoonacular', spoonacularRoute)
+app.route('/v1/edamam', edamamRoute)
 
 app.notFound((c) =>
   c.json({ error: 'not_found', code: 'not_found', requestId: c.req.header('cf-ray') ?? '' }, 404),

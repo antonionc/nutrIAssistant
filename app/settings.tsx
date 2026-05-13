@@ -364,7 +364,7 @@ export default function SettingsScreen() {
 
         {/* Recipe sources — consolidated into one compact card */}
         <View style={styles.card}>
-          {(['fatsecret', 'spoonacular', 'themealdb'] as RecipeSourceKey[]).map((key, index) => {
+          {(['edamam', 'spoonacular', 'themealdb'] as RecipeSourceKey[]).map((key, index) => {
             const config = sourcesConfig[key]
             const label = SOURCE_LABELS[key]
             const isSyncing = syncingSource === key

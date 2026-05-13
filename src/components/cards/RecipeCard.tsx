@@ -9,8 +9,11 @@ import {
 import { Recipe } from '../../types/recipes'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
 
+// "Powered by Edamam" is the exact phrasing required by Edamam's free-tier
+// TOS for attribution on any screen that displays their recipe data.
+// Other sources are labelled with their plain name.
 const SOURCE_LABEL: Partial<Record<string, string>> = {
-  fatsecret:    'FatSecret',
+  edamam:       'Powered by Edamam',
   spoonacular:  'Spoonacular',
   themealdb:    'TheMealDB',
   ai_generated: '✨ AI',

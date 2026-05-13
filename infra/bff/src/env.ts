@@ -1,12 +1,13 @@
 export interface Env {
   // ── Secrets (set via `wrangler secret put …`; never committed) ──────────────
-  FATSECRET_CLIENT_ID: string
-  FATSECRET_CLIENT_SECRET: string
   SPOONACULAR_API_KEY: string
+  EDAMAM_APP_ID: string
+  EDAMAM_APP_KEY: string
 
   // ── Vars (committed in wrangler.toml; non-sensitive) ────────────────────────
   SPOONACULAR_DAILY_LIMIT: string
   RATE_LIMIT_PER_MINUTE: string
+  EDAMAM_ACCOUNT_USER: string
   ENVIRONMENT: 'production' | 'staging' | 'dev'
 
   // ── KV bindings ─────────────────────────────────────────────────────────────
