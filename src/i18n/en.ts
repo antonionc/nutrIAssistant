@@ -62,6 +62,23 @@ export const EN = {
     noAlternatives: 'No alternatives found',
     generateTileTitle: 'Generate menu',
     generateTileSubtitle: 'Personalized weekly plan',
+    // School-menu upload errors (mapped from SchoolMenuUploadError.stage)
+    errLlmNotReady: 'The AI model isn’t ready yet. Wait for it to finish loading and try again.',
+    errPdfEmpty: 'Couldn’t read text from the PDF. If it’s a scanned image, try a PDF with selectable text.',
+    errPdfExtract: 'Couldn’t process the PDF. Check that it isn’t password protected.',
+    errLlmParse: 'The AI couldn’t extract the menu in the expected structure. Please try again.',
+    errLlmGenerate: 'The on-device assistant couldn’t process the menu. Please try again in a moment.',
+    // Child-target picker (shown when family has 2+ school-age children)
+    pickChildrenTitle: 'Which child is this menu for?',
+    pickChildrenSubtitle: 'Select the children this PDF applies to. Their previous menus will be replaced.',
+    pickChildrenContinue: 'Continue',
+    pickChildrenNoneSelected: 'Select at least one child',
+    // View-school-menu sheet
+    viewSchoolMenu: 'View school menu',
+    schoolMenuSheetTitle: 'Planned school menu',
+    schoolMenuSheetSubtitle: 'Meals at school for upcoming days',
+    schoolMenuEmpty: 'No meals planned yet',
+    schoolMenuAllergensLabel: 'Allergens',
   },
 
   recipes: {
@@ -131,6 +148,12 @@ export const EN = {
     recipeNotFound: 'Recipe not found.',
     today: 'Today',
     tomorrow: 'Tomorrow',
+    // Personal vs family favorite picker (shown when tapping the heart on an
+    // unfavorited recipe)
+    favoritePickerTitle: 'How do you want to save it?',
+    favoritePickerMsg: 'Choose where to save this recipe as a favorite.',
+    favoritePersonal: 'Personal',
+    favoriteFamily: 'Family',
   },
 
   groceries: {
@@ -441,6 +464,7 @@ export const EN = {
     modelDownloading: 'Downloading on-device AI model...',
     modelReady: 'On-device AI ready',
     modelPreparingMessage: 'Almost ready — your private AI assistant is setting up. We\'ll notify you when it\'s ready.',
+    modelLoadingA11y: 'Loading on-device AI model',
     tapToSpeak: 'Tap to speak',
     voiceNotAvailableTitle: 'Voice not available',
     voiceNotAvailableMsg: 'Voice recognition is not available on this device.',

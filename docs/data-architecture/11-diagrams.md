@@ -31,7 +31,8 @@ flowchart TB
     OFF([🥫 OpenFoodFacts<br/>barcode → product]):::external
     ED([🥗 Edamam<br/>via BFF · Mediterranean catalog]):::external
     SP([🍲 Spoonacular<br/>API key · multi-cuisine catalog]):::external
-    HF([🤖 HuggingFace CDN<br/>.pte model downloads]):::external
+    BFF([☁️ Cloudflare Worker BFF<br/>api.nutriassistant.org<br/>catalog proxy · R2-backed LLM mirror]):::external
+    HF([🤖 HuggingFace CDN<br/>MiniLM embeddings · upstream of LLM mirror]):::external
     AH([❤️ Apple HealthKit<br/>iOS native]):::external
     HC([🏃 Health Connect<br/>Android native]):::external
     KC([🔐 iOS Keychain / Android Keystore<br/>OS-managed key store]):::external
@@ -44,7 +45,9 @@ flowchart TB
     NIA -->|GET barcode JSON| OFF
     NIA -->|GET recipes JSON + OAuth| FS
     NIA -->|GET recipes JSON + API key| SP
-    NIA -->|GET model.pte tokenizers| HF
+    NIA -->|GET .pte + tokenizer JSONs<br/>/v1/llm/qwen3-1.7b/*| BFF
+    NIA -->|GET MiniLM embeddings model| HF
+    BFF -.->|R2 mirror seeded from| HF
     NIA -->|reads HKQuantityTypeSteps| AH
     NIA -->|reads Steps + ActiveCaloriesBurned| HC
     NIA -->|persists nutri_master_key_v1| KC

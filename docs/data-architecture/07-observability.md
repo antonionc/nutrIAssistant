@@ -368,7 +368,7 @@ Events that **do not consume error budget** (document and exclude in post-mortem
 
 - Planned maintenance window announced >72h in advance.
 - Outage of an external provider (OpenFoodFacts, Edamam, Spoonacular) confirmed on their status page.
-- HuggingFace CDN outage during the initial model download (out of our control for new users, but **retries do consume budget**).
+- Cloudflare R2 outage during the initial model download — now the primary source for the on-device LLM `.pte` and tokenizer JSONs (`infra/bff/src/routes/llm.ts`). Far lower probability than HuggingFace CDN historically, with edge cache 1-year immutable. HuggingFace CDN remains a dependency for the MiniLM embeddings model (~28 MB).
 - Force-update (major AI model change) requiring re-download: counts as a **planned window**.
 
 **Prioritized recommendations (§7.3):**
@@ -504,11 +504,13 @@ What failed in monitoring/alerts.
 | Edamam Recipe Search v2 | 0 USD (Developer tier) | 10 req/min, monthly cap. Held server-side in CF secret store. | `src/services/edamam.ts` |
 | OpenFoodFacts | 0 EUR | Public API, no auth | `src/services/openFoodFacts.ts:3` |
 | Spoonacular API | ⚠️ **Paid plan needed** | `SPOONACULAR_DAILY_LIMIT = 10_000` (`src/services/spoonacular.ts:10`). The free plan is **150 points/day**, not 10,000 → the app **assumes** the dev has a paid plan ($29 - $149/month by package) | `src/services/spoonacular.ts:10` |
-| HuggingFace CDN | 0 USD | Public downloads, no cost for the repo | `src/services/onDeviceLlm.ts:28-32` |
+| HuggingFace CDN | 0 USD | Public download of MiniLM embeddings model + upstream source for the R2 LLM mirror | `src/services/onDeviceLlm.ts`, `src/services/embeddings.ts` |
+| Cloudflare R2 (LLM mirror) | ~0.02 USD/month storage | 1.2 GB of `.pte`/tokenizers at $0.015/GB/month. Egress to internet is **free** under R2; only Worker requests/CPU count. | `infra/bff/src/routes/llm.ts`, `infra/bff/wrangler.toml` |
+| Cloudflare Workers (BFF) | 0 USD on free tier | 100k requests/day free, after that $5/10M. First-launch LLM download is 1-3 requests per user. | `infra/bff/` |
 | EAS Build | 0 USD on free tier | 30 builds/month free | n/a |
 | Apple notarization | Included with Apple Dev | — | — |
 | AI inference | **€0** | 100% on-device | All of [§4](./04-ai-architecture.md) |
-| Backend hosting | €0 | Does not exist | — |
+| Backend hosting | ~0 USD/month at current scale | Cloudflare Worker BFF (`api.nutriassistant.org`) + R2 bucket — fits under free tier for tens of thousands of users; only the LLM egress cost dominates at scale (free under R2 today) | `infra/bff/` |
 | **AS-IS total** | **~ $99 - $1,800 / year** (variable by Spoonacular usage) | — | — |
 
 ### 7.5.2. Projected TO-BE cost by MAU tier

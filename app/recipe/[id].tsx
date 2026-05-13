@@ -50,7 +50,7 @@ export default function RecipeDetailScreen() {
   const { items: inventory, decrementIngredients } = useInventory()
   const { addItem: addToGroceries } = useGroceries()
   const { setMealForDate, removeMealFromDate } = usePlanner()
-  const { profiles } = useProfiles()
+  const { profiles, addFavorite, removeFavorite } = useProfiles()
   const { selectedId } = useSelectedProfile()
   const orderedMembers = useMemo(() => {
     if (!selectedId) return profiles
@@ -67,7 +67,21 @@ export default function RecipeDetailScreen() {
   const [servings, setServings] = useState(1)
   const [instructionsExpanded, setInstructionsExpanded] = useState(false)
   const [addedToCart, setAddedToCart] = useState<Set<string>>(new Set())
-  const [isFavorite, setIsFavorite] = useState(false)
+  // Heart is filled when the recipe lives in EITHER bucket:
+  //   - personal: selected member's `favoriteRecipeIds`
+  //   - family:   global `recipes.is_favorite` flag (Recipe.isFavorite)
+  // Local `isFamilyFavorite` mirrors the global flag for optimistic updates;
+  // personal-bucket state is read live from `profiles` so it stays in sync
+  // when the user changes the active profile.
+  const [isFamilyFavorite, setIsFamilyFavorite] = useState(false)
+  const selectedMember = useMemo(
+    () => profiles.find((p) => p.id === selectedId) ?? null,
+    [profiles, selectedId]
+  )
+  const isPersonalFavorite = !!(
+    recipe && selectedMember?.favoriteRecipeIds.includes(recipe.id)
+  )
+  const isFavorite = isFamilyFavorite || isPersonalFavorite
   const [planModalVisible, setPlanModalVisible] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0])
   const [selectedMeal, setSelectedMeal] = useState<'breakfast' | 'lunch' | 'dinner'>('lunch')
@@ -80,7 +94,7 @@ export default function RecipeDetailScreen() {
       if (r) {
         setRecipe(r)
         setServings(r.servings)
-        setIsFavorite(r.isFavorite ?? false)
+        setIsFamilyFavorite(r.isFavorite ?? false)
       }
       setIsLoading(false)
     })
@@ -118,8 +132,47 @@ export default function RecipeDetailScreen() {
   const handleFavorite = async () => {
     if (!recipe) return
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    await favorite(recipe.id)
-    setIsFavorite((prev) => !prev)
+
+    // Already in either bucket → tap removes from BOTH (predictable unfavorite).
+    if (isFavorite) {
+      if (isFamilyFavorite) {
+        await favorite(recipe.id)
+        setIsFamilyFavorite(false)
+      }
+      if (isPersonalFavorite && selectedId) {
+        await removeFavorite(selectedId, recipe.id)
+      }
+      return
+    }
+
+    // Not favorited yet → ask which bucket. If no profile is selected we have
+    // no personal bucket to target, so default straight to family.
+    if (!selectedId) {
+      await favorite(recipe.id)
+      setIsFamilyFavorite(true)
+      return
+    }
+
+    Alert.alert(
+      tr.recipes.favoritePickerTitle,
+      tr.recipes.favoritePickerMsg,
+      [
+        { text: tr.app.cancel, style: 'cancel' },
+        {
+          text: tr.recipes.favoritePersonal,
+          onPress: async () => {
+            await addFavorite(selectedId, recipe.id)
+          },
+        },
+        {
+          text: tr.recipes.favoriteFamily,
+          onPress: async () => {
+            await favorite(recipe.id)
+            setIsFamilyFavorite(true)
+          },
+        },
+      ]
+    )
   }
 
   const handleAddIngredientToCart = async (ingredient: RecipeIngredient) => {

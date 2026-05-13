@@ -31,6 +31,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 import { AIMessage } from '../../types/ai'
 import { useAIEngine } from '../../modules/ai-engine/AIContext'
 import { useTranslation } from '../../i18n'
+import { MarkdownText } from './MarkdownText'
 
 // BCP-47 tag for voice recognition + TTS. Falls back to es-ES when the
 // device locale is anything other than English (matches the i18n fallback).
@@ -385,9 +386,7 @@ export const AIAssistant = forwardRef<any, AIAssistantProps>(
             {!isUser && (
               <Text style={ts.botName}>NutriBot</Text>
             )}
-            <Text style={[ts.messageText, isUser && ts.messageTextUser]}>
-              {item.content}
-            </Text>
+            <MarkdownText content={item.content} isUser={isUser} />
             {item.isStreaming && (
               <Animated.Text style={[ts.cursor, { opacity: pulseAnim }]}>▋</Animated.Text>
             )}
@@ -633,8 +632,6 @@ function makeStyles(colors: ThemeColors) {
     welcomeTitle: { ...Typography.heading1, color: colors.text, textAlign: 'center' } as TextStyle,
     welcomeText: { ...Typography.body, color: colors.textSecondary, textAlign: 'center' } as TextStyle,
     botName: { ...Typography.overline, color: Colors.forestGreen } as TextStyle,
-    messageText: { ...Typography.body, color: colors.text } as TextStyle,
-    messageTextUser: { color: Colors.white } as TextStyle,
     cursor: { color: Colors.healthGreen, fontSize: 16 } as TextStyle,
     errorText: { ...Typography.caption, color: Colors.errorRed } as TextStyle,
     actionText: { ...Typography.caption, color: Colors.forestGreen, fontFamily: Typography.heading3.fontFamily } as TextStyle,

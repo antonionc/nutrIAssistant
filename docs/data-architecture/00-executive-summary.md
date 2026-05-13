@@ -38,7 +38,7 @@
 - TheMealDB (HTTPS API v2, `themealdb.com`) — code present but migration 009 wipes all records (`src/db/migrations/009_purge_themealdb.ts`).
 - Apple HealthKit (iOS native) — steps and active calories (`src/modules/health/providers/appleHealth.ts`).
 - Health Connect (Android native) — steps and active calories (`src/modules/health/providers/healthConnect.ts`).
-- HuggingFace CDN (`.pte` models and tokenizers) — downloaded on first run via `react-native-executorch` (`src/services/onDeviceLlm.ts:110-118`, `app/_layout.tsx:18`).
+- On-device LLM artifacts (`.pte` weights + tokenizer JSONs for Qwen 3 1.7B, ~1.2 GB total) — served by **our own Cloudflare Worker BFF** at `api.nutriassistant.org/v1/llm/qwen3-1.7b/*`, backed by an R2 bucket (`nutriassistant-llm-models`) that mirrors the upstream HuggingFace release. Downloaded on first run via `react-native-executorch` `fromCustomModel` (`src/services/onDeviceLlm.ts`, `infra/bff/src/routes/llm.ts`). Inference itself stays 100% on-device.
 - ⚠️ GAP: no wearable APIs beyond HealthKit/Health Connect (Garmin, Polar, Fitbit not integrated).
 - ⚠️ GAP: no calls to OpenAI/Anthropic/HuggingFace Inference or any cloud LLM (`grep -r "anthropic\|openai" src/` returns nothing). The LLM is on-device only.
 
@@ -73,7 +73,7 @@
 
 ## Section 0 — Executive Summary
 
-**Current state:** mobile prototype with a radical local-first architecture. All PII, Art. 9 health data, clinical-document embeddings and LLM inference live on the user's device. There is no backend of our own, no tracking, no account. Field-level encryption of sensitive fields (`aboutMeNotes`, `conditions`, memories, embeddings, PDF chunks) uses AES-GCM-256 with a 256-bit key in Keychain/Keystore. The initial download (~1 GB of Qwen 3 + 28 MB of MiniLM) hits the HuggingFace CDN. The recipe catalog is enriched with three external APIs whose credentials ship in the bundle as `EXPO_PUBLIC_*` (identified risk, see [§3.6](./03-security-encryption.md#36-secrets-management-in-the-repo)).
+**Current state:** mobile prototype with a radical local-first architecture. All PII, Art. 9 health data, clinical-document embeddings and LLM inference live on the user's device. The only backend of our own is a thin Cloudflare Worker BFF (`api.nutriassistant.org`) that proxies third-party catalog APIs (OpenFoodFacts, Edamam, Spoonacular) so their credentials never ship in the bundle, and mirrors the on-device LLM artifacts on R2 for a stable EU edge POP. No tracking, no account, no user data in the BFF. Field-level encryption of sensitive fields (`aboutMeNotes`, `conditions`, memories, embeddings, PDF chunks) uses AES-GCM-256 with a 256-bit key in Keychain/Keystore. The initial download (~1.2 GB of Qwen 3 from R2 + 28 MB of MiniLM from HuggingFace) is the only model traffic. The recipe catalog is enriched with the three external APIs whose credentials live exclusively in Cloudflare's encrypted secret store ([§3.6](./03-security-encryption.md#36-secrets-management-in-the-repo)).
 
 ### Summary table
 
@@ -82,7 +82,7 @@
 | Stack | ✅ | Expo SDK 55, React Native 0.83.6, TypeScript 5.9, expo-sqlite, AsyncStorage, expo-secure-store | n/a |
 | Primary storage | ✅ | Local SQLite + AsyncStorage + iOS Keychain/Android Keystore + FileSystem (`docs/`, `avatars/`) | 🟡 (partial encryption — critical fields only) |
 | Key store | ✅ | iOS Keychain / Android Keystore (hardware-backed when available) | 🟡 (no rotation) |
-| External providers | ✅ | OpenFoodFacts, Edamam (via BFF), Spoonacular (US), HuggingFace CDN, Apple Health, Health Connect | 🔴 (no DPIA, no SCC, no TIA) |
+| External providers | ✅ | OpenFoodFacts, Edamam, Spoonacular **all via BFF**; LLM artifacts via Cloudflare R2 (mirror of HuggingFace upstream); MiniLM embeddings model still from HuggingFace direct; Apple Health, Health Connect | 🔴 (no DPIA, no SCC, no TIA) |
 | AI model | ✅ | **100% on-device**: Qwen 3 1.7B Quantized (LLM) + all-MiniLM-L6-v2 (embeddings) | 🟢 (privacy-by-design) |
 | Field-level encryption at rest | ✅ | AES-256-GCM `@noble/ciphers`, 96-bit nonce, 128-bit tag | 🟡 (does not cover all columns) |
 | Encryption in transit | ✅ | OS-default TLS 1.2/1.3; no pinning | 🟡 |

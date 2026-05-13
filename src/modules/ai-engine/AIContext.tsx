@@ -7,7 +7,12 @@ import { usePlanner } from '../planner/PlannerContext'
 import { useInventory } from '../inventory/InventoryContext'
 import { getSchoolMenuEntries } from '../planner/plannerDB'
 import { buildSystemPrompt, RecipeRef, RetrievedDocChunk } from '../../services/prompts/system'
-import { getLLMStatus, generateOnDevice, ensureModelAvailable } from '../../services/onDeviceLlm'
+import {
+  getLLMStatus,
+  generateOnDevice,
+  ensureModelAvailable,
+  subscribeLLMLoad,
+} from '../../services/onDeviceLlm'
 import { embedTextOrNull } from '../../services/embeddings'
 import { retrievePdfChunks, rankByKeywordOverlap } from '../../services/retrieval'
 import { getTopMemoriesForMember, addMemberMemory } from '../../services/memoryStore'
@@ -47,11 +52,25 @@ const MEMORY_TOP_K = 5
 const RETRIEVED_CHUNKS_K = 2
 const FACT_EXTRACTOR_DEBOUNCE_MS = 2000
 
+// Refusals (whether from the topic gate or parroted by the model) start
+// with one of these stems. We strip them from the rolled history before
+// feeding it back to the LLM, otherwise the model pattern-matches the
+// prior refusal and repeats it on the next turn even when the new question
+// is clearly on-topic. The hard topic gate still runs per-turn so genuine
+// off-topic queries are still refused on entry.
+const REFUSAL_PREFIXES = ['Soy NutriBot', "I'm NutriBot", 'Im NutriBot']
+
+function isRefusalMessage(m: AIMessage): boolean {
+  if (m.role !== 'assistant') return false
+  const trimmed = m.content.trim()
+  return REFUSAL_PREFIXES.some((p) => trimmed.startsWith(p))
+}
+
 function buildPromptWithHistory(history: AIMessage[], latestUserContent: string): string {
   const recent = history.slice(-HISTORY_TURNS * 2)
   if (recent.length === 0) return latestUserContent
   const lines = recent
-    .filter((m) => m.content.trim().length > 0)
+    .filter((m) => m.content.trim().length > 0 && !isRefusalMessage(m))
     .map((m) => (m.role === 'user' ? `Usuario: ${m.content}` : `Asistente: ${m.content}`))
   lines.push(`Usuario: ${latestUserContent}`)
   return lines.join('\n')
@@ -91,9 +110,23 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   useEffect(() => {
+    // One initial read covers the case where the model is already loaded by
+    // the time the provider mounts (subsequent app launches).
     refreshModelStatus()
-    const interval = setInterval(refreshModelStatus, 5000)
-    return () => clearInterval(interval)
+    // Live updates while the model downloads/loads. Replaces the previous
+    // 5s polling so the progress bar feels smooth.
+    const unsubscribe = subscribeLLMLoad((phase, progress) => {
+      setModelStatus((prev) => ({
+        isDownloaded: phase === 'ready' || prev.isDownloaded,
+        // On 'error' we want both flags false so the progress bar's
+        // visibility predicate (downloading || progress>0) drops it from
+        // the UI; chat-side errors will guide the user from there.
+        isDownloading: phase === 'downloading',
+        isLoaded: phase === 'ready',
+        downloadProgress: phase === 'error' ? 0 : progress,
+      }))
+    })
+    return unsubscribe
   }, [refreshModelStatus])
 
   const scheduleFactExtraction = useCallback(

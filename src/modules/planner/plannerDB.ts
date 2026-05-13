@@ -1,6 +1,8 @@
 import { getDatabase } from '../../db/database'
 import { safeJsonParse } from '../../db/dbUtils'
 import { MealPlan } from '../../types/planner'
+import { Recipe } from '../../types/recipes'
+import { getRecipesByIds } from '../recipes/recipeDB'
 
 function rowToPlan(row: Record<string, unknown>): MealPlan {
   return {
@@ -24,6 +26,45 @@ function rowToPlan(row: Record<string, unknown>): MealPlan {
     isLocked: (row.is_locked as number) === 1,
     generatedAt: row.generated_at as string,
     updatedAt: row.updated_at as string,
+  }
+}
+
+// Each meal recipe is stored as a frozen JSON snapshot of the Recipe at the
+// time the plan was generated. Older plans were saved before Edamam started
+// populating `imageUrl`, so their snapshots lack a thumbnail even though the
+// live catalog row now has one. We backfill the image (and only the image)
+// from the live recipes table at read time, falling back to the snapshot
+// when the recipe is no longer in the catalog (deleted, ad-hoc AI-generated).
+//
+// This is the FAST PATH for the common case: catalog row already has a
+// thumbnail (synced or previously enriched). MealCard then renders without
+// any further DB roundtrip.
+//
+// The SLOW PATH lives in `useResolvedRecipeImage` inside MealCard.tsx — it
+// handles the case where even the live catalog row is a stub (un-enriched
+// or nulled by `cleanDuplicateImageUrls`) by triggering the same lazy
+// `enrichRecipeDetail`/`enrichSpoonacularDetail` flow the recipe-detail
+// screen uses. The two layers are complementary, not redundant.
+async function hydratePlanImages(plans: MealPlan[]): Promise<void> {
+  const idsToHydrate = new Set<string>()
+  for (const plan of plans) {
+    for (const slot of ['breakfast', 'lunch', 'dinner'] as const) {
+      const r = plan.meals[slot]
+      if (r && !r.imageUrl) idsToHydrate.add(r.id)
+    }
+  }
+  if (idsToHydrate.size === 0) return
+
+  const live = await getRecipesByIds([...idsToHydrate])
+  const liveById = new Map<string, Recipe>(live.map((r) => [r.id, r]))
+
+  for (const plan of plans) {
+    for (const slot of ['breakfast', 'lunch', 'dinner'] as const) {
+      const snapshot = plan.meals[slot]
+      if (!snapshot || snapshot.imageUrl) continue
+      const liveImage = liveById.get(snapshot.id)?.imageUrl
+      if (liveImage) snapshot.imageUrl = liveImage
+    }
   }
 }
 
@@ -56,7 +97,10 @@ export async function getMealPlanForDate(date: string): Promise<MealPlan | null>
     'SELECT * FROM meal_plans WHERE date = ?',
     [date]
   )
-  return row ? rowToPlan(row) : null
+  if (!row) return null
+  const plan = rowToPlan(row)
+  await hydratePlanImages([plan])
+  return plan
 }
 
 export async function getMealPlansForRange(
@@ -68,7 +112,9 @@ export async function getMealPlansForRange(
     'SELECT * FROM meal_plans WHERE date >= ? AND date <= ? ORDER BY date ASC',
     [startDate, endDate]
   )
-  return rows.map(rowToPlan)
+  const plans = rows.map(rowToPlan)
+  await hydratePlanImages(plans)
+  return plans
 }
 
 export async function toggleLockPlan(date: string): Promise<void> {
@@ -104,6 +150,19 @@ export async function saveSchoolMenuEntry(entry: {
       entry.nutritionalEstimate ? JSON.stringify(entry.nutritionalEstimate) : null,
     ]
   )
+}
+
+export async function deleteSchoolMenuEntriesForChild(childId: string): Promise<void> {
+  const db = await getDatabase()
+  await db.runAsync('DELETE FROM school_menu_entries WHERE child_id = ?', [childId])
+}
+
+export async function getSchoolMenuChildIds(): Promise<string[]> {
+  const db = await getDatabase()
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    'SELECT DISTINCT child_id FROM school_menu_entries ORDER BY child_id ASC'
+  )
+  return rows.map((row) => row.child_id as string)
 }
 
 export async function getSchoolMenuEntries(childId: string): Promise<Array<{

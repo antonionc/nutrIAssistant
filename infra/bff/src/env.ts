@@ -14,6 +14,11 @@ export interface Env {
   RATE_LIMIT_KV: KVNamespace
   TOKEN_CACHE_KV: KVNamespace
   QUOTA_KV: KVNamespace
+
+  // ── R2 bindings ─────────────────────────────────────────────────────────────
+  // Holds the on-device LLM artifacts (.pte + tokenizer JSONs) served by the
+  // /v1/llm/* route. Created with `wrangler r2 bucket create nutriassistant-llm-models`.
+  MODEL_BUCKET: R2Bucket
 }
 
 export type AppContext = {

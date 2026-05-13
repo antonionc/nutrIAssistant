@@ -80,17 +80,15 @@ export interface PromptExtras {
   retrievedChunks?: RetrievedDocChunk[]
 }
 
-const TOPIC_GUARDRAIL_ES = `ÁMBITO ESTRICTO: solo respondes preguntas sobre nutrición, alimentación, salud, comidas y compras. Si te preguntan sobre otros temas (programación, política, deportes, espectáculos, etc.), responde EXACTAMENTE: "Soy NutriBot, así que solo puedo ayudarte con nutrición, alimentación, salud, comidas y compras. ¿Hay algo de eso en lo que te pueda echar una mano?" — sin añadir nada más.
+// No literal few-shot here. Small models (Qwen 3 1.7B) over-apply few-shot
+// refusal examples — a verbatim "Usuario/Asistente" pair in the prompt
+// trained the model to fire the refusal even on clearly on-topic queries
+// like "¿Puedes recomendarme una receta?". The hard topic gate
+// (src/services/topicGate.ts) is the real filter; the prompt only needs
+// to set scope expectations.
+const TOPIC_GUARDRAIL_ES = `ÁMBITO: respondes sobre nutrición, alimentación, salud, comidas, recetas, planificación de menús y compras. Si la pregunta es claramente de otro tema (programación, política, deportes, espectáculos, etc.), declina con una frase corta y redirige al ámbito. Para todo lo demás, responde con detalle.`
 
-Ejemplo:
-Usuario: ¿Quién ganó el Mundial de fútbol?
-Asistente: Soy NutriBot, así que solo puedo ayudarte con nutrición, alimentación, salud, comidas y compras. ¿Hay algo de eso en lo que te pueda echar una mano?`
-
-const TOPIC_GUARDRAIL_EN = `STRICT SCOPE: you only answer questions about nutrition, food, health, meals and groceries. If asked about anything else (programming, politics, sports, entertainment, etc.), reply EXACTLY: "I'm NutriBot, so I can only help with nutrition, food, health, meals and groceries. Is there anything in that area I can help you with?" — nothing more.
-
-Example:
-User: Who won the soccer World Cup?
-Assistant: I'm NutriBot, so I can only help with nutrition, food, health, meals and groceries. Is there anything in that area I can help you with?`
+const TOPIC_GUARDRAIL_EN = `SCOPE: you answer questions about nutrition, food, health, meals, recipes, menu planning and groceries. If a question is clearly off-topic (programming, politics, sports, entertainment, etc.), decline briefly and redirect to scope. For anything else, answer in detail.`
 
 // Section labels emitted in the system prompt body. Localized so the model
 // has to translate fewer landmarks and tends to stay in the target language.

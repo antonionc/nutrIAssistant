@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as DocumentPicker from 'expo-document-picker'
 import { router } from 'expo-router'
-import { usePlanner } from '../../src/modules/planner/PlannerContext'
+import { usePlanner, SchoolMenuUploadError } from '../../src/modules/planner/PlannerContext'
 import { useInventory } from '../../src/modules/inventory/InventoryContext'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
 import { useSelectedProfile } from '../../src/modules/profiles/SelectedProfileContext'
@@ -65,6 +65,8 @@ export default function NutritionScreen() {
     lockDay,
     uploadSchoolMenu,
     setMealForDate,
+    schoolMenuChildIds,
+    getSchoolMenuEntries,
   } = usePlanner()
   const { colors } = useTheme()
   const tr = useTranslation()
@@ -82,6 +84,32 @@ export default function NutritionScreen() {
     loading: boolean
     recipes: Recipe[]
   }>({ visible: false, mealType: 'lunch', loading: false, recipes: [] })
+
+  // Child-target picker (shown before file picker when 2+ school-age members).
+  // The promise resolver lets handleUploadSchoolMenu await the user's choice
+  // and keeps the upload flow linear without lifting more state into refs.
+  const [childPicker, setChildPicker] = useState<{
+    visible: boolean
+    selected: Set<string>
+  }>({ visible: false, selected: new Set() })
+  const childPickerResolverRef = useRef<((ids: string[] | null) => void) | null>(null)
+
+  // View-school-menu sheet
+  type SchoolEntry = {
+    id: string
+    date: string
+    childId: string
+    description: string
+    extractedIngredients: string[]
+    extractedAllergens: string[]
+    nutritionalEstimate?: { calories: number; protein: number; carbs: number; fat: number }
+  }
+  const [menuSheet, setMenuSheet] = useState<{
+    visible: boolean
+    activeChildId: string | null
+    entries: SchoolEntry[]
+    loading: boolean
+  }>({ visible: false, activeChildId: null, entries: [], loading: false })
 
   const selectedPlan = weekPlans.find((p) => p.date === selectedDay)
 
@@ -108,11 +136,46 @@ export default function NutritionScreen() {
     await setMealForDate(selectedDay, mealType, recipe)
   }, [altSheet.mealType, selectedDay, setMealForDate])
 
+  const openChildTargetPicker = useCallback(
+    (candidateIds: string[]): Promise<string[] | null> => {
+      return new Promise((resolve) => {
+        childPickerResolverRef.current = resolve
+        setChildPicker({ visible: true, selected: new Set(candidateIds) })
+      })
+    },
+    []
+  )
+
+  const closeChildPicker = useCallback((result: string[] | null) => {
+    setChildPicker((prev) => ({ ...prev, visible: false }))
+    const resolver = childPickerResolverRef.current
+    childPickerResolverRef.current = null
+    resolver?.(result)
+  }, [])
+
+  const toggleChildInPicker = useCallback((id: string) => {
+    setChildPicker((prev) => {
+      const next = new Set(prev.selected)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return { ...prev, selected: next }
+    })
+  }, [])
+
   const handleUploadSchoolMenu = useCallback(async () => {
     const schoolAgeMembers = profiles.filter((p) => p.isSchoolAge)
     if (schoolAgeMembers.length === 0) {
       Alert.alert(tr.nutrition.noSchoolAgeMembers, tr.nutrition.noSchoolAgeMembersDesc)
       return
+    }
+
+    let targetChildIds: string[]
+    if (schoolAgeMembers.length === 1) {
+      targetChildIds = [schoolAgeMembers[0].id]
+    } else {
+      const picked = await openChildTargetPicker(schoolAgeMembers.map((m) => m.id))
+      if (!picked || picked.length === 0) return
+      targetChildIds = picked
     }
 
     const result = await DocumentPicker.getDocumentAsync({
@@ -125,21 +188,69 @@ export default function NutritionScreen() {
     const file = result.assets[0]
     setUploadPhase('analyzing')
     try {
-      for (const member of schoolAgeMembers) {
-        await uploadSchoolMenu(file.uri, member.id)
-      }
-
+      await uploadSchoolMenu(file.uri, targetChildIds)
       setUploadPhase('generating')
       await handleGeneratePlan()
       Alert.alert(tr.nutrition.uploadSuccess, tr.nutrition.uploadSuccessDesc)
     } catch (error) {
-      Alert.alert(tr.nutrition.uploadFailed, error instanceof Error ? error.message : tr.app.error)
+      console.error('[Nutrition] School menu upload failed:', error)
+      const message =
+        error instanceof SchoolMenuUploadError
+          ? tr.nutrition[
+              ({
+                llm_not_ready: 'errLlmNotReady',
+                pdf_empty: 'errPdfEmpty',
+                pdf_extract: 'errPdfExtract',
+                llm_parse: 'errLlmParse',
+                llm_generate: 'errLlmGenerate',
+              } as const)[error.stage]
+            ]
+          : error instanceof Error
+          ? error.message
+          : tr.app.error
+      Alert.alert(tr.nutrition.uploadFailed, message)
     } finally {
       setUploadPhase('idle')
     }
-  }, [profiles, uploadSchoolMenu, handleGeneratePlan])
+  }, [profiles, uploadSchoolMenu, handleGeneratePlan, openChildTargetPicker, tr])
 
   const hasSchoolAgeMembers = profiles.some((p) => p.isSchoolAge)
+
+  // ── View school menu sheet: lazy-load entries when sheet opens or active
+  // child changes. The button that triggers this is only rendered when
+  // schoolMenuChildIds is non-empty, so we always have at least one candidate.
+  const openMenuSheet = useCallback(() => {
+    const firstChild = schoolMenuChildIds[0] ?? null
+    setMenuSheet({ visible: true, activeChildId: firstChild, entries: [], loading: true })
+  }, [schoolMenuChildIds])
+
+  useEffect(() => {
+    if (!menuSheet.visible || !menuSheet.activeChildId) return
+    let cancelled = false
+    setMenuSheet((prev) => ({ ...prev, loading: true }))
+    getSchoolMenuEntries(menuSheet.activeChildId)
+      .then((entries) => {
+        if (cancelled) return
+        setMenuSheet((prev) => ({ ...prev, entries, loading: false }))
+      })
+      .catch(() => {
+        if (cancelled) return
+        setMenuSheet((prev) => ({ ...prev, entries: [], loading: false }))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [menuSheet.visible, menuSheet.activeChildId, getSchoolMenuEntries])
+
+  const formatMenuDate = useCallback((iso: string) => {
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return iso
+    return d.toLocaleDateString(undefined, {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+    })
+  }, [])
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -223,6 +334,18 @@ export default function NutritionScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        {/* View planned school menu — only when at least one child has an
+            uploaded menu in the DB. Compact pill below the action tiles. */}
+        {schoolMenuChildIds.length > 0 && (
+          <TouchableOpacity
+            style={styles.viewMenuPill}
+            onPress={openMenuSheet}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.viewMenuPillText}>🏫 {tr.nutrition.viewSchoolMenu}</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Meal Cards for selected day */}
         {isLoading ? (
@@ -338,6 +461,169 @@ export default function NutritionScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ── Child-target picker (shown before file picker when family has
+          two or more school-age children, so the user can bind the PDF to
+          the correct children) ─── */}
+      <Modal
+        visible={childPicker.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => closeChildPicker(null)}
+      >
+        <KeyboardAvoidingView
+          style={styles.sheetOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => closeChildPicker(null)}
+          />
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>{tr.nutrition.pickChildrenTitle}</Text>
+            <Text style={styles.sheetSubtitle}>{tr.nutrition.pickChildrenSubtitle}</Text>
+
+            {profiles
+              .filter((p) => p.isSchoolAge)
+              .map((member) => {
+                const checked = childPicker.selected.has(member.id)
+                const age = (() => {
+                  const d = new Date(member.dateOfBirth)
+                  if (Number.isNaN(d.getTime())) return null
+                  const ageMs = Date.now() - d.getTime()
+                  return Math.floor(ageMs / (365.25 * 24 * 60 * 60 * 1000))
+                })()
+                return (
+                  <TouchableOpacity
+                    key={member.id}
+                    style={styles.childRow}
+                    onPress={() => toggleChildInPicker(member.id)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+                      {checked && <Text style={styles.checkboxMark}>✓</Text>}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.childName}>{member.name}</Text>
+                      {age !== null && (
+                        <Text style={styles.childMeta}>
+                          {tr.onboarding.summaryAge(age)}
+                        </Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                )
+              })}
+
+            <View style={styles.childPickerFooter}>
+              <TouchableOpacity
+                style={styles.childPickerCancel}
+                onPress={() => closeChildPicker(null)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.childPickerCancelText}>{tr.app.cancel}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.childPickerContinue,
+                  childPicker.selected.size === 0 && styles.childPickerContinueDisabled,
+                ]}
+                onPress={() => closeChildPicker(Array.from(childPicker.selected))}
+                disabled={childPicker.selected.size === 0}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.childPickerContinueText}>
+                  {tr.nutrition.pickChildrenContinue}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── View planned school menu sheet ─── */}
+      <Modal
+        visible={menuSheet.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMenuSheet((p) => ({ ...p, visible: false }))}
+      >
+        <KeyboardAvoidingView
+          style={styles.sheetOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => setMenuSheet((p) => ({ ...p, visible: false }))}
+          />
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>{tr.nutrition.schoolMenuSheetTitle}</Text>
+            <Text style={styles.sheetSubtitle}>{tr.nutrition.schoolMenuSheetSubtitle}</Text>
+
+            {/* Child selector — only when more than one child has a menu */}
+            {schoolMenuChildIds.length > 1 && (
+              <View style={styles.menuChildPills}>
+                {schoolMenuChildIds.map((id) => {
+                  const member = profiles.find((p) => p.id === id)
+                  const isActive = id === menuSheet.activeChildId
+                  return (
+                    <TouchableOpacity
+                      key={id}
+                      style={[styles.menuChildPill, isActive && styles.menuChildPillActive]}
+                      onPress={() => setMenuSheet((prev) => ({ ...prev, activeChildId: id }))}
+                      activeOpacity={0.85}
+                    >
+                      <Text
+                        style={[
+                          styles.menuChildPillText,
+                          isActive && styles.menuChildPillTextActive,
+                        ]}
+                      >
+                        {member?.name ?? id}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+            )}
+
+            {menuSheet.loading ? (
+              <ActivityIndicator color={Colors.healthGreen} style={{ marginVertical: Spacing.xl }} />
+            ) : menuSheet.entries.length === 0 ? (
+              <Text style={styles.sheetEmpty}>{tr.nutrition.schoolMenuEmpty}</Text>
+            ) : (
+              <FlatList
+                data={menuSheet.entries}
+                keyExtractor={(e) => e.id}
+                ItemSeparatorComponent={() => <View style={styles.sheetDivider} />}
+                style={{ maxHeight: 420 }}
+                renderItem={({ item }) => (
+                  <View style={styles.menuEntryRow}>
+                    <Text style={styles.menuEntryDate}>{formatMenuDate(item.date)}</Text>
+                    <Text style={styles.menuEntryDesc}>{item.description}</Text>
+                    {item.extractedAllergens.length > 0 && (
+                      <View style={styles.menuAllergenWrap}>
+                        <Text style={styles.menuAllergenLabel}>
+                          {tr.nutrition.schoolMenuAllergensLabel}:
+                        </Text>
+                        {item.extractedAllergens.map((a) => (
+                          <View key={a} style={styles.menuAllergenChip}>
+                            <Text style={styles.menuAllergenChipText}>{a}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+              />
+            )}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -429,5 +715,152 @@ function makeStyles(colors: ThemeColors) {
     altName: { ...Typography.body, color: colors.text, fontFamily: Typography.heading3.fontFamily, lineHeight: 20 },
     altMeta: { ...Typography.caption, color: colors.textSecondary, marginTop: 3 },
     altChevron: { fontSize: 24, color: colors.textMuted, lineHeight: 28 },
+
+    // "Ver menú escolar" pill — appears only when at least one child has an
+    // uploaded school menu in the DB.
+    viewMenuPill: {
+      alignSelf: 'center',
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.pill,
+      backgroundColor: Colors.softMint,
+      marginBottom: Spacing.md,
+    },
+    viewMenuPillText: {
+      ...Typography.body,
+      color: Colors.forestGreen,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+
+    // Child-target picker rows + footer
+    childRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      paddingVertical: Spacing.sm,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+    },
+    checkboxChecked: {
+      backgroundColor: Colors.healthGreen,
+      borderColor: Colors.healthGreen,
+    },
+    checkboxMark: {
+      color: Colors.white,
+      fontSize: 14,
+      lineHeight: 16,
+      fontWeight: '700',
+    },
+    childName: {
+      ...Typography.body,
+      color: colors.text,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    childMeta: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    childPickerFooter: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      marginTop: Spacing.md,
+    },
+    childPickerCancel: {
+      flex: 1,
+      paddingVertical: Spacing.md,
+      borderRadius: BorderRadius.md,
+      backgroundColor: colors.warmSurface,
+      alignItems: 'center',
+    },
+    childPickerCancelText: {
+      ...Typography.body,
+      color: colors.text,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    childPickerContinue: {
+      flex: 1.4,
+      paddingVertical: Spacing.md,
+      borderRadius: BorderRadius.md,
+      backgroundColor: Colors.healthGreen,
+      alignItems: 'center',
+    },
+    childPickerContinueDisabled: {
+      opacity: 0.5,
+    },
+    childPickerContinueText: {
+      ...Typography.body,
+      color: Colors.white,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+
+    // View-menu sheet: child pills + entry rows
+    menuChildPills: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.sm,
+      marginBottom: Spacing.md,
+    },
+    menuChildPill: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.pill,
+      backgroundColor: colors.warmSurface,
+    },
+    menuChildPillActive: {
+      backgroundColor: Colors.healthGreen,
+    },
+    menuChildPillText: {
+      ...Typography.caption,
+      color: colors.text,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    menuChildPillTextActive: {
+      color: Colors.white,
+    },
+    menuEntryRow: {
+      paddingVertical: Spacing.sm,
+    },
+    menuEntryDate: {
+      ...Typography.caption,
+      color: Colors.forestGreen,
+      fontFamily: Typography.heading3.fontFamily,
+      textTransform: 'capitalize',
+    },
+    menuEntryDesc: {
+      ...Typography.body,
+      color: colors.text,
+      marginTop: 2,
+      lineHeight: 20,
+    },
+    menuAllergenWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: Spacing.xs,
+      marginTop: Spacing.xs,
+    },
+    menuAllergenLabel: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+    },
+    menuAllergenChip: {
+      backgroundColor: `${Colors.goldenAmber}20`,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.pill,
+    },
+    menuAllergenChipText: {
+      ...Typography.caption,
+      color: colors.text,
+    },
   })
 }

@@ -45,10 +45,11 @@ flowchart TB
     end
 
     subgraph Cloud["☁️ Internet · non-PII only"]
-        OFF[OpenFoodFacts FR]:::ext
-        ED[Edamam US ⚠️ SCC]:::warn
-        SP[Spoonacular US ⚠️ SCC]:::warn
-        HF[HuggingFace CDN models]:::ext
+        BFF[Cloudflare BFF EU<br/>catalog proxy + R2 LLM mirror]:::ok
+        OFF[OpenFoodFacts FR<br/>via BFF]:::ext
+        ED[Edamam US ⚠️ SCC<br/>via BFF]:::warn
+        SP[Spoonacular US ⚠️ SCC<br/>via BFF]:::warn
+        HF[HuggingFace CDN<br/>MiniLM + upstream of LLM mirror]:::ext
     end
 
     subgraph Comp["🔴 Compliance — launch blockers"]
@@ -113,7 +114,7 @@ This is the honest snapshot: an exemplary local-first architecture, partial encr
 | Stack | ✅ Expo SDK 55, RN 0.83.6, TypeScript 5.9 | n/a |
 | Primary storage | ✅ SQLite + AsyncStorage + Keychain/Keystore + FileSystem | 🟡 partial encryption |
 | Key store | ✅ iOS Keychain / Android Keystore | 🟡 no rotation |
-| External providers | ✅ OpenFoodFacts, Edamam, Spoonacular, HuggingFace, Apple Health, Health Connect | 🔴 no DPIA, no SCC, no TIA |
+| External providers | ✅ OpenFoodFacts, Edamam, Spoonacular **all via BFF**; LLM artifacts via Cloudflare R2 (HuggingFace upstream); MiniLM embeddings still direct from HuggingFace; Apple Health, Health Connect | 🔴 no DPIA, no SCC, no TIA |
 | AI model | ✅ **100% on-device** (Qwen 3 1.7B Q + MiniLM L6 v2) | 🟢 privacy-by-design |
 | Field-level encryption at rest | ✅ AES-256-GCM `@noble/ciphers` | 🟡 partial column coverage |
 | Encryption in transit | ✅ OS-default TLS 1.2/1.3, no pinning | 🟡 |

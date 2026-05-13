@@ -26,6 +26,7 @@ import { InventoryProvider } from '../src/modules/inventory/InventoryContext'
 import { HealthProvider } from '../src/modules/health/HealthContext'
 import { AIEngineProvider } from '../src/modules/ai-engine/AIContext'
 import { AIAssistantHost } from '../src/components/layout/AIAssistantHost'
+import { LLMLoadingBar } from '../src/components/layout/LLMLoadingBar'
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext'
 import { runMigrations } from '../src/db/database'
 import { t } from '../src/i18n'
@@ -48,6 +49,7 @@ function AppShell() {
       <HealthProvider>
       <AIEngineProvider>
       <AIAssistantHost>
+        <LLMLoadingBar />
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen

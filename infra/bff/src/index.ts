@@ -6,6 +6,7 @@ import { healthRoute } from './routes/health'
 import { offRoute } from './routes/off'
 import { spoonacularRoute } from './routes/spoonacular'
 import { edamamRoute } from './routes/edamam'
+import { llmRoute } from './routes/llm'
 
 const app = new Hono<AppContext>()
 
@@ -18,6 +19,7 @@ app.route('/v1/health', healthRoute)
 app.route('/v1/off', offRoute)
 app.route('/v1/spoonacular', spoonacularRoute)
 app.route('/v1/edamam', edamamRoute)
+app.route('/v1/llm', llmRoute)
 
 app.notFound((c) =>
   c.json({ error: 'not_found', code: 'not_found', requestId: c.req.header('cf-ray') ?? '' }, 404),

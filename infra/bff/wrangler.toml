@@ -33,6 +33,16 @@ binding = "QUOTA_KV"
 id = "ac242a103e204b69a8b38d36d3de1a93"
 preview_id = "07c0942456684965a72a707f3dbd6ebf"
 
+# R2 bucket holding the on-device LLM artifacts (.pte + tokenizer JSONs)
+# served by /v1/llm/*. Create the bucket once with:
+#   wrangler r2 bucket create nutriassistant-llm-models
+#   wrangler r2 bucket create nutriassistant-llm-models-preview
+# Upload procedure documented in infra/bff/README.md (#mirroring-the-llm).
+[[r2_buckets]]
+binding = "MODEL_BUCKET"
+bucket_name = "nutriassistant-llm-models"
+preview_bucket_name = "nutriassistant-llm-models-preview"
+
 # Vars that are safe to commit (not secret). Secrets go via `wrangler secret put`.
 [vars]
 SPOONACULAR_DAILY_LIMIT = "10000"

@@ -37,6 +37,7 @@ Backend-For-Frontend on Cloudflare Workers. Sits between the mobile app and thre
 | `GET /v1/spoonacular/complex-search?cuisine=…&number=…&offset=…&sort=…` | Spoonacular `/recipes/complexSearch` | 1h |
 | `GET /v1/spoonacular/recipes/:id?includeNutrition=true` | Spoonacular `/recipes/:id/information` | 6h |
 | `GET /v1/spoonacular/quota` | — (KV read) | none |
+| `GET /v1/llm/qwen3-1.7b/{model.pte,tokenizer.json,tokenizer_config.json}` | R2 `MODEL_BUCKET` | 1y immutable |
 
 All endpoints return the **upstream JSON unchanged** so existing client-side mappers keep working.
 
@@ -69,6 +70,15 @@ npx wrangler kv namespace create QUOTA_KV --preview
 ```
 
 Each command prints an `id`. Paste them into `wrangler.toml` replacing the `REPLACE_WITH_*` placeholders.
+
+### 3b. Create the R2 bucket for on-device LLM artifacts
+
+```bash
+npx wrangler r2 bucket create nutriassistant-llm-models
+npx wrangler r2 bucket create nutriassistant-llm-models-preview
+```
+
+Upload the model files (see [Mirroring the on-device LLM](#mirroring-the-on-device-llm) below).
 
 ### 4. Set production secrets
 
@@ -250,6 +260,73 @@ once the cap is hit. Override via `SPOONACULAR_DAILY_LIMIT` in
 - **Edamam response sanitization:** Edamam embeds raw `app_id`/`app_key` in every `_links.*.href`. `routes/edamam.ts` deep-walks the response and rewrites those URLs to BFF equivalents before returning to the client.
 - **Spoonacular quota** is global, not per-device. The old per-device counter was security theater (a malicious user could just reset their device). With BFF tracking, we know the real upstream usage and can disable proactively before bill shock.
 - **`TOKEN_CACHE_KV`** is retained (formerly held FatSecret OAuth tokens). Not actively used today but free and convenient for future OAuth-style providers.
+
+## Mirroring the on-device LLM
+
+The mobile app downloads ~1 GB of model artifacts on first launch (Qwen 3 1.7B
+Quantized). We mirror those files in R2 instead of hitting HuggingFace directly,
+because:
+
+- Cloudflare's global edge cuts first-launch download time vs. HF's CDN, which
+  is geographically uneven and occasionally returns 5xx.
+- R2 → Workers egress is free; we only pay storage (~$0.015/GB/month) and
+  per-user egress (~$0.09/GB). Tokenizer JSONs are edge-cached after the first
+  hit, so per-user egress is dominated by the .pte (~1 GB once per install).
+- We control the SLA. A HuggingFace incident no longer breaks new installs.
+
+### Files to upload
+
+These are the three blobs `react-native-executorch` resolves for the
+`QWEN3_1_7B_QUANTIZED` preset. Pin to `v0.8.0` of the upstream repo so we
+serve a stable revision regardless of HuggingFace mutations:
+
+| R2 key | HuggingFace URL |
+|---|---|
+| `qwen3-1.7b/model.pte` | https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/v0.8.0/qwen-3-1.7B/quantized/qwen3_1_7b_8da4w.pte |
+| `qwen3-1.7b/tokenizer.json` | https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/v0.8.0/tokenizer.json |
+| `qwen3-1.7b/tokenizer_config.json` | https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/v0.8.0/tokenizer_config.json |
+
+### Upload procedure
+
+One-time, after creating the bucket:
+
+```bash
+# Pull the three upstream files to disk.
+mkdir -p /tmp/qwen3-1.7b && cd /tmp/qwen3-1.7b
+curl -L -o model.pte              https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/v0.8.0/qwen-3-1.7B/quantized/qwen3_1_7b_8da4w.pte
+curl -L -o tokenizer.json         https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/v0.8.0/tokenizer.json
+curl -L -o tokenizer_config.json  https://huggingface.co/software-mansion/react-native-executorch-qwen-3/resolve/v0.8.0/tokenizer_config.json
+
+# Push to R2. --remote skips the local sim cache.
+cd infra/bff
+npx wrangler r2 object put nutriassistant-llm-models/qwen3-1.7b/model.pte             --file=/tmp/qwen3-1.7b/model.pte             --remote
+npx wrangler r2 object put nutriassistant-llm-models/qwen3-1.7b/tokenizer.json        --file=/tmp/qwen3-1.7b/tokenizer.json        --remote
+npx wrangler r2 object put nutriassistant-llm-models/qwen3-1.7b/tokenizer_config.json --file=/tmp/qwen3-1.7b/tokenizer_config.json --remote
+
+# Verify.
+curl -sI https://api.nutriassistant.org/v1/llm/qwen3-1.7b/tokenizer.json | head
+# expect: HTTP/2 200, content-type: application/json, cache-control: ...immutable
+```
+
+For the preview/staging bucket, repeat with `nutriassistant-llm-models-preview`.
+
+### Upgrading the model
+
+When migrating to a newer Qwen revision (or a different model entirely):
+
+1. Pick a new R2 namespace (e.g. `qwen3-1.7b-v2/` or `qwen2.5-3b/`).
+2. Upload the new files under that namespace via `wrangler r2 object put`.
+3. Add the new namespace to `ALLOWED_MODELS` in `infra/bff/src/routes/llm.ts`.
+4. In `src/services/onDeviceLlm.ts`, update `LLM_BASE` to the new namespace
+   AND bump `KEY_MODEL_FIRST_LOAD` to a fresh suffix — different URL means
+   the executorch fetcher writes to a fresh cache filename, so the sticky
+   "already loaded" flag must reset.
+5. Once installs have migrated, delete the old namespace's R2 objects to
+   stop paying storage on the legacy revision.
+
+Do NOT overwrite files in-place under the same R2 key. The route sets
+`cache-control: immutable, max-age=1y`, so a same-key replacement won't
+propagate to clients (or to the CF edge cache) until the cache expires.
 
 ## Migration path (Phase 2, separate task)
 

@@ -1,6 +1,8 @@
 # 04 — AI Architecture & Engagement
 
-**Current state:** the product's AI runs **entirely on-device** (Qwen 3 1.7B Quantized + all-MiniLM-L6-v2). No cloud provider is called (`grep -r "openai\|anthropic\|huggingface.inference" src/` returns nothing). The system is composed of six layers: topic gate, RAG over clinical PDFs, prompt builder, LLM generation, action parser, fact extractor. Weekly plan generation uses the LLM with an algorithmic fallback. The whole pipeline was designed for privacy (data never leaves the phone) and for latency/cost (zero inference cost, ~2-5 s per turn on modern hardware).
+**Current state:** the product's AI runs **entirely on-device** (Qwen 3 1.7B Quantized + all-MiniLM-L6-v2). No cloud provider is called for inference (`grep -r "openai\|anthropic\|huggingface.inference" src/` returns nothing). The system is composed of six layers: topic gate, RAG over clinical PDFs, prompt builder, LLM generation, action parser, fact extractor. Weekly plan generation uses the LLM with an algorithmic fallback. The whole pipeline was designed for privacy (data never leaves the phone) and for latency/cost (zero inference cost, ~2-5 s per turn on modern hardware).
+
+**Model artifact delivery:** the `.pte` weights (~1.2 GB) and tokenizer JSONs are served by our Cloudflare Worker BFF (`/v1/llm/qwen3-1.7b/{model.pte,tokenizer.json,tokenizer_config.json}`) backed by R2. They were previously pulled directly from the HuggingFace CDN; mirroring through R2 gives us a stable POP near EU users (e.g. Madrid), control over availability during HF outages, and immutable 1-year edge cache. Inference itself is **still 100% on-device** — the BFF only hosts the static artifacts.
 
 ## 4.1. AI capability inventory
 
@@ -30,7 +32,8 @@ flowchart LR
         B1[ensureKey] --> B2[runMigrations] --> B3[seedRecipesIfNeeded]
         B3 --> B4[isModelDownloaded?]
         B4 -- No --> B5[notifyDownloadStarted]
-        B4 --> B6[ensureModelAvailable<br/>fromModelName + ExpoResourceFetcher]
+        B4 --> B6[ensureModelAvailable<br/>fromCustomModel via BFF/R2<br/>+ ExpoResourceFetcher]
+        B6 -- subscribeLLMLoad --> Bar[LLMLoadingBar<br/>2 px progress bar]
         B6 --> B7[notifyModelReady]
         B4 --> B8[ensureEmbeddingsAvailable]
     end
@@ -101,9 +104,9 @@ flowchart LR
 
 | Aspect | State | Evidence | Recommendation |
 |---|---|---|---|
-| Model versioning | 🟡 Implicit — model-version suffix in the AsyncStorage flag | `src/services/onDeviceLlm.ts:47` | Persist a dict `{name, sha256, source_url, downloaded_at}` |
+| Model versioning | 🟡 Implicit — model-version suffix in the AsyncStorage flag (`_qwen3_1_7b_q_bff`, bumped on each CDN/model migration) | `src/services/onDeviceLlm.ts:47` | Persist a dict `{name, sha256, source_url, downloaded_at}` |
 | Registry | 🔴 GAP | — | MLflow / Weights & Biases / minimal in-house in the BFF |
-| Model CI/CD | 🔴 GAP | — | Workflow that pre-downloads the `.pte`, computes the SHA, and publishes to our own CDN |
+| Model CI/CD | 🟡 Partial — artifacts mirrored to R2 (`nutriassistant-llm-models`) via the BFF; SHA256 verified against HuggingFace upstream during upload (runbook in `infra/bff/README.md#mirroring-the-on-device-llm`); no automated workflow yet | `infra/bff/src/routes/llm.ts`, `infra/bff/README.md` | Wrap the `wrangler r2 object put` step in a GitHub Action that pins to a tagged HF release |
 | Drift monitoring (data drift) | 🔴 GAP | — | With BFF and cache, compare query distribution week-over-week |
 | Concept-drift monitoring | 🔴 GAP | — | Validation against a gold nutrition Q&A set |
 | Retraining | 🔴 Not applicable — Qwen is a frozen model | — | — |
@@ -140,7 +143,7 @@ flowchart LR
 
 ```
 /no_think
-STRICT SCOPE: only answer questions about nutrition, food, health, meals, and groceries. [...]
+SCOPE: you answer questions about nutrition, food, health, meals, recipes, menu planning and groceries. If a question is clearly off-topic (programming, politics, sports, entertainment, etc.), decline briefly and redirect to scope. For anything else, answer in detail.
 
 You are NutriBot, a family nutrition assistant. Today is 2026-05-13. Always reply in Spanish (Spain), friendly and concise.
 
@@ -176,6 +179,8 @@ ACTIONS: When the user explicitly asks you to add or remove a recipe from favori
 ```
 
 **Hard cap of 4,500 chars** enforced by `src/services/prompts/system.ts:261-263`. Truncated from the tail → preserves the topic guardrail and active-member info (the most important pieces for correctness).
+
+**Topic guardrail rewrite (2026-05):** the guardrail used to be a "respond EXACTLY: …" instruction with a verbatim few-shot example (User/Assistant pair). Qwen 3 1.7B over-applied that pattern and fired the refusal on clearly on-topic queries like *"recommend me a recipe"*. The current `TOPIC_GUARDRAIL_ES/EN` (`src/services/prompts/system.ts:83-93`) is a short directive with no literal example; "recipes" and "menu planning" are stated explicitly as in-scope. The hard pre-LLM topic gate (`src/services/topicGate.ts`) remains the real refusal filter. Companion mitigation: `buildPromptWithHistory` (`src/modules/ai-engine/AIContext.tsx`) now drops assistant turns starting with `Soy NutriBot` / `I'm NutriBot` from the rolled history before feeding it back to the model — otherwise a prior refusal poisoned the context and triggered a refusal loop.
 
 ## 4.6. AI Governance
 

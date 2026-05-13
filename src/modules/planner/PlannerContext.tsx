@@ -13,11 +13,16 @@ import {
   toggleLockPlan,
   saveSchoolMenuEntry,
   getSchoolMenuEntries,
+  deleteSchoolMenuEntriesForChild,
+  getSchoolMenuChildIds,
 } from './plannerDB'
 import { extractPdfText } from '../../../modules/expo-pdf-text'
-import { generateOnDevice } from '../../services/onDeviceLlm'
+import { generateOnDevice, getLLMStatus } from '../../services/onDeviceLlm'
 import { InventoryLite } from '../../services/prompts/system'
-import { SCHOOL_MENU_EXTRACTION_PROMPT } from '../../services/prompts/schoolMenuExtraction'
+import {
+  SCHOOL_MENU_EXTRACTION_PROMPT,
+  SCHOOL_MENU_EXTRACTION_PROMPT_SIMPLE,
+} from '../../services/prompts/schoolMenuExtraction'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { selectWeekRecipes } from './mealPlanGenerator'
 
@@ -33,10 +38,109 @@ function getWeekDates(startDate?: string): string[] {
 
 type MealSlot = 'breakfast' | 'lunch' | 'dinner'
 
+type SchoolMenuParsedEntry = {
+  date: string
+  description: string
+  extractedIngredients: string[]
+  extractedAllergens: string[]
+  nutritionalEstimate?: { calories: number; protein: number; carbs: number; fat: number }
+}
+
+// Permissive extractor for the on-device LLM's school-menu response. Handles:
+//   - bare JSON arrays ([...])
+//   - arrays wrapped in markdown code fences (```json ... ```)
+//   - arrays nested inside an object ({"days":[...]} / {"menu":[...]})
+//   - truncated tails: if the closing "]" is missing, we re-balance brackets
+//     and drop the last (incomplete) element so the rest is still salvageable.
+// Returns null when nothing usable can be parsed.
+function parseSchoolMenuResponse(raw: string): SchoolMenuParsedEntry[] | null {
+  // 1a. Strip well-formed <think>…</think> blocks.
+  // 1b. Strip a dangling <think>… with no closing tag (Qwen 3 sometimes runs
+  //     out of tokens mid-reasoning and never closes the block). Without /no_think
+  //     this consumes the whole response — we still try to recover anything past
+  //     a stray </think> if one exists.
+  let s = raw
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/<think>[\s\S]*$/, '')
+    .replace(/^[\s\S]*?<\/think>/, '')
+    .trim()
+
+  // Qwen 3 1.7B occasionally forgets the `},{` array-element separator and
+  // emits `}","date":...` (stray quote + comma instead of `},{`). The lookahead
+  // anchors on what looks like a JSON object opening a new entry, so we don't
+  // touch this sequence when it appears inside a string value.
+  s = s.replace(/\}",\s*(?="[\w-]+"\s*:)/g, '},{')
+
+  // 2. Strip markdown code fences if present.
+  s = s.replace(/```(?:json|JSON)?\s*([\s\S]*?)```/g, '$1').trim()
+
+  // 3. Greedy match for the outermost [...] block.
+  const arrayMatch = s.match(/\[[\s\S]*\]/)
+  const candidates: string[] = []
+  if (arrayMatch) candidates.push(arrayMatch[0])
+
+  // 4. If we never found a closing "]", try to salvage a truncated array by
+  //    cutting after the last complete object and appending "]".
+  const firstBracket = s.indexOf('[')
+  if (firstBracket !== -1 && s.indexOf(']', firstBracket) === -1) {
+    const tail = s.slice(firstBracket)
+    const lastObjectEnd = tail.lastIndexOf('}')
+    if (lastObjectEnd !== -1) {
+      candidates.push(tail.slice(0, lastObjectEnd + 1) + ']')
+    }
+  }
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate)
+      if (Array.isArray(parsed)) return parsed as SchoolMenuParsedEntry[]
+    } catch {
+      // try next candidate
+    }
+  }
+
+  // 5. Last resort: the LLM wrapped the array in an object. Find the first
+  //    "{...}" block and look for an array-valued property inside it.
+  const objectMatch = s.match(/\{[\s\S]*\}/)
+  if (objectMatch) {
+    try {
+      const parsedObj = JSON.parse(objectMatch[0])
+      if (parsedObj && typeof parsedObj === 'object') {
+        for (const value of Object.values(parsedObj)) {
+          if (Array.isArray(value)) return value as SchoolMenuParsedEntry[]
+        }
+      }
+    } catch {
+      // give up
+    }
+  }
+
+  return null
+}
+
+export type SchoolMenuUploadStage =
+  | 'llm_not_ready'
+  | 'pdf_empty'
+  | 'pdf_extract'
+  | 'llm_parse'
+  | 'llm_generate'
+
+export class SchoolMenuUploadError extends Error {
+  stage: SchoolMenuUploadStage
+  cause?: unknown
+  constructor(stage: SchoolMenuUploadStage, cause?: unknown) {
+    super(`School menu upload failed at stage: ${stage}`)
+    this.name = 'SchoolMenuUploadError'
+    this.stage = stage
+    this.cause = cause
+  }
+}
+
 interface PlannerContextValue {
   weekPlans: MealPlan[]
   isLoading: boolean
   isGenerating: boolean
+  schoolMenuChildIds: string[]
   loadWeek: (startDate?: string) => Promise<void>
   generateWeekPlan: (
     inventory: InventoryLite[],
@@ -45,7 +149,8 @@ interface PlannerContextValue {
   setMealForDate: (date: string, mealType: MealSlot, recipe: Recipe) => Promise<void>
   removeMealFromDate: (date: string, mealType: MealSlot) => Promise<void>
   lockDay: (date: string) => Promise<void>
-  uploadSchoolMenu: (pdfUri: string, childId: string) => Promise<void>
+  uploadSchoolMenu: (pdfUri: string, childIds: string[]) => Promise<void>
+  refreshSchoolMenuState: () => Promise<void>
   getSchoolMenuEntries: typeof getSchoolMenuEntries
 }
 
@@ -56,6 +161,7 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
   const [weekPlans, setWeekPlans] = useState<MealPlan[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [schoolMenuChildIds, setSchoolMenuChildIds] = useState<string[]>([])
 
   const loadWeek = useCallback(async (startDate?: string) => {
     setIsLoading(true)
@@ -65,9 +171,15 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false)
   }, [])
 
+  const refreshSchoolMenuState = useCallback(async () => {
+    const ids = await getSchoolMenuChildIds()
+    setSchoolMenuChildIds(ids)
+  }, [])
+
   useEffect(() => {
     loadWeek()
-  }, [loadWeek])
+    refreshSchoolMenuState()
+  }, [loadWeek, refreshSchoolMenuState])
 
   /**
    * Generates a 7-day meal plan from locally-stored recipes. Uses the
@@ -179,42 +291,92 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
 
   // School menu upload runs entirely on-device: PDF text is extracted via the
   // expo-pdf-text native module (PDFKit on iOS, PdfBox on Android), then the
-  // local LLM parses it into structured entries.
+  // local LLM parses it into structured entries. The PDF is parsed and the LLM
+  // is invoked ONCE per upload; results are written per target child after
+  // wiping that child's previous entries (true replace semantics).
   const uploadSchoolMenu = useCallback(
-    async (pdfUri: string, childId: string): Promise<void> => {
-      const pdfText = await extractPdfText(pdfUri)
-      if (!pdfText.trim()) throw new Error('Could not extract text from PDF')
-
-      const userPrompt = `${SCHOOL_MENU_EXTRACTION_PROMPT}\n\nPDF TEXT:\n${pdfText}`
-      const response = await generateOnDevice(
-        userPrompt,
-        'You extract structured school-menu data and return ONLY a JSON array. No markdown, no commentary.'
-      )
-
-      const jsonMatch = response.match(/\[[\s\S]*\]/)
-      if (!jsonMatch) throw new Error('Could not extract school menu data')
-
-      const entries: Array<{
-        date: string
-        description: string
-        extractedIngredients: string[]
-        extractedAllergens: string[]
-        nutritionalEstimate?: { calories: number; protein: number; carbs: number; fat: number }
-      }> = JSON.parse(jsonMatch[0])
-
-      for (const entry of entries) {
-        await saveSchoolMenuEntry({
-          id: `school-${entry.date}-${childId}`,
-          date: entry.date,
-          childId,
-          description: entry.description,
-          extractedIngredients: entry.extractedIngredients,
-          extractedAllergens: entry.extractedAllergens,
-          nutritionalEstimate: entry.nutritionalEstimate,
-        })
+    async (pdfUri: string, childIds: string[]): Promise<void> => {
+      const status = await getLLMStatus()
+      if (!status.isLoaded) {
+        throw new SchoolMenuUploadError('llm_not_ready')
       }
+
+      let pdfText: string
+      try {
+        pdfText = await extractPdfText(pdfUri)
+      } catch (e) {
+        throw new SchoolMenuUploadError('pdf_extract', e)
+      }
+      if (!pdfText.trim()) throw new SchoolMenuUploadError('pdf_empty')
+
+      // Small on-device models occasionally wrap the array in markdown fences,
+      // emit a preamble, or wrap it in an object ({"days":[...]}). Be permissive
+      // when extracting the JSON payload before parsing.
+      const runLLM = async (prompt: string): Promise<string> => {
+        try {
+          return await generateOnDevice(
+            `${prompt}\n\nPDF TEXT:\n${pdfText}`,
+            '/no_think You extract structured school-menu data. Reply with ONLY a JSON array, starting with "[" and ending with "]". No markdown, no code fences, no commentary, no <think> tags.'
+          )
+        } catch (e) {
+          throw new SchoolMenuUploadError('llm_generate', e)
+        }
+      }
+
+      let response = await runLLM(SCHOOL_MENU_EXTRACTION_PROMPT)
+      let entries = parseSchoolMenuResponse(response)
+
+      // Retry with a much simpler schema if the first attempt was unparseable.
+      // Small models (~1.7B) produce date+description arrays far more reliably
+      // than full nutrition/allergen objects. Fill defaults for the dropped fields.
+      if (!entries) {
+        console.info(
+          '[Planner] First-pass school-menu parse failed — falling back to the simpler-schema retry. ' +
+            'This is an expected recovery path; the upload will still succeed if the retry parses cleanly. ' +
+            'First 2000 chars of original response:\n' +
+            response.slice(0, 2000)
+        )
+        response = await runLLM(SCHOOL_MENU_EXTRACTION_PROMPT_SIMPLE)
+        const simple = parseSchoolMenuResponse(response)
+        if (simple) {
+          entries = simple.map((e) => ({
+            date: e.date,
+            description: e.description,
+            extractedIngredients: e.extractedIngredients ?? [],
+            extractedAllergens: e.extractedAllergens ?? [],
+            nutritionalEstimate: e.nutritionalEstimate,
+          }))
+        }
+      }
+
+      if (!entries) {
+        console.error(
+          '\n===== [Planner] LLM response STILL unparseable after retry. Giving up. =====\n' +
+            'First 2000 chars of retry response:\n' +
+            response.slice(0, 2000) +
+            '\n=================================================='
+        )
+        throw new SchoolMenuUploadError('llm_parse')
+      }
+
+      for (const childId of childIds) {
+        await deleteSchoolMenuEntriesForChild(childId)
+        for (const entry of entries) {
+          await saveSchoolMenuEntry({
+            id: `school-${entry.date}-${childId}`,
+            date: entry.date,
+            childId,
+            description: entry.description,
+            extractedIngredients: entry.extractedIngredients,
+            extractedAllergens: entry.extractedAllergens,
+            nutritionalEstimate: entry.nutritionalEstimate,
+          })
+        }
+      }
+
+      await refreshSchoolMenuState()
     },
-    []
+    [refreshSchoolMenuState]
   )
 
   return (
@@ -222,12 +384,14 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       weekPlans,
       isLoading,
       isGenerating,
+      schoolMenuChildIds,
       loadWeek,
       generateWeekPlan,
       setMealForDate,
       removeMealFromDate,
       lockDay,
       uploadSchoolMenu,
+      refreshSchoolMenuState,
       getSchoolMenuEntries,
     }}>
       {children}

@@ -65,6 +65,23 @@ export const ES = {
     noAlternatives: 'No se encontraron alternativas',
     generateTileTitle: 'Generar menú',
     generateTileSubtitle: 'Plan semanal a tu medida',
+    // School-menu upload errors (mapped from SchoolMenuUploadError.stage)
+    errLlmNotReady: 'El modelo de IA aún no está listo. Espera a que termine de cargar e inténtalo de nuevo.',
+    errPdfEmpty: 'No se pudo leer texto del PDF. Si es un escaneo en imagen, prueba con un PDF que contenga texto seleccionable.',
+    errPdfExtract: 'No se pudo procesar el PDF. Comprueba que no esté protegido por contraseña.',
+    errLlmParse: 'La IA no pudo extraer el menú con la estructura esperada. Inténtalo de nuevo.',
+    errLlmGenerate: 'El asistente local no pudo procesar el menú. Inténtalo de nuevo en un momento.',
+    // Child-target picker (shown when family has 2+ school-age children)
+    pickChildrenTitle: '¿De qué hijo es este menú?',
+    pickChildrenSubtitle: 'Selecciona los hijos a los que aplica el PDF. Sus menús anteriores serán reemplazados.',
+    pickChildrenContinue: 'Continuar',
+    pickChildrenNoneSelected: 'Selecciona al menos un hijo',
+    // View-school-menu sheet
+    viewSchoolMenu: 'Ver menú escolar',
+    schoolMenuSheetTitle: 'Menú escolar planificado',
+    schoolMenuSheetSubtitle: 'Comidas en el colegio para los próximos días',
+    schoolMenuEmpty: 'Aún no hay comidas planificadas',
+    schoolMenuAllergensLabel: 'Alérgenos',
   },
 
   // Recipes
@@ -135,6 +152,12 @@ export const ES = {
     recipeNotFound: 'Receta no encontrada.',
     today: 'Hoy',
     tomorrow: 'Mañana',
+    // Personal vs family favorite picker (shown when tapping the heart on an
+    // unfavorited recipe)
+    favoritePickerTitle: '¿Cómo quieres guardarla?',
+    favoritePickerMsg: 'Elige dónde guardar esta receta como favorita.',
+    favoritePersonal: 'Personal',
+    favoriteFamily: 'Familia',
   },
 
   // Groceries
@@ -449,6 +472,7 @@ export const ES = {
     modelDownloading: 'Descargando el modelo de IA local...',
     modelReady: 'IA local lista',
     modelPreparingMessage: 'Casi listo — tu asistente de IA privado se está configurando. Te avisaremos cuando esté listo.',
+    modelLoadingA11y: 'Cargando modelo de IA en el dispositivo',
     tapToSpeak: 'Toca para hablar',
     voiceNotAvailableTitle: 'Voz no disponible',
     voiceNotAvailableMsg: 'El reconocimiento de voz no está disponible en este dispositivo.',

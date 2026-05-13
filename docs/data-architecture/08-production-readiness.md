@@ -27,10 +27,11 @@ flowchart TB
     end
 
     subgraph Vendors["☁️ Providers (DPA sub-processors)"]
+        CF[Cloudflare BFF + R2 EU ✅]
         OFF[OpenFoodFacts]
         ED[Edamam API US ⚠️ SCC]
         SP[Spoonacular API US ⚠️ SCC]
-        HF[HuggingFace CDN US ⚠️]
+        HF[HuggingFace CDN US ⚠️<br/>MiniLM + upstream of LLM mirror]
         Mistral[Mistral La Plateforme EU ✅ opt-in]
     end
 
