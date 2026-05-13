@@ -145,6 +145,69 @@ The Worker is available at `http://localhost:8787`. KV bindings use the `preview
 - **Analytics:** Cloudflare Dashboard → Workers & Pages → `nutriassistant-bff` → Metrics
 - **Rollback:** Dashboard → Deployments tab → "Promote" a previous version
 - **Quota check:** `curl https://api.nutriassistant.org/v1/spoonacular/quota`
+- **List active secrets:** `npx wrangler secret list` (expect exactly `EDAMAM_APP_ID`, `EDAMAM_APP_KEY`, `SPOONACULAR_API_KEY`)
+
+### Rotating a provider credential
+
+Use this runbook when you need to rotate the Spoonacular API key or Edamam
+`app_key` — either on a schedule, after a suspected leak, or after publishing
+a binary that you suspect carried an older copy.
+
+`wrangler secret put` **overwrites** an existing secret, so there is no
+"delete first, then set" step. The Worker picks up the new value on the next
+invocation (cold-start within ~30s); **no redeploy needed**.
+
+#### Spoonacular
+
+1. **Generate a new key at the provider.** Sign in at
+   https://spoonacular.com/food-api/console → **Profile → My Console**.
+   If Spoonacular offers "Generate new key" (a second key alongside the old),
+   prefer that — zero downtime. Otherwise "Reset / regenerate" replaces the
+   old key immediately (~1 min downtime).
+2. **Update the Cloudflare secret:**
+   ```bash
+   cd infra/bff
+   npx wrangler secret put SPOONACULAR_API_KEY
+   # paste the new value at the prompt, Enter
+   ```
+3. **Verify:**
+   ```bash
+   curl -sS "https://api.nutriassistant.org/v1/spoonacular/complex-search?cuisine=italian&number=1"
+   # expect a JSON body with `results: [...]`, NOT `spoonacular_upstream_401`
+   ```
+   If you get a 502 with `spoonacular_upstream_401`, the new key has not
+   propagated yet — wait 60 seconds and retry, or `npx wrangler tail` to
+   watch live.
+4. **Revoke the old key** at Spoonacular (only after step 3 confirms the
+   new key works). Older binaries that still ship with the old key will
+   degrade gracefully: `getSpoonacularRecipeDetail` returns `null` and the
+   app falls back to Edamam + on-device generation.
+
+#### Edamam
+
+Same shape, different URL. Sign in at https://developer.edamam.com/admin → your
+application → **Rotate keys** (or **Regenerate app key**). Then:
+
+```bash
+cd infra/bff
+npx wrangler secret put EDAMAM_APP_KEY    # paste new value
+# EDAMAM_APP_ID rarely changes — only rotate it if the provider explicitly issues a new one.
+```
+
+Verify with:
+
+```bash
+curl -sS "https://api.nutriassistant.org/v1/edamam/recipes/search?q=paella&cuisineType=mediterranean" | head -c 200
+# expect a JSON body with `hits: [...]`, NOT 502 `edamam_auth_error`
+```
+
+#### Emergency revocation (key leaked)
+
+If a key is suspected leaked, **delete it at the provider first**, then set
+the replacement on Cloudflare. This sequence accepts a few minutes of broken
+catalog UX in exchange for cutting the leaked key off immediately. The app
+remains usable throughout — on-device LLM, meal planning, profiles, AI chat,
+and OpenFoodFacts scanning are all unaffected.
 
 ## Provider-specific gotchas
 
