@@ -4,8 +4,10 @@ import { NutritionalInfo } from '../types/nutrition'
 import { computeNutriScore } from './nutriscore'
 import { detectAllergensInIngredients } from '../modules/profiles/allergenEngine'
 
-const API_KEY  = process.env.EXPO_PUBLIC_SPOONACULAR_API_KEY ?? ''
-const BASE_URL = 'https://api.spoonacular.com'
+// All calls go through the BFF (https://api.nutriassistant.org). The BFF
+// holds the Spoonacular API key in Cloudflare's secret store and enforces
+// the global daily quota — no credentials ship in this binary.
+const BFF_BASE = process.env.EXPO_PUBLIC_BFF_BASE_URL ?? 'https://api.nutriassistant.org'
 
 export const SPOONACULAR_DAILY_LIMIT = 10_000
 
@@ -13,37 +15,41 @@ export const SPOONACULAR_DAILY_LIMIT = 10_000
 const MAX_PER_CUISINE = 1_000
 const PAGE_SIZE = 100  // Spoonacular's maximum per request
 
-const CALLS_STORAGE_KEY = 'sp_daily_calls'
+// ─── Quota (read from BFF) ────────────────────────────────────────────────────
+//
+// The BFF tracks the daily counter globally across all users. We cache the
+// response briefly in AsyncStorage so UI re-renders don't hammer the BFF.
 
-// ─── Daily call tracking ──────────────────────────────────────────────────────
+const QUOTA_CACHE_KEY = 'sp_quota_cache_v2'
+const QUOTA_CACHE_TTL_MS = 30_000
 
-interface DailyCallRecord { date: string; count: number }
+interface QuotaSnapshot { ts: number; used: number; limit: number; remaining: number }
 
-function todayString(): string { return new Date().toISOString().slice(0, 10) }
+async function fetchQuotaFromBFF(): Promise<QuotaSnapshot> {
+  const cached = await AsyncStorage.getItem(QUOTA_CACHE_KEY)
+  if (cached) {
+    const parsed = JSON.parse(cached) as QuotaSnapshot
+    if (Date.now() - parsed.ts < QUOTA_CACHE_TTL_MS) return parsed
+  }
+  try {
+    const resp = await fetch(`${BFF_BASE}/v1/spoonacular/quota`)
+    if (!resp.ok) throw new Error(`quota status ${resp.status}`)
+    const data = (await resp.json()) as { used: number; limit: number; remaining: number }
+    const snap: QuotaSnapshot = { ...data, ts: Date.now() }
+    await AsyncStorage.setItem(QUOTA_CACHE_KEY, JSON.stringify(snap))
+    return snap
+  } catch {
+    // BFF unreachable — assume full quota so the UI doesn't lock users out.
+    return { ts: Date.now(), used: 0, limit: SPOONACULAR_DAILY_LIMIT, remaining: SPOONACULAR_DAILY_LIMIT }
+  }
+}
 
 export async function getSpoonacularCallsToday(): Promise<number> {
-  const raw = await AsyncStorage.getItem(CALLS_STORAGE_KEY)
-  if (!raw) return 0
-  const record: DailyCallRecord = JSON.parse(raw)
-  return record.date === todayString() ? record.count : 0
+  return (await fetchQuotaFromBFF()).used
 }
 
 export async function getSpoonacularCallsRemaining(): Promise<number> {
-  return Math.max(0, SPOONACULAR_DAILY_LIMIT - (await getSpoonacularCallsToday()))
-}
-
-async function incrementCalls(cost = 1): Promise<void> {
-  const today = todayString()
-  const raw   = await AsyncStorage.getItem(CALLS_STORAGE_KEY)
-  const prev: DailyCallRecord = raw ? JSON.parse(raw) : { date: today, count: 0 }
-  await AsyncStorage.setItem(
-    CALLS_STORAGE_KEY,
-    JSON.stringify({ date: today, count: prev.date === today ? prev.count + cost : cost })
-  )
-}
-
-async function canCall(cost = 1): Promise<boolean> {
-  return (await getSpoonacularCallsToday()) + cost <= SPOONACULAR_DAILY_LIMIT
+  return (await fetchQuotaFromBFF()).remaining
 }
 
 // ─── Spoonacular raw types ────────────────────────────────────────────────────
@@ -145,14 +151,25 @@ function mapNutrition(nutrients?: SPNutrient[]): NutritionalInfo {
   }
 }
 
-// ─── API helper ───────────────────────────────────────────────────────────────
+// ─── BFF helper ───────────────────────────────────────────────────────────────
 
-async function spFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-  const qs = new URLSearchParams({ ...params, apiKey: API_KEY }).toString()
-  const resp = await fetch(`${BASE_URL}${path}?${qs}`)
+class SpoonacularQuotaError extends Error {
+  constructor() { super('Límite diario de Spoonacular alcanzado.') }
+}
+
+async function bffFetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+  const qs = new URLSearchParams(params).toString()
+  const url = `${BFF_BASE}${path}${qs ? '?' + qs : ''}`
+  const resp = await fetch(url)
+  if (resp.status === 429) {
+    // BFF returns 429 with `quota_exhausted` once today's global cap is hit.
+    // Invalidate the local quota cache so the UI updates immediately.
+    await AsyncStorage.removeItem(QUOTA_CACHE_KEY)
+    throw new SpoonacularQuotaError()
+  }
   if (!resp.ok) {
     const text = await resp.text().catch(() => '')
-    throw new Error(`[Spoonacular] ${resp.status}: ${text.slice(0, 200)}`)
+    throw new Error(`[Spoonacular BFF] ${resp.status}: ${text.slice(0, 200)}`)
   }
   return resp.json() as Promise<T>
 }
@@ -203,15 +220,20 @@ export async function searchAllSpoonacularByCuisine(
   let totalResults = Infinity
 
   while (offset < totalResults && all.length < MAX_PER_CUISINE) {
-    if (!(await canCall(1))) break
-
-    const data = await spFetch<SPSearchResponse>('/recipes/complexSearch', {
-      cuisine,
-      number:  String(Math.min(PAGE_SIZE, MAX_PER_CUISINE - all.length)),
-      offset:  String(offset),
-      sort:    'popularity',
-    })
-    await incrementCalls(1)
+    let data: SPSearchResponse
+    try {
+      data = await bffFetch<SPSearchResponse>('/v1/spoonacular/complex-search', {
+        cuisine,
+        number: String(Math.min(PAGE_SIZE, MAX_PER_CUISINE - all.length)),
+        offset: String(offset),
+        sort:   'popularity',
+      })
+    } catch (e) {
+      // Quota errors propagate so the sync orchestrator can stop early
+      // with the right user-facing message.
+      if (e instanceof SpoonacularQuotaError) throw e
+      throw e
+    }
 
     if (offset === 0) totalResults = data.totalResults
     if (!data.results.length) break
@@ -234,14 +256,11 @@ export async function searchSpoonacularByCuisine(
   cuisineFlag: string,
   number = 50
 ): Promise<Recipe[]> {
-  if (!(await canCall(1))) throw new Error('Límite diario de Spoonacular alcanzado.')
-
-  const data = await spFetch<SPSearchResponse>('/recipes/complexSearch', {
+  const data = await bffFetch<SPSearchResponse>('/v1/spoonacular/complex-search', {
     cuisine,
     number: String(Math.min(number, PAGE_SIZE)),
     sort:   'popularity',
   })
-  await incrementCalls(1)
 
   return data.results.map((r) => buildStub(r, cuisine, cuisineFlag))
 }
@@ -264,16 +283,10 @@ export interface SpoonacularRecipeDetail {
 export async function getSpoonacularRecipeDetail(
   spoonacularId: string
 ): Promise<SpoonacularRecipeDetail | null> {
-  if (!(await canCall(1))) {
-    console.warn('[Spoonacular] Daily limit reached, cannot fetch detail')
-    return null
-  }
-
   try {
-    const data = await spFetch<SPRecipeInfo>(`/recipes/${spoonacularId}/information`, {
+    const data = await bffFetch<SPRecipeInfo>(`/v1/spoonacular/recipes/${spoonacularId}`, {
       includeNutrition: 'true',
     })
-    await incrementCalls(1)
 
     const ingredientNames = (data.extendedIngredients ?? []).map((i) => i.name)
     const allergens = detectAllergensInIngredients(ingredientNames)

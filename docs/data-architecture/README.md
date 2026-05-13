@@ -5,7 +5,7 @@ This area documents the data lifecycle, AI architecture, security model, privacy
 > **Recent architectural changes (read before consuming the rest):**
 >
 > - **2026-05-13 — FatSecret → Edamam swap.** All FatSecret integration was removed (commit `adb2483`, DB migration 013 purges legacy `fs-*` recipes). Edamam Recipe Search v2 replaces it as the Mediterranean catalog source. Credentials are held server-side in the Cloudflare BFF (`api.nutriassistant.org`), never in the bundle. Sections below that still describe FatSecret OAuth, `EXPO_PUBLIC_FATSECRET_*` secrets, or `fs-*` recipe IDs are historical — treat them as describing the previous architecture.
-> - **2026-05-13 — Cloudflare BFF deployed.** `infra/bff/` proxies OpenFoodFacts, Edamam, and Spoonacular. Edamam is fully routed through the BFF; OFF and Spoonacular still call upstream directly from the app and are on the migration list. The "secrets in bundle" finding in §0 / §3 applies only to `EXPO_PUBLIC_SPOONACULAR_API_KEY` going forward.
+> - **2026-05-13 — Full BFF migration complete.** `infra/bff/` proxies OpenFoodFacts, Edamam, and Spoonacular. **All three upstreams are now reached via the BFF; the app no longer holds any third-party API key.** The `EXPO_PUBLIC_SPOONACULAR_API_KEY` referenced in §0 / §3 is gone from `.env` and the bundle — the Spoonacular daily quota is now tracked globally by the BFF and surfaced to the client via `GET /v1/spoonacular/quota`. The "secrets in public bundle" finding (top-5 critical, §0) is **resolved**.
 
 ## One-page picture
 
