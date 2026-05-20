@@ -13,6 +13,10 @@ public class LiquidGlassModule: Module {
         view.updateSelectedIndex(index)
       }
 
+      Prop("colorScheme") { (view: LiquidGlassTabBarView, scheme: String) in
+        view.updateColorScheme(scheme)
+      }
+
       Events("onTabPress")
     }
   }

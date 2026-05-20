@@ -61,7 +61,16 @@ function AppShell() {
         <LLMLoadingBar />
         <DecryptFailureBanner appVersion={Constants.expoConfig?.version ?? '1.0.0'} />
         <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="(tabs)"
+            options={{
+              headerShown: false,
+              // React Navigation's default screen background is pure white;
+              // letting it show through would render as a horizontal white
+              // band refracted through the floating Liquid Glass bar.
+              contentStyle: { backgroundColor: colors.background },
+            }}
+          />
           <Stack.Screen
             name="scanner"
             options={{ headerShown: false, presentation: 'fullScreenModal' }}

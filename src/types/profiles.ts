@@ -21,7 +21,16 @@ export interface SchoolMenuEntry {
   date: string          // ISO date YYYY-MM-DD
   childId: string
   meal: 'lunch'
+  // Raw concatenated text from the PDF — kept as a last-resort fallback
+  // when the parser can't identify any of the three courses below.
   description: string
+  // Structured courses extracted from the PDF. Each is optional because
+  // the parser may not always identify every course (e.g. a menu that
+  // only lists a main and a dessert), and legacy rows persisted before
+  // migration 017 are NULL across the board.
+  firstCourse?: string
+  secondCourse?: string
+  dessert?: string
   extractedIngredients: string[]
   extractedAllergens: string[]
   nutritionalEstimate?: {

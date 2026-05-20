@@ -203,7 +203,7 @@ function buildReadme(manifest: ExportResultManifest): string {
     '',
     '## Questions',
     '',
-    'Contact hola@nutriassistant.ai for any question about this export.',
+    'Contact hola@nutriassistant.org for any question about this export.',
   ].join('\n')
 }
 

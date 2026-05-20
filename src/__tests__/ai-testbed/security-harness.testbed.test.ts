@@ -100,6 +100,47 @@ const AMBIGUOUS: string[] = [
   'Hello there',
 ]
 
+// Entertainment-request corpus. Stems (not exact phrases) drive the gate,
+// so any paraphrase a user might try to get NutriBot to entertain them
+// must classify as 'out', not 'ambiguous'.
+const ENTERTAINMENT_REQUESTS: string[] = [
+  // Spanish — direct
+  'Cuéntame un chiste',
+  'Cuéntame un chiste corto',
+  'Cuéntame un chiste gracioso',
+  '¿Sabes algún chiste?',
+  'Dime un chiste de mamá',
+  'Necesito una chifla',
+  'Hazme reír',
+  'Hazme reir, por favor',
+  '¿Algo divertido?',
+  'Cuéntame algo divertido',
+  'Cuéntame algo gracioso',
+  'Quiero reír un rato',
+  '¿Me cuentas una broma?',
+  'Una broma, anda',
+  'Cántame una canción',
+  'Recomiéndame una serie',
+  // English — direct
+  'Tell me a joke',
+  'Tell me a funny joke',
+  'Tell me a really funny joke',
+  'Can you tell me a funny joke?',
+  'Can you tell me a joke?',
+  'Do you know any jokes?',
+  'Know any good jokes?',
+  'Make me laugh',
+  'Make me laugh please',
+  'Crack me up',
+  'Tell me something funny',
+  'Tell me something humorous',
+  'I want to hear a joke',
+  'Got any jokes?',
+  'Be funny',
+  'Recommend a comedy show',
+  'Who is your favorite comedian?',
+]
+
 // ─── 1. Topic gate ───────────────────────────────────────────────────────────
 
 describe('Security harness · topic gate · in-scope queries reach the LLM', () => {
@@ -123,6 +164,16 @@ describe('Security harness · topic gate · off-topic queries are hard-refused',
 describe('Security harness · topic gate · ambiguous queries defer to the LLM guardrail', () => {
   it.each(AMBIGUOUS)('classifies %p as ambiguous (handled by the prompt guardrail)', (q) => {
     expect(classify(q)).toBe('ambiguous')
+  })
+})
+
+describe('Security harness · topic gate · entertainment requests are hard-refused', () => {
+  it.each(ENTERTAINMENT_REQUESTS)('refuses entertainment request %p', (q) => {
+    expect(classify(q)).toBe('out')
+  })
+
+  it.each(ENTERTAINMENT_REQUESTS)('never lets %p reach the LLM as "in"', (q) => {
+    expect(classify(q)).not.toBe('in')
   })
 })
 

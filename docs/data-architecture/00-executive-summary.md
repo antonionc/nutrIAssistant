@@ -11,7 +11,7 @@
 - **Client:** React Native (`0.83.6`) + React (`19.2.0`) on Expo SDK 55, TypeScript 5.9, Hermes enabled, New Architecture enabled (`app.json:10`), experimental React Compiler enabled (`app.json:79-82`). Routing via `expo-router` with `typedRoutes` (`app.json:80`). Evidence: `package.json:18-49`.
 - **Platforms:** iOS 18.1+ (`app.json:13`) and Android (package `com.anonymous.nutrIAssistant`, `app.json:39`). Web compiles to a static demo landing (`app.json:42`); not a target platform.
 - **Backend of our own:** ⚠️ GAP — **does not exist**. All logic, persistence and AI runs on the device.
-- **Local persistence:** SQLite via `expo-sqlite ~55.0.15` (12 migrations, WAL journal, `foreign_keys=ON`, see `src/db/database.ts:53-56`). AsyncStorage for serialized profiles and flags (`@react-native-async-storage/async-storage 2.2.0`, `package.json:21`). FileSystem for PDFs and avatars.
+- **Local persistence:** SQLite via `expo-sqlite ~55.0.15` (16 migrations, WAL journal, `foreign_keys=ON`, see `src/db/database.ts:53-56`). AsyncStorage for serialized profiles and flags (`@react-native-async-storage/async-storage 2.2.0`, `package.json:21`). FileSystem for PDFs and avatars.
 - **Secure store:** iOS Keychain / Android Keystore via `expo-secure-store ~55.0.13` (`package.json:38`) — solely the AES master key.
 - **Crypto:** `@noble/ciphers ^2.2.0` (AES-256-GCM, `package.json:22`) + `expo-crypto` for `getRandomBytes` (`src/services/encryption.ts:45,58`).
 - **On-device AI:** `react-native-executorch ^0.8.3` with the Expo resource-fetcher (`react-native-executorch-expo-resource-fetcher ^0.8.0`, `package.json:46-47`). Models: **Qwen 3 1.7B Quantized** (`src/services/onDeviceLlm.ts:24,44-47`) and **all-MiniLM-L6-v2** for embeddings (`src/services/embeddings.ts:21-22,33`).
@@ -19,9 +19,9 @@
 - **Camera and OCR:** `expo-camera` (EAN13/EAN8/UPC-A/UPC-E/QR barcode scanner — `app/scanner.tsx:158`).
 - **PDFs:** custom Expo native module `expo-pdf-text` (Swift in `modules/expo-pdf-text/ios/ExpoPdfTextModule.swift`, Kotlin in `modules/expo-pdf-text/android/src/main/java/expo/modules/pdftext/ExpoPdfTextModule.kt`) to extract text from clinical PDFs.
 - **External APIs:** three nutrition/recipe catalog providers (see [§2.2](./02-data-model-architecture.md#22-data-source-classification)): **OpenFoodFacts** (no auth), **Edamam** Recipe Search v2 (`app_id` + `app_key`), and **Spoonacular** (API key). **All three are reached only through the BFF** at `api.nutriassistant.org`; the app binary holds zero third-party credentials. Client services live in `src/services/{openFoodFacts,edamam,spoonacular}.ts`, all built on `src/services/bff/client.ts`. Legacy: FatSecret was removed in migration 013; TheMealDB in migration 009.
-- **Telemetry / APM / analytics:** ⚠️ GAP — **no Sentry, Datadog, Amplitude, PostHog, Mixpanel, GA4 or Firebase Analytics**. The only observability is `console.log/warn/error` in code.
-- **CI/CD:** ⚠️ GAP — no workflows (GitHub Actions, EAS), `gitleaks`, SBOM, Snyk or Dependabot configured in the repo (`ls -la .github` does not exist; no workflow `.yml` files).
-- **Tests:** Jest + `jest-expo`. 9 files in `src/__tests__/` (`scripts/reset-project.js` excluded). No E2E or data-contract tests.
+- **Telemetry / APM / analytics:** 🟡 partial — **no remote APM yet** (Sentry, Datadog, PostHog, GA4). Local accountability shipped: structured logger with PII scrubbing (`src/utils/logger.ts`) routes all app code; encrypted local audit log (migration 014, `src/services/auditLog.ts`) persists 11 event types for Art. 5.2 / 30 / 33. Sentry self-hosted EU is the remaining gate.
+- **CI/CD:** 🟡 GitHub Actions in place — `.github/workflows/gitleaks.yml` (secret scan), `.github/workflows/sbom.yml` (CycloneDX), `.github/dependabot.yml`. Still missing: EAS Build automation, end-to-end test pipeline.
+- **Tests:** Jest + `jest-expo`. Test suites cover services, modules, components, and the AI testbed (5 suites · 230 cases via `npm run testbed`). No E2E or data-contract tests yet.
 
 **Detected data entities (model and SQL)**
 
@@ -59,11 +59,11 @@
 - At-rest field-level encryption: AES-256-GCM (`src/services/encryption.ts:56-75`).
 - Master key: 32 random bytes, persisted in Keychain/Keystore via `expo-secure-store` (`src/services/encryption.ts:33-48`).
 - ⚠️ GAP: **no TLS pinning, no mTLS** (all API calls use the platform's default TLS).
-- ⚠️ GAP: **no master-key rotation**.
+- 🟡 Master-key rotation: manual user-triggered rotation shipped (Settings → Security, `src/services/keyRotation.ts`, ADR-012). Scheduled / time-based rotation still pending.
 
 **Observability**
 
-- ⚠️ Severe GAP. Only `console.log/warn/error`. No APM SDK, no metrics, no audit logs, no distributed traces, no alerts, no dashboards. The only "alert" surfaced to the user is `expo-notifications` for the on-device model download (`src/services/aiNotifications.ts`).
+- 🟡 partial. Structured logger with PII scrubbing (`src/utils/logger.ts`) is the single ingress point for app logs. Encrypted local audit log (migration 014) covers consent, erasure, export, PDF uploads, key rotations, retention sweeps, decrypt failures, parental consents — surfaced to the user in `app/audit-log.tsx`. Still missing: remote APM (Sentry), metrics, distributed traces, dashboards.
 
 **Data governance**
 
@@ -96,7 +96,7 @@
 | Medical disclaimer (Art. 22) | ✅ | Non-dismissible banner in `src/components/layout/AIAssistant.tsx`, EN+ES | 🟢 |
 | Medical RAG | ✅ | Encrypted clinical-PDF chunks, cosine retrieval, top-K 2, threshold 0.4 | 🟢 |
 | Automated decisions (Art. 22) | 🟡 | Suggestions, not decisions; missing explicit notice + granular opt-out in UI | 🟡 |
-| Data of minors | 🟡 | Age gate on AI chat (≥18, `src/modules/ai-engine/aiAccess.ts:13-22`); ⚠️ no parental verification for child profiles | 🟡 |
+| Data of minors | 🟡 | Age gate on AI chat (≥18, `src/modules/ai-engine/aiAccess.ts`); parental-consent checkbox required for under-14 profiles (Spain RGPD-K, ADR-011), `parental_consent_granted` audit event recorded. KYC-style verification still out of scope. | 🟡 |
 
 ### Critical findings — status after the 5-sprint engineering pass (commit `aaa3179`)
 

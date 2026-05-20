@@ -11,7 +11,7 @@
 | Campo | Valor |
 |---|---|
 | Responsable | NutrIAssistant (entidad por definir antes de lanzamiento) |
-| Contacto | hola@nutriassistant.ai |
+| Contacto | hola@nutriassistant.org |
 | DPO | Por designar antes de TestFlight público (item #8 del plan priorizado) |
 | Representante en la UE | n/a — el responsable está establecido en la UE |
 

@@ -79,9 +79,18 @@ export const ES = {
     // View-school-menu sheet
     viewSchoolMenu: 'Ver menú escolar',
     schoolMenuSheetTitle: 'Menú escolar planificado',
-    schoolMenuSheetSubtitle: 'Comidas en el colegio para los próximos días',
+    schoolMenuSheetSubtitle: 'Hoy y los próximos 4 días en el colegio',
     schoolMenuEmpty: 'Aún no hay comidas planificadas',
     schoolMenuAllergensLabel: 'Alérgenos',
+    schoolMenuNoData: 'Sin datos',
+    schoolMenuToday: 'Hoy',
+    schoolMenuFirstCourse: 'Primer plato',
+    schoolMenuSecondCourse: 'Segundo plato',
+    schoolMenuDessert: 'Postre',
+    schoolMenuOrphanBanner: (first: string, last: string) =>
+      `El menú subido cubre del ${first} al ${last}, fuera de los próximos 5 días. Mostrando las entradas que tenemos:`,
+    schoolMenuUploadSummary: (count: number, first: string, last: string) =>
+      `Guardadas ${count} entradas del menú escolar (del ${first} al ${last}).`,
   },
 
   // Recipes
@@ -397,7 +406,7 @@ export const ES = {
         desc: 'Chat IA en el dispositivo, extracción automática de hechos, memorias por miembro. Todo el procesamiento se queda en el dispositivo.',
       },
       documents: {
-        label: '📄 Análisis de documentos y menús',
+        label: '📄 Análisis de documentos',
         desc: 'Análisis de informes médicos, recetas y menús escolares con la IA on-device para recuperación y sugerencias.',
       },
     },

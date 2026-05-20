@@ -42,6 +42,7 @@ import { exportAllUserData } from '../src/services/userDataExport'
 import { eraseAllUserData } from '../src/services/dataErasure'
 import { rotateMasterKey } from '../src/services/keyRotation'
 import { useConsent, ConsentToggle } from '../src/modules/consent/ConsentContext'
+import { useAIEngine } from '../src/modules/ai-engine/AIContext'
 import { router } from 'expo-router'
 import * as Sharing from 'expo-sharing'
 import { getRecipeCount, cleanDuplicateImageUrls } from '../src/modules/recipes/recipeDB'
@@ -57,8 +58,10 @@ export default function SettingsScreen() {
   const superUserCount = profiles.filter((p) => p.isSuperUser).length
   const { preference: themePreference, setPreference: setThemePreference, colors } = useTheme()
   const { consent: consentState, setToggle: setConsentToggle } = useConsent()
+  const { modelStatus } = useAIEngine()
   const styles = useMemo(() => makeStyles(colors), [colors])
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null)
+  const [expandedConsent, setExpandedConsent] = useState<ConsentToggle | null>(null)
   const [editingFamilyName, setEditingFamilyName] = useState(false)
   const [familyNameInput, setFamilyNameInput] = useState(familyName)
   const [syncingSource, setSyncingSource] = useState<RecipeSourceKey | null>(null)
@@ -572,26 +575,52 @@ export default function SettingsScreen() {
         <>
         <SectionHeader title={tr.settings.sectDataPrivacy} colors={colors} />
         <View style={styles.card}>
-          {/* GDPR Art. 7.3 — withdrawable consent. Each toggle revokes
-              the corresponding processing purpose; the affected feature
-              entry points (FAB IA, personalized recipes, document
-              parsing) react to the flag at runtime via useConsent(). */}
-          <Text style={styles.hint}>{tr.consent.sectionHint}</Text>
-          {(['health', 'ai', 'documents'] as ConsentToggle[]).map((key) => (
-            <View key={key} style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>{tr.consent.toggles[key].label}</Text>
-                <Text style={styles.hint}>{tr.consent.toggles[key].desc}</Text>
+          {/* GDPR Art. 7.3 — withdrawable consent. Each toggle revokes the
+              corresponding processing purpose; the affected feature entry
+              points (FAB IA, personalized recipes, document parsing) react
+              at runtime via useConsent(). Descriptions live behind the (i)
+              button to keep the section scannable. */}
+          <Text style={styles.sectionIntro}>{tr.consent.sectionHint}</Text>
+          {(['health', 'ai', 'documents'] as ConsentToggle[]).map((key, idx) => {
+            const isOpen = expandedConsent === key
+            return (
+              <View key={key}>
+                {idx > 0 && <View style={styles.consentRowDivider} />}
+                <View style={styles.consentRow}>
+                  <Text style={styles.consentLabel} numberOfLines={2}>
+                    {tr.consent.toggles[key].label}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setExpandedConsent(isOpen ? null : key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={tr.consent.toggles[key].label}
+                    accessibilityState={{ expanded: isOpen }}
+                    hitSlop={10}
+                    style={styles.consentInfoBtn}
+                  >
+                    <Ionicons
+                      name={isOpen ? 'information-circle' : 'information-circle-outline'}
+                      size={18}
+                      color={isOpen ? Colors.infoBlue : colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                  <View style={styles.consentSpacer} />
+                  <Switch
+                    value={consentState[key]}
+                    onValueChange={(v) => setConsentToggle(key, v)}
+                    trackColor={{ true: Colors.healthGreen, false: colors.border }}
+                  />
+                </View>
+                {isOpen && (
+                  <View style={styles.consentDescBox}>
+                    <Text style={styles.consentDescText}>{tr.consent.toggles[key].desc}</Text>
+                  </View>
+                )}
               </View>
-              <Switch
-                value={consentState[key]}
-                onValueChange={(v) => setConsentToggle(key, v)}
-                trackColor={{ true: Colors.healthGreen, false: colors.border }}
-              />
-            </View>
-          ))}
+            )
+          })}
           {consentState.grantedAt && (
-            <Text style={[styles.hint, { fontSize: 11 }]}>
+            <Text style={styles.consentTimestamp}>
               {tr.consent.grantedAtLabel(consentState.grantedAt)}
             </Text>
           )}
@@ -687,20 +716,29 @@ export default function SettingsScreen() {
         {/* ── Contacto ────────────────────────── */}
         <SectionHeader title={tr.settings.contact} colors={colors} />
         <View style={styles.card}>
-          <ContactRow label="📧 Email" value="hola@nutriassistant.ai" onPress={() => Linking.openURL('mailto:hola@nutriassistant.ai')} colors={colors} />
-          <ContactRow label="📸 Instagram" value="@nutriassistant.ai" onPress={() => Linking.openURL('https://instagram.com/nutriassistant.ai')} colors={colors} />
-          <ContactRow label="🌐 Web" value="nutriassistant.ai" onPress={() => Linking.openURL('https://www.nutriassistant.ai')} colors={colors} />
+          <ContactRow label="📧 Email" value="hola@nutriassistant.org" onPress={() => Linking.openURL('mailto:hola@nutriassistant.org')} colors={colors} />
+          <ContactRow label="📸 Instagram" value="@nutriassistant.org" onPress={() => Linking.openURL('https://instagram.com/nutriassistant.org')} colors={colors} />
+          <ContactRow label="🌐 Web" value="nutriassistant.org" onPress={() => Linking.openURL('https://www.nutriassistant.org')} colors={colors} />
           <View style={styles.divider} />
           <Text style={styles.version}>{tr.settings.version(appVersion)}</Text>
           {/* Dev-only entry to the AI behavioural eval. Gated by __DEV__ so it
-              never renders in a release build; label intentionally not i18n'd. */}
+              never renders in a release build; label intentionally not i18n'd.
+              Disabled until the on-device model is loaded. */}
           {__DEV__ && (
             <TouchableOpacity
-              style={styles.linkBtn}
+              style={[styles.linkBtn, !modelStatus.isLoaded && { opacity: 0.5 }]}
+              disabled={!modelStatus.isLoaded}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               onPress={() => router.push('/dev/ai-eval' as any)}
             >
               <Text style={styles.linkBtnText}>🧪 AI behavioural eval (dev)</Text>
+              {!modelStatus.isLoaded && (
+                <Text style={styles.linkBtnHint}>
+                  {modelStatus.isDownloading
+                    ? `Model loading… ${Math.round(modelStatus.downloadProgress * 100)}%`
+                    : 'Model loading…'}
+                </Text>
+              )}
             </TouchableOpacity>
           )}
         </View>
@@ -1047,6 +1085,32 @@ function makeStyles(colors: ThemeColors) {
     value: { ...Typography.body, color: colors.textSecondary },
     hint: { ...Typography.caption, color: colors.textMuted, marginTop: 2 },
     divider: { height: 1, backgroundColor: colors.divider, marginVertical: Spacing.sm },
+    // Consent block: single-row toggles with (i) descriptions in an info box.
+    sectionIntro: {
+      ...Typography.caption, color: colors.textSecondary,
+      marginBottom: Spacing.xs,
+    },
+    consentRow: {
+      flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.sm, gap: Spacing.xs,
+    },
+    consentRowDivider: { height: 1, backgroundColor: colors.divider, opacity: 0.5 },
+    consentLabel: {
+      ...Typography.body, color: colors.text,
+      fontFamily: Typography.heading3.fontFamily, flexShrink: 1,
+    },
+    consentInfoBtn: { padding: 2 },
+    consentSpacer: { flex: 1 },
+    consentDescBox: {
+      backgroundColor: colors.mintSurface,
+      borderRadius: BorderRadius.md,
+      paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+      marginBottom: Spacing.xs,
+    },
+    consentDescText: { ...Typography.caption, color: colors.textSecondary, lineHeight: 18 },
+    consentTimestamp: {
+      ...Typography.caption, color: colors.textMuted,
+      fontSize: 11, marginTop: Spacing.xs,
+    },
     themeRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
     themeBtn: {
       flex: 1, alignItems: 'center', paddingVertical: Spacing.sm,
@@ -1074,6 +1138,7 @@ function makeStyles(colors: ThemeColors) {
     dangerBtnText: { ...Typography.bodyLarge, color: Colors.errorRed },
     linkBtn: { padding: Spacing.sm, alignItems: 'flex-start' },
     linkBtnText: { ...Typography.bodyLarge, color: Colors.infoBlue },
+    linkBtnHint: { ...Typography.caption, color: colors.textSecondary, marginTop: 2 },
     progressContainer: { marginTop: Spacing.sm, gap: Spacing.xs },
     progressTrack: { height: 6, backgroundColor: colors.mintSurface, borderRadius: 3 },
     progressBar: { height: 6, backgroundColor: Colors.healthGreen, borderRadius: 3 },

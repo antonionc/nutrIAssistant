@@ -1,6 +1,6 @@
 # 05 — Privacy Model
 
-**Current state:** the local-first architecture provides an extraordinarily solid base for privacy (data never leaves the device), but formal GDPR elements are missing: published privacy policy, Records of Processing Activities (ROPA), DPIA, designated DPO, granular consent, and effective erasure. This section breaks down what is in place and what is missing, with evidence.
+**Current state:** the local-first architecture provides an extraordinarily solid base for privacy (data never leaves the device). After the 2026-05 GDPR sprints (commits `aaa3179` → `81f59d0`) the engineering side is largely done — drafted privacy policy in-app, ROPA published, granular consent UI with parental gate, effective erasure, encrypted audit log, retention sweeper, manual key rotation. **Remaining gates are external:** DPO appointment, formal DPIA, Sentry/breach detection, and store privacy labels. This section breaks down what is in place and what is missing, with evidence.
 
 ## 5.1. Personal-data inventory
 
@@ -73,34 +73,19 @@
 | Objection | ✅ Each of the three consent toggles (`health`/`ai`/`documents`) can be revoked independently from Settings → Data & privacy. Revocation gates the corresponding feature at runtime (e.g. the AI floating button disappears when `consent.ai === false`). Audit-logged as `consent_revoked`. | `src/modules/consent/ConsentContext.tsx`, `app/settings.tsx` | — | — |
 | **Right not to be subject to automated decisions (Art. 22)** | 🟡 The AI makes suggestions, not legal/significant decisions; explicit disclaimer and easy chat opt-out missing | [§4.6](./04-ai-architecture.md#46-ai-governance) | — | — |
 
-**Critical action**: implement full erasure as follows:
-
-```ts
-// pseudo-code proposal — DOES NOT exist in the repo
-async function fullWipe() {
-  await deactivateProvider()                        // health off
-  await closeDatabase()                              // close sqlite
-  await SQLite.deleteDatabaseAsync('nutriassistant.db')
-  await AsyncStorage.clear()                         // profiles, flags, tokens
-  await SecureStore.deleteItemAsync(KEY_NAME)        // master key
-  await FileSystem.deleteAsync(`${docDir}profile-documents/`, {idempotent:true})
-  await FileSystem.deleteAsync(`${docDir}avatars/`,           {idempotent:true})
-  await FileSystem.deleteAsync(`${docDir}react-native-executorch/`, {idempotent:true})
-  // then: relaunch app to onboarding
-}
-```
+**Status**: ✅ Full erasure shipped in `src/services/dataErasure.ts` (Sprint 1.5). Atomic wipe of every SQLite table, all AsyncStorage keys, the FileSystem subtrees (`profile-documents/`, `avatars/`, `react-native-executorch/`), and the Keychain master key. Two-step confirmation in Settings, audit-logged as `erasure_started` / `erasure_completed`, then the router navigates to onboarding. Covered by `src/__tests__/services/dataErasure.test.ts`.
 
 ## 5.5. GDPR roadmap (8 steps) — current status
 
 | # | Step | State | Required actions |
 |---|---|---|---|
-| 1 | DPO appointment | 🔴 No | Designate an internal or external DPO (mandatory for Art. 9 data at scale). Publish contact: `dpo@nutriassistant.ai` |
+| 1 | DPO appointment | 🔴 No | Designate an internal or external DPO (mandatory for Art. 9 data at scale). Publish contact: `dpo@nutriassistant.org` |
 | 2 | User notification systems (Art. 33-34: breaches, policy changes) | 🔴 No | `expo-notifications` already integrated (`src/services/aiNotifications.ts:48-54`); a "policy changes" channel is missing. Implement an "Announcements" screen + optional email |
-| 3 | Published, accessible privacy policy | 🔴 No (Settings → Contact links to the web but not to a specific policy, `app/settings.tsx:530-534`) | Draft and publish at `nutriassistant.ai/privacy` and link from Settings + onboarding |
-| 4 | ROPA (Records of Processing Activities) | 🔴 No | Generate ROPA v1 documenting the 18 activities in [§5.1](#51-personal-data-inventory) |
-| 5 | Risk analysis | 🔴 No (preliminary STRIDE in [§3.5](./03-security-encryption.md#35-threat-model-simplified-stride)) | Formalize and sign off |
+| 3 | Published, accessible privacy policy | 🟡 Drafted and rendered in-app from `assets/legal/privacy-policy-v1.{en,es}.md` via `app/legal/privacy.tsx`. Public web URL `nutriassistant.org/privacy` still pending legal-counsel sign-off. | Counsel review + publish at the public URL |
+| 4 | ROPA (Records of Processing Activities) | ✅ Published at `docs/legal/ROPA.md` covering the activities enumerated in [§5.1](#51-personal-data-inventory) | Keep in sync as processing changes |
+| 5 | Risk analysis | 🟡 STRIDE in [§3.5](./03-security-encryption.md#35-threat-model-simplified-stride) + this document's threat coverage | Formal external sign-off |
 | 6 | Security-measures review | 🟡 Partial (this document) | Annual external audit |
-| 7 | Contingency mechanisms (IR plan, breach notification) | 🔴 No | Define a runbook: detection → containment → AEPD notification (<72h) → user communication |
+| 7 | Contingency mechanisms (IR plan, breach notification) | ✅ Incident-response runbook at `docs/runbooks/INCIDENT_RESPONSE.md` (detection → containment → AEPD <72h → user comms). Local audit log (migration 014) provides the queryable trail. | Connect Sentry once shipped so breach detection is push-based, not poll-based |
 | 8 | DPIA (Data Protection Impact Assessment) | 🔴 No — **mandatory** because health data is processed systematically | Perform a DPIA before public launch (Art. 35) |
 
 ## 5.6. International transfers (Schrems II)
@@ -162,10 +147,10 @@ As [§5.1](#51-personal-data-inventory) shows, NutrIAssistant is **fundamentally
 
 **Prioritized recommendations (section 5):**
 
-1. ⚠️ **Privacy policy** — engineering done: `app/legal/privacy.tsx` renders `assets/legal/privacy-policy-v1.{en,es}.md`. **Pending**: legal-counsel review of the wording + public URL at `nutriassistant.ai/privacy`.
+1. ⚠️ **Privacy policy** — engineering done: `app/legal/privacy.tsx` renders `assets/legal/privacy-policy-v1.{en,es}.md`. **Pending**: legal-counsel review of the wording + public URL at `nutriassistant.org/privacy`.
 2. ✅ **Full erasure** — implemented in `src/services/dataErasure.ts` (Sprint 1.5), atomic across all storage backends.
 3. ✅ **Granular consent screen** — 3-toggle model (`health`, `ai`, `documents`) implemented in onboarding + Settings (Sprint 3.1). The 5-toggle draft was simplified after design review to avoid consent fatigue.
 4. ❌ **External DPIA** — still pending. Requires €5-15k consultancy (Garrigues, Ecix, KPMG).
 5. ✅ **ROPA** — published at `docs/legal/ROPA.md` with 18 processing activities (Sprint 4.7).
 6. ✅ **Encryption of Art. 9 fields** — `weight`, `height`, `dateOfBirth`, `allergies` encrypted in Sprint 2.2; PDFs at rest in Sprint 2.1.
-7. ❌ **DPO designation** — pending. Fractional DPO contract (~€500-1500/mo). The placeholder `dpo@nutriassistant.ai` is referenced in the privacy-policy template.
+7. ❌ **DPO designation** — pending. Fractional DPO contract (~€500-1500/mo). The placeholder `dpo@nutriassistant.org` is referenced in the privacy-policy template.

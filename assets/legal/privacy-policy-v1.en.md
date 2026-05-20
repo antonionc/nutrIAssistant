@@ -11,7 +11,7 @@
 ## 1. Data controller
 
 NutrIAssistant ("we", "the app"). Contact for privacy matters:
-hola@nutriassistant.ai. A Data Protection Officer will be appointed
+hola@nutriassistant.org. A Data Protection Officer will be appointed
 before the production launch; the appointment will be reflected here.
 
 ## 2. Categories of personal data we process
@@ -80,4 +80,4 @@ consent on next launch. Minor edits (typos, clarifications) do not.
 
 ## 10. Contact
 
-hola@nutriassistant.ai
+hola@nutriassistant.org

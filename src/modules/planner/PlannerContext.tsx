@@ -7,6 +7,7 @@ import React, {
 } from 'react'
 import { MealPlan } from '../../types/planner'
 import { Recipe } from '../../types/recipes'
+import { SchoolMenuEntry } from '../../types/profiles'
 import {
   upsertMealPlan,
   getMealPlansForRange,
@@ -23,6 +24,11 @@ import {
   SCHOOL_MENU_EXTRACTION_PROMPT,
   SCHOOL_MENU_EXTRACTION_PROMPT_SIMPLE,
 } from '../../services/prompts/schoolMenuExtraction'
+import {
+  parseSchoolMenuResponse,
+  normalizeSchoolMenuEntry,
+  deterministicSchoolMenuParse,
+} from '../../services/schoolMenuParser'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { selectWeekRecipes } from './mealPlanGenerator'
 import { logger } from '../../utils/logger'
@@ -39,92 +45,20 @@ function getWeekDates(startDate?: string): string[] {
 
 type MealSlot = 'breakfast' | 'lunch' | 'dinner'
 
-type SchoolMenuParsedEntry = {
-  date: string
-  description: string
-  extractedIngredients: string[]
-  extractedAllergens: string[]
-  nutritionalEstimate?: { calories: number; protein: number; carbs: number; fat: number }
-}
-
-// Permissive extractor for the on-device LLM's school-menu response. Handles:
-//   - bare JSON arrays ([...])
-//   - arrays wrapped in markdown code fences (```json ... ```)
-//   - arrays nested inside an object ({"days":[...]} / {"menu":[...]})
-//   - truncated tails: if the closing "]" is missing, we re-balance brackets
-//     and drop the last (incomplete) element so the rest is still salvageable.
-// Returns null when nothing usable can be parsed.
-function parseSchoolMenuResponse(raw: string): SchoolMenuParsedEntry[] | null {
-  // 1a. Strip well-formed <think>…</think> blocks.
-  // 1b. Strip a dangling <think>… with no closing tag (Qwen 3 sometimes runs
-  //     out of tokens mid-reasoning and never closes the block). Without /no_think
-  //     this consumes the whole response — we still try to recover anything past
-  //     a stray </think> if one exists.
-  let s = raw
-    .replace(/<think>[\s\S]*?<\/think>/g, '')
-    .replace(/<think>[\s\S]*$/, '')
-    .replace(/^[\s\S]*?<\/think>/, '')
-    .trim()
-
-  // Qwen 3 1.7B occasionally forgets the `},{` array-element separator and
-  // emits `}","date":...` (stray quote + comma instead of `},{`). The lookahead
-  // anchors on what looks like a JSON object opening a new entry, so we don't
-  // touch this sequence when it appears inside a string value.
-  s = s.replace(/\}",\s*(?="[\w-]+"\s*:)/g, '},{')
-
-  // 2. Strip markdown code fences if present.
-  s = s.replace(/```(?:json|JSON)?\s*([\s\S]*?)```/g, '$1').trim()
-
-  // 3. Greedy match for the outermost [...] block.
-  const arrayMatch = s.match(/\[[\s\S]*\]/)
-  const candidates: string[] = []
-  if (arrayMatch) candidates.push(arrayMatch[0])
-
-  // 4. If we never found a closing "]", try to salvage a truncated array by
-  //    cutting after the last complete object and appending "]".
-  const firstBracket = s.indexOf('[')
-  if (firstBracket !== -1 && s.indexOf(']', firstBracket) === -1) {
-    const tail = s.slice(firstBracket)
-    const lastObjectEnd = tail.lastIndexOf('}')
-    if (lastObjectEnd !== -1) {
-      candidates.push(tail.slice(0, lastObjectEnd + 1) + ']')
-    }
-  }
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate)
-      if (Array.isArray(parsed)) return parsed as SchoolMenuParsedEntry[]
-    } catch {
-      // try next candidate
-    }
-  }
-
-  // 5. Last resort: the LLM wrapped the array in an object. Find the first
-  //    "{...}" block and look for an array-valued property inside it.
-  const objectMatch = s.match(/\{[\s\S]*\}/)
-  if (objectMatch) {
-    try {
-      const parsedObj = JSON.parse(objectMatch[0])
-      if (parsedObj && typeof parsedObj === 'object') {
-        for (const value of Object.values(parsedObj)) {
-          if (Array.isArray(value)) return value as SchoolMenuParsedEntry[]
-        }
-      }
-    } catch {
-      // give up
-    }
-  }
-
-  return null
-}
-
 export type SchoolMenuUploadStage =
   | 'llm_not_ready'
   | 'pdf_empty'
   | 'pdf_extract'
   | 'llm_parse'
   | 'llm_generate'
+
+export interface SchoolMenuUploadResult {
+  entryCount: number
+  firstDate: string | null
+  lastDate: string | null
+  /** True when the deterministic regex parser produced the result. */
+  deterministic: boolean
+}
 
 export class SchoolMenuUploadError extends Error {
   stage: SchoolMenuUploadStage
@@ -150,7 +84,7 @@ interface PlannerContextValue {
   setMealForDate: (date: string, mealType: MealSlot, recipe: Recipe) => Promise<void>
   removeMealFromDate: (date: string, mealType: MealSlot) => Promise<void>
   lockDay: (date: string) => Promise<void>
-  uploadSchoolMenu: (pdfUri: string, childIds: string[]) => Promise<void>
+  uploadSchoolMenu: (pdfUri: string, childIds: string[]) => Promise<SchoolMenuUploadResult>
   refreshSchoolMenuState: () => Promise<void>
   getSchoolMenuEntries: typeof getSchoolMenuEntries
 }
@@ -310,53 +244,74 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       }
       if (!pdfText.trim()) throw new SchoolMenuUploadError('pdf_empty')
 
-      // Small on-device models occasionally wrap the array in markdown fences,
-      // emit a preamble, or wrap it in an object ({"days":[...]}). Be permissive
-      // when extracting the JSON payload before parsing.
-      const runLLM = async (prompt: string): Promise<string> => {
-        try {
-          return await generateOnDevice(
-            `${prompt}\n\nPDF TEXT:\n${pdfText}`,
-            '/no_think You extract structured school-menu data. Reply with ONLY a JSON array, starting with "[" and ending with "]". No markdown, no code fences, no commentary, no <think> tags.'
+      // 1. Deterministic pass — most Spanish/English school menus follow a
+      //    "LUNES 6 DE ABRIL / Primer plato: … / Segundo plato: … / Postre: …"
+      //    shape that regex can extract reliably. Skips the LLM entirely
+      //    when ≥3 days come back with at least one identified course.
+      const deterministic = deterministicSchoolMenuParse(pdfText)
+      let entries: Array<Omit<SchoolMenuEntry, 'id' | 'childId'>> = []
+      if (deterministic.length >= 3) {
+        entries = deterministic
+        logger.info('[Planner] School-menu parsed deterministically', { entryCount: entries.length })
+      } else {
+        // 2. LLM pass. Try the SIMPLE schema first (date + 3 courses) —
+        //    smaller schemas are far more reliable on a 1.7B model. Fall
+        //    back to the full schema only if the simple one fails.
+        const runLLM = async (prompt: string): Promise<string> => {
+          try {
+            return await generateOnDevice(
+              `${prompt}\n\nPDF TEXT:\n${pdfText}`,
+              '/no_think You extract structured school-menu data. Reply with ONLY a JSON array, starting with "[" and ending with "]". No markdown, no code fences, no commentary, no <think> tags.'
+            )
+          } catch (e) {
+            throw new SchoolMenuUploadError('llm_generate', e)
+          }
+        }
+
+        let response = await runLLM(SCHOOL_MENU_EXTRACTION_PROMPT_SIMPLE)
+        let parsed = parseSchoolMenuResponse(response)
+
+        if (!parsed) {
+          logger.warn(
+            '[Planner] Simple-schema school-menu parse failed; retrying with full schema',
+            {
+              responseLength: response.length,
+              // In dev, surface the first 300 chars of the response so we
+              // can iterate. PII risk is local-only; redacted in release.
+              ...(__DEV__ ? { responseHead: response.slice(0, 300) } : {}),
+            }
           )
-        } catch (e) {
-          throw new SchoolMenuUploadError('llm_generate', e)
+          response = await runLLM(SCHOOL_MENU_EXTRACTION_PROMPT)
+          parsed = parseSchoolMenuResponse(response)
         }
-      }
 
-      let response = await runLLM(SCHOOL_MENU_EXTRACTION_PROMPT)
-      let entries = parseSchoolMenuResponse(response)
-
-      // Retry with a much simpler schema if the first attempt was unparseable.
-      // Small models (~1.7B) produce date+description arrays far more reliably
-      // than full nutrition/allergen objects. Fill defaults for the dropped fields.
-      if (!entries) {
-        // Do NOT log the response body — it can contain child names, school
-        // identifiers and other PII extracted from the menu PDF. Only the
-        // length is needed to diagnose truncation vs. unparseable shape.
-        logger.warn(
-          '[Planner] First-pass school-menu parse failed; retrying with simpler schema',
-          { responseLength: response.length }
-        )
-        response = await runLLM(SCHOOL_MENU_EXTRACTION_PROMPT_SIMPLE)
-        const simple = parseSchoolMenuResponse(response)
-        if (simple) {
-          entries = simple.map((e) => ({
-            date: e.date,
-            description: e.description,
-            extractedIngredients: e.extractedIngredients ?? [],
-            extractedAllergens: e.extractedAllergens ?? [],
-            nutritionalEstimate: e.nutritionalEstimate,
-          }))
+        if (!parsed) {
+          logger.error(
+            '[Planner] School-menu retry still unparseable; aborting upload',
+            {
+              responseLength: response.length,
+              ...(__DEV__ ? { responseHead: response.slice(0, 300) } : {}),
+            }
+          )
+          throw new SchoolMenuUploadError('llm_parse')
         }
-      }
 
-      if (!entries) {
-        logger.error(
-          '[Planner] School-menu retry still unparseable; aborting upload',
-          { responseLength: response.length }
-        )
-        throw new SchoolMenuUploadError('llm_parse')
+        entries = parsed
+          .map(normalizeSchoolMenuEntry)
+          .filter((e): e is NonNullable<typeof e> => e !== null)
+
+        if (entries.length === 0) {
+          // Last resort: if the LLM produced something but normalisation
+          // rejected every entry (e.g. bad dates), see if the deterministic
+          // pass salvaged anything we previously rejected for being <3 days.
+          if (deterministic.length > 0) {
+            entries = deterministic
+            logger.info('[Planner] Falling back to deterministic parse after LLM normalisation produced 0 entries')
+          } else {
+            logger.warn('[Planner] School-menu parse produced 0 valid entries after normalisation')
+            throw new SchoolMenuUploadError('llm_parse')
+          }
+        }
       }
 
       for (const childId of childIds) {
@@ -367,6 +322,9 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
             date: entry.date,
             childId,
             description: entry.description,
+            firstCourse: entry.firstCourse,
+            secondCourse: entry.secondCourse,
+            dessert: entry.dessert,
             extractedIngredients: entry.extractedIngredients,
             extractedAllergens: entry.extractedAllergens,
             nutritionalEstimate: entry.nutritionalEstimate,
@@ -375,6 +333,16 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       }
 
       await refreshSchoolMenuState()
+
+      const sortedDates = entries.map((e) => e.date).sort()
+      const result: SchoolMenuUploadResult = {
+        entryCount: entries.length,
+        firstDate: sortedDates[0] ?? null,
+        lastDate: sortedDates[sortedDates.length - 1] ?? null,
+        deterministic: entries === deterministic,
+      }
+      logger.info('[Planner] School-menu upload finished', result)
+      return result
     },
     [refreshSchoolMenuState]
   )

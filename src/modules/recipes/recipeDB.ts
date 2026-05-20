@@ -313,10 +313,32 @@ export async function getRandomRecipes(
 ): Promise<Recipe[]> {
   const db = await getDatabase()
   const categoryClause = category ? `AND category = ?` : ''
+  // Prefer rows with an image. `cleanDuplicateImageUrls` nulls out URLs
+  // shared across ≥2 recipes (Edamam free-tier reuses generic stock
+  // photos), so favouring imaged rows avoids a grid of empty stubs while
+  // lazy enrichment repopulates.
   const params = category ? [category, limit] : [limit]
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM recipes WHERE ${VERIFIED_SOURCES} ${categoryClause} ORDER BY RANDOM() LIMIT ?`,
+    `SELECT * FROM recipes
+     WHERE ${VERIFIED_SOURCES}
+       AND image_url IS NOT NULL AND image_url != ''
+       ${categoryClause}
+     ORDER BY RANDOM() LIMIT ?`,
     params
   )
-  return rows.map(rowToRecipe)
+  if (rows.length >= limit) return rows.map(rowToRecipe)
+
+  // Top up with imageless rows so the carousel keeps its size when too
+  // few imaged rows exist. `useResolvedRecipeImage` will lazy-enrich them.
+  const remaining = limit - rows.length
+  const fallbackParams = category ? [category, remaining] : [remaining]
+  const fallback = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM recipes
+     WHERE ${VERIFIED_SOURCES}
+       AND (image_url IS NULL OR image_url = '')
+       ${categoryClause}
+     ORDER BY RANDOM() LIMIT ?`,
+    fallbackParams
+  )
+  return [...rows, ...fallback].map(rowToRecipe)
 }

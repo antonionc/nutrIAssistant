@@ -76,9 +76,18 @@ export const EN = {
     // View-school-menu sheet
     viewSchoolMenu: 'View school menu',
     schoolMenuSheetTitle: 'Planned school menu',
-    schoolMenuSheetSubtitle: 'Meals at school for upcoming days',
+    schoolMenuSheetSubtitle: 'Today and the next 4 days at school',
     schoolMenuEmpty: 'No meals planned yet',
     schoolMenuAllergensLabel: 'Allergens',
+    schoolMenuNoData: 'No data',
+    schoolMenuToday: 'Today',
+    schoolMenuFirstCourse: 'First course',
+    schoolMenuSecondCourse: 'Second course',
+    schoolMenuDessert: 'Dessert',
+    schoolMenuOrphanBanner: (first: string, last: string) =>
+      `Your uploaded menu covers ${first} – ${last}, which is outside the next 5 days. Showing the entries on file:`,
+    schoolMenuUploadSummary: (count: number, first: string, last: string) =>
+      `Saved ${count} school-menu entries from ${first} to ${last}.`,
   },
 
   recipes: {
@@ -390,7 +399,7 @@ export const EN = {
         desc: 'On-device AI chat, automatic fact extraction, per-member memories. All processing stays on the device.',
       },
       documents: {
-        label: '📄 Document & menu analysis',
+        label: '📄 Document analysis',
         desc: 'Lab reports, prescriptions and school menus parsed via on-device AI for retrieval and suggestions.',
       },
     },

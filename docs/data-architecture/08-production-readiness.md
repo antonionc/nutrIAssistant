@@ -72,7 +72,7 @@ flowchart TB
 
 | Guideline section | State | Required actions |
 |---|---|---|
-| **5. Legal** | 🔴 Privacy policy not published | Draft and publish at `nutriassistant.ai/privacy`, link from Settings and App Store Connect |
+| **5. Legal** | 🟡 Drafted and rendered in-app (`app/legal/privacy.tsx` → `assets/legal/privacy-policy-v1.{en,es}.md`); public URL still pending legal-counsel sign-off | Counsel review + publish at `nutriassistant.org/privacy`, link from Settings and App Store Connect |
 | **1.5 Developer Information** | 🟡 Settings has contact but lacks a canonical URL | Improve `app/settings.tsx:531-534` with a direct link to a support page |
 | **Privacy Nutrition Labels (App Privacy Details)** | 🟡 **Engineering guide published** — `docs/store-readiness/privacy-labels.md` covers Apple Nutrition Labels + Google Data Safety field-by-field. Almost every category declares as "Data Not Collected" because the app is on-device-only; catalog queries via the BFF carry no personal data. Pending: filling the App Store Connect + Play Console forms at submission time. | `docs/store-readiness/privacy-labels.md` |
 | **App Tracking Transparency (ATT)** | ✅ Not applicable — no cross-app tracking | n/a |

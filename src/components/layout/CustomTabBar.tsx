@@ -1,11 +1,14 @@
 import { Ionicons } from '@expo/vector-icons'
-import { BottomTabBarProps } from '@react-navigation/bottom-tabs'
+import { BlurView } from 'expo-blur'
 import React from 'react'
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors, Spacing, BorderRadius, Typography } from '../../theme'
 import { useTheme } from '../../theme/ThemeContext'
-import { t } from '../../i18n'
+
+// BlurView-based tab-bar pill. Used as the cross-platform fallback for
+// FloatingLiquidGlassTabBar on Android, web, and pre-iOS-26 devices where
+// the native SwiftUI Liquid Glass module isn't available. Positioning is
+// the caller's responsibility — this component just paints the pill.
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name']
 
@@ -16,98 +19,110 @@ const TAB_ICONS: Record<string, { default: IoniconsName; active: IoniconsName }>
   groceries: { default: 'cart-outline',     active: 'cart' },
 }
 
-const TAB_LABEL_KEYS: Record<string, keyof typeof t.tabs> = {
-  index: 'home',
-  nutrition: 'nutrition',
-  recipes: 'recipes',
-  groceries: 'groceries',
+export interface CustomTabBarTab {
+  name: string
+  label: string
 }
 
-export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  const insets = useSafeAreaInsets()
-  const { colors } = useTheme()
+export interface CustomTabBarProps {
+  tabs: CustomTabBarTab[]
+  selectedIndex: number
+  onSelect: (index: number) => void
+}
+
+export function CustomTabBar({ tabs, selectedIndex, onSelect }: CustomTabBarProps) {
+  const { colors, isDark } = useTheme()
 
   return (
-    <View
-      pointerEvents="box-none"
-      style={[
-        styles.container,
-        // Transparent so screen content shows through. The pill itself keeps
-        // its own opaque background (set below) so it stays visually solid;
-        // the surrounding band that used to be `colors.background` is gone.
-        { paddingBottom: insets.bottom + 12 },
-      ]}
-    >
-      <View style={[styles.pill, { backgroundColor: colors.surface }]}>
-        {state.routes.map((route, index) => {
-          const isFocused = state.index === index
-          const icons = TAB_ICONS[route.name]
-          const labelKey = TAB_LABEL_KEYS[route.name]
-          const label = descriptors[route.key].options.title ?? (labelKey ? t.tabs[labelKey] : route.name)
-
-          return (
-            <TouchableOpacity
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityLabel={label}
-              accessibilityState={isFocused ? { selected: true } : {}}
-              onPress={() => {
-                if (!isFocused) navigation.navigate(route.name)
-              }}
-              activeOpacity={0.7}
-              style={styles.tabButton}
-            >
-              <View style={[styles.tabInner, isFocused && styles.tabInnerActive]}>
-                <Ionicons
-                  name={isFocused ? icons?.active ?? 'ellipse' : icons?.default ?? 'ellipse-outline'}
-                  size={24}
-                  color={isFocused ? Colors.forestGreen : colors.textSecondary}
-                />
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.label,
-                    { color: isFocused ? Colors.forestGreen : colors.textSecondary },
-                    isFocused && styles.labelActive,
-                  ]}
-                >
-                  {label}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          )
-        })}
+    <View style={styles.pillShadow}>
+      <View style={styles.pillClip}>
+        <BlurView
+          intensity={Platform.OS === 'ios' ? 80 : 100}
+          tint={isDark ? 'dark' : 'light'}
+          style={StyleSheet.absoluteFill}
+        />
+        {/* Light wash lifts label contrast over busy backgrounds; the
+            native iOS-26 path doesn't need this because UIGlassEffect
+            handles legibility itself. */}
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: isDark ? 'rgba(30,30,28,0.18)' : 'rgba(255,255,255,0.08)' },
+          ]}
+        />
+        <View style={styles.row} pointerEvents="box-none">
+          {tabs.map((tab, index) => {
+            const isFocused = selectedIndex === index
+            const icons = TAB_ICONS[tab.name]
+            return (
+              <TouchableOpacity
+                key={tab.name}
+                accessibilityRole="button"
+                accessibilityLabel={tab.label}
+                accessibilityState={isFocused ? { selected: true } : {}}
+                onPress={() => {
+                  if (!isFocused) onSelect(index)
+                }}
+                activeOpacity={0.7}
+                style={styles.tabButton}
+              >
+                <View style={[styles.tabInner, isFocused && styles.tabInnerActive]}>
+                  <Ionicons
+                    name={isFocused ? icons?.active ?? 'ellipse' : icons?.default ?? 'ellipse-outline'}
+                    size={24}
+                    color={isFocused ? Colors.forestGreen : colors.textSecondary}
+                  />
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.label,
+                      { color: isFocused ? Colors.forestGreen : colors.textSecondary },
+                      isFocused && styles.labelActive,
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
       </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-    // Transparent: the surrounding band used to fill with colors.background
-    // (cream/dark cream depending on theme) and looked like the pill was
-    // sitting on a colored shelf. Removing the fill makes the pill read as
-    // a floating element. The pill itself stays opaque (colors.surface).
-    backgroundColor: 'transparent',
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
+  // Outer wrapper carries the drop shadow. Cannot have overflow:hidden
+  // here on iOS or shadows vanish.
+  pillShadow: {
+    flex: 1,
     borderRadius: BorderRadius.pill,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    minHeight: 64,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.14,
+        shadowRadius: 18,
       },
-      android: { elevation: 8 },
+      android: { elevation: 10 },
     }),
+  },
+  // Inner wrapper clips the BlurView to the pill shape.
+  pillClip: {
+    flex: 1,
+    borderRadius: BorderRadius.pill,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  row: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingHorizontal: 6,
+    paddingVertical: 6,
   },
   tabButton: { flex: 1 },
   tabInner: {
@@ -119,7 +134,9 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   tabInnerActive: {
-    backgroundColor: `${Colors.healthGreen}18`,
+    backgroundColor: `${Colors.healthGreen}1F`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${Colors.healthGreen}33`,
   },
   label: {
     ...Typography.caption,

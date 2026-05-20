@@ -206,10 +206,9 @@ Sentry.init({
 
 **Prioritized recommendations (§7.1):**
 
-1. **Create `src/utils/logger.ts`** (S — 0.5d) and migrate the 44 `console.*` occurrences (S — 1d).
-2. **Integrate Sentry RN self-hosted EU** with PII-safe `beforeSend` (M — 3-5d).
-3. **Strip payload from logs** in `src/db/dbUtils.ts:6` and `src/services/memoryStore.ts:163` (S — 5 min).
-4. **Unified health checks**: add `getDbStatus()`, `getNetworkStatus()` analogous to `getLLMStatus()` (S — 1d).
+1. ✅ Structured logger with PII scrubbing shipped at `src/utils/logger.ts`; all app-code `console.*` migrated. Only the logger itself still uses `console.*` under the hood (the routing target when Sentry lands).
+2. **Integrate Sentry RN self-hosted EU** with PII-safe `beforeSend` (M — 3-5d). Logger already exposes the routing point so this is a near-drop-in.
+3. **Unified health checks**: add `getDbStatus()`, `getNetworkStatus()` analogous to `getLLMStatus()` (S — 1d).
 
 ## 7.2. Key dashboards (technical and business)
 
@@ -486,7 +485,7 @@ What failed in monitoring/alerts.
 | Internal team | Immediate | Slack `#incidents` (private) | S1-S4 template |
 | Affected users | S1 with Art. 34 risk | Push + email + in-app banner | Legal-reviewed template |
 | AEPD | S1 with Art. 9 data + risk | Form on sede.aepd.gob.es | Art. 33 template |
-| Public status page | S1, S2 | `status.nutriassistant.ai` (Statuspage / Instatus) | Auto-generated |
+| Public status page | S1, S2 | `status.nutriassistant.org` (Statuspage / Instatus) | Auto-generated |
 | Stores (Apple/Google) | S1 with broken app | Resolution Center / Play Console | Manual |
 
 **Prioritized recommendations (§7.4):**
@@ -566,70 +565,20 @@ What failed in monitoring/alerts.
 
 ## 7.6. Compliance-oriented observability (Art. 9 extension)
 
-**Current state:** ⚠️ Full GAP. This subsection **was not in the original course scope** but is **essential** for an app that processes Art. 9 data at scale and aspires to accountability (Art. 5.2 GDPR).
+**Current state:** ✅ Shipped in the 2026-05 GDPR sprints (ADR-010). The local audit log is the accountability backbone for Art. 5.2 / 30 / 33 — it lets us enumerate breach scope within 72h without a cloud APM.
 
-### 7.6.1. Proposed `audit_log` schema (encrypted, append-only)
+### 7.6.1. Implementation
 
-```sql
--- Proposed migration 013 — DOES NOT exist in the repo
-CREATE TABLE audit_log (
-  id              TEXT PRIMARY KEY,
-  ts              TEXT NOT NULL,               -- ISO-8601 UTC
-  actor_member_id TEXT NOT NULL,               -- who triggered
-  event_type      TEXT NOT NULL,               -- see catalog below
-  target_type     TEXT,                        -- 'member' | 'document' | 'memory' | 'inventory' | ...
-  target_id       TEXT,
-  encrypted_meta  TEXT,                        -- AES-GCM with event details
-  app_version     TEXT NOT NULL,
-  created_at      TEXT NOT NULL
-);
-CREATE INDEX idx_audit_actor ON audit_log(actor_member_id);
-CREATE INDEX idx_audit_event ON audit_log(event_type);
-CREATE INDEX idx_audit_ts ON audit_log(ts);
-```
+- **Table**: `audit_log` created in `src/db/migrations/014_audit_log.ts`. Cleartext metadata (`event_type`, `ts`, `actor`, `app_version`) for queryability; AES-GCM-encrypted `payload` for the operation details. Identifiers (`memberId`, `docId`) are pseudonymised via `pseudonymise()` before going into the payload, so an attacker with the master key still cannot rebuild a who-uploaded-what dictionary.
+- **Event catalog**: 11 event types covering consent toggles, full erasure, export, PDF upload/delete, key rotations, retention sweeps, decrypt failures, parental consents. See `src/services/auditLog.ts`.
+- **User surface**: `app/audit-log.tsx` ("My activity") renders the log in plain Spanish/English for Art. 12 transparency.
+- **Append-only by convention**: the only code path that deletes rows is `eraseAllUserData()` (Art. 17 prevails over Art. 30 for the data subject's own data).
+- **Tests**: `src/__tests__/services/auditLog.test.ts`.
 
-### 7.6.2. Auditable-event catalog
+### 7.6.2. Remaining work
 
-| Event | When | Evidential severity | Retention |
-|---|---|---|---|
-| `MEMBER_ADDED` | New profile | Medium | Indefinite |
-| `MEMBER_DELETED` | Profile deletion | High | 2 years |
-| `MEMBER_EDITED_HEALTH_FIELD` | Change to `conditions`, `allergies`, `weight`, `height` | **High (Art. 9)** | Indefinite |
-| `DOCUMENT_UPLOADED` | Clinical PDF uploaded | **High (Art. 9)** | 2 years |
-| `DOCUMENT_DELETED` | Same | High | 2 years |
-| `DOCUMENT_VIEWED` | PDF opened in app | Medium | 90 days |
-| `MEMORY_ADDED` | Fact accepted | **High (Art. 9)** | 2 years |
-| `MEMORY_DELETED` | Memory deletion | High | 2 years |
-| `AI_TURN` | AI chat turn | Medium (no content) | 30 days |
-| `EXPORT_TRIGGERED` | Markdown export | High (data movement) | 2 years |
-| `FULL_WIPE` | GDPR full erasure | **Critical (DSR)** | 2 years (in pseudonymized external logs) |
-| `CONSENT_GRANTED` / `CONSENT_WITHDRAWN` | Consent toggle | **Critical (Art. 7)** | 2 years |
-| `HEALTH_PROVIDER_ACTIVATED` / `DEACTIVATED` | Apple Health / Health Connect | Medium | 2 years |
-| `ADMIN_ROLE_CHANGED` | `isSuperUser` toggled | High | 2 years |
-
-### 7.6.3. Key properties of the audit log
-
-- **Append-only**: no code path emits `DELETE` or `UPDATE` on `audit_log` except `FULL_WIPE`, which is atomic with the reset.
-- **Encrypted**: `encrypted_meta` uses the same master key (`nutri_master_key_v1`) — to avoid amplifying blast radius.
-- **Visible to the user**: an "My activity" Settings screen showing the last N events (decrypted in RAM). Reinforces the transparency principle (Art. 12).
-- **Never leaves the device**: never sent to Sentry / PostHog. The only exit is a manual user export to accompany a DSR.
-
-### 7.6.4. Compliance metrics derivable from the audit log
-
-| Metric | Computation | Threshold |
-|---|---|---|
-| DSR response time | `ts(DSR_FULFILLED) - ts(DSR_REQUESTED)` per event | P95 < 7 days |
-| % users with fresh consent | Users with `CONSENT_GRANTED` in < 13 months | > 80% |
-| Art. 9 events per user / month | count(`MEMBER_EDITED_HEALTH_FIELD`, `DOCUMENT_*`, `MEMORY_*`) | Informational tracking |
-| Erasures executed / month | count(`FULL_WIPE`) | Informational tracking |
-| Audit-encryption failure rate | count(events with `encrypted_meta` corrupt on read) | < 0.1% |
-
-**Prioritized recommendations (§7.6):**
-
-1. **Migration 013** with the `audit_log` table before launch (S — 1d).
-2. Instrument the **5 critical events** first: `FULL_WIPE`, `CONSENT_*`, `EXPORT_TRIGGERED`, `DOCUMENT_UPLOADED`, `MEMBER_EDITED_HEALTH_FIELD` (M — 3d).
-3. Create the **"My activity"** Settings screen (S — 1d) — beyond compliance, it improves perceived trust.
-4. Document the retention policy in `docs/legal/AUDIT_LOG_RETENTION.md`.
+- Push-based breach detection — today the trail is local and queried after the fact. Once Sentry self-hosted EU lands, mirror the cleartext metadata for real-time alerting (never the encrypted payload).
+- Retention policy doc at `docs/legal/AUDIT_LOG_RETENTION.md` (today retention is governed by the 365-day window in `src/services/dataRetention.ts`).
 
 ## 7.7. Data quality monitoring (bridge to §6.4)
 
@@ -664,18 +613,17 @@ CREATE INDEX idx_audit_ts ON audit_log(ts);
 
 | # | Action | Effort | Impact | Launch blocker |
 |---|---|---|---|---|
-| 1 | Structured logger `src/utils/logger.ts` + migrate 44 `console.*` | S | High | Yes |
-| 2 | Sentry RN self-hosted EU + PII-safe `beforeSend` | M | Critical | Yes |
-| 3 | Strip PII payload from 2 existing warns | S | High | Yes |
-| 4 | Minimum dashboards D1 + D5 + D7 in Grafana | M | High | Yes (D7 for DPO) |
-| 5 | Publish the 4 legal SLAs in privacy policy | S | Critical | Yes |
-| 6 | Multi-window burn-rate alerts | S | Medium | No |
-| 7 | S1-S4 runbook + Instatus status page | S | Critical | Yes |
-| 8 | Cost guards (CF Workers, Spoonacular, Sentry) | S | Medium | Yes |
-| 9 | Migration 013 `audit_log` + "My activity" screen | M | Critical (Art. 5.2) | Yes |
-| 10 | Data-quality metrics with Zod at entries | M | High | No |
-| 11 | Drift monitoring (prompt, embedding, catalog) | L | Medium | No |
-| 12 | Additional health checks (`getDbStatus`, `getNetworkStatus`) | S | Medium | No |
+| 1 | Sentry RN self-hosted EU + PII-safe `beforeSend` | M | Critical | Yes |
+| 2 | Minimum dashboards D1 + D5 + D7 in Grafana | M | High | Yes (D7 for DPO) |
+| 3 | Publish the 4 legal SLAs in privacy policy | S | Critical | Yes |
+| 4 | Multi-window burn-rate alerts | S | Medium | No |
+| 5 | S1-S4 runbook + Instatus status page | S | Critical | Yes |
+| 6 | Cost guards (CF Workers, Spoonacular, Sentry) | S | Medium | Yes |
+| 7 | Data-quality metrics with Zod at entries | M | High | No |
+| 8 | Drift monitoring (prompt, embedding, catalog) | L | Medium | No |
+| 9 | Additional health checks (`getDbStatus`, `getNetworkStatus`) | S | Medium | No |
+
+✅ Shipped (removed from the table): structured logger with PII scrubbing (`src/utils/logger.ts`), `audit_log` migration 014 + "My activity" screen (`app/audit-log.tsx`), incident-response runbook (`docs/runbooks/INCIDENT_RESPONSE.md`).
 
 **Closure definition:** Section 7 is ✅ green when:
 

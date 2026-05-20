@@ -69,4 +69,18 @@ class LiquidGlassTabBarView: ExpoView {
   func updateSelectedIndex(_ index: Int) {
     state.selectedIndex = index
   }
+
+  // Apply the app's theme to the hosting controller so SwiftUI's
+  // `@Environment(\.colorScheme)` matches the React-side theme even when
+  // the user has overridden the system appearance from inside the app.
+  // Accepted values: "light", "dark", anything else falls back to system.
+  func updateColorScheme(_ scheme: String) {
+    let style: UIUserInterfaceStyle
+    switch scheme {
+    case "light": style = .light
+    case "dark":  style = .dark
+    default:      style = .unspecified
+    }
+    hostingController?.view.overrideUserInterfaceStyle = style
+  }
 }

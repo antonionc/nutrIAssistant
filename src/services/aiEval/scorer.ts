@@ -1,5 +1,6 @@
 import { GoldenCase, CaseObservation, CaseResult, CheckResult, EvalSummary } from './types'
 import { isCannedRefusal } from '../topicGate'
+import { t } from '../../i18n'
 
 // Pure scorer for the on-device AI eval. Given a golden case and what the
 // real pipeline produced, it derives the machine-checkable verdict. Pure and
@@ -7,6 +8,19 @@ import { isCannedRefusal } from '../topicGate'
 
 function includesCI(haystack: string, needle: string): boolean {
   return haystack.toLowerCase().includes(needle.toLowerCase())
+}
+
+// Recognises replies that aren't really model output: AIContext wraps native
+// LLM errors with `t.ai.errorPrefix`, and the in-flight timeout path injects
+// `t.ai.modelPreparingMessage`. Both must fail the case, not be scored.
+function isEngineErrorEnvelope(reply: string): { matched: boolean; envelope?: string } {
+  const trimmed = reply.trim()
+  if (trimmed.length === 0) return { matched: false }
+  if (trimmed.startsWith(t.ai.errorPrefix)) return { matched: true, envelope: t.ai.errorPrefix }
+  if (trimmed === t.ai.modelPreparingMessage.trim()) {
+    return { matched: true, envelope: 'modelPreparingMessage' }
+  }
+  return { matched: false }
 }
 
 export function scoreCase(c: GoldenCase, obs: CaseObservation): CaseResult {
@@ -20,6 +34,13 @@ export function scoreCase(c: GoldenCase, obs: CaseObservation): CaseResult {
     label: 'No <think> chain-of-thought leakage',
     passed: !leaked,
     detail: leaked ? 'reply contains a <think> tag' : undefined,
+  })
+
+  const envelope = isEngineErrorEnvelope(reply)
+  checks.push({
+    label: 'Reply is not an engine error',
+    passed: !envelope.matched,
+    detail: envelope.matched ? `matched ${envelope.envelope}` : undefined,
   })
 
   // Topic-gate verdict.

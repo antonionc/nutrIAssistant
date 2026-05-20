@@ -133,6 +133,9 @@ export async function saveSchoolMenuEntry(entry: {
   date: string
   childId: string
   description: string
+  firstCourse?: string
+  secondCourse?: string
+  dessert?: string
   extractedIngredients: string[]
   extractedAllergens: string[]
   nutritionalEstimate?: { calories: number; protein: number; carbs: number; fat: number }
@@ -140,11 +143,15 @@ export async function saveSchoolMenuEntry(entry: {
   const db = await getDatabase()
   await db.runAsync(
     `INSERT OR REPLACE INTO school_menu_entries
-      (id, date, child_id, meal, description, extracted_ingredients, extracted_allergens, nutritional_estimate)
-     VALUES (?,?,?,?,?,?,?,?)`,
+      (id, date, child_id, meal, description, first_course, second_course, dessert,
+       extracted_ingredients, extracted_allergens, nutritional_estimate)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
     [
       entry.id, entry.date, entry.childId, 'lunch',
       entry.description,
+      entry.firstCourse ?? null,
+      entry.secondCourse ?? null,
+      entry.dessert ?? null,
       JSON.stringify(entry.extractedIngredients),
       JSON.stringify(entry.extractedAllergens),
       entry.nutritionalEstimate ? JSON.stringify(entry.nutritionalEstimate) : null,
@@ -167,6 +174,7 @@ export async function getSchoolMenuChildIds(): Promise<string[]> {
 
 export async function getSchoolMenuEntries(childId: string): Promise<Array<{
   id: string; date: string; childId: string; description: string;
+  firstCourse?: string; secondCourse?: string; dessert?: string;
   extractedIngredients: string[]; extractedAllergens: string[];
   nutritionalEstimate?: { calories: number; protein: number; carbs: number; fat: number }
 }>> {
@@ -180,6 +188,9 @@ export async function getSchoolMenuEntries(childId: string): Promise<Array<{
     date: row.date as string,
     childId: row.child_id as string,
     description: row.description as string,
+    firstCourse: (row.first_course as string | null) ?? undefined,
+    secondCourse: (row.second_course as string | null) ?? undefined,
+    dessert: (row.dessert as string | null) ?? undefined,
     extractedIngredients: safeJsonParse(row.extracted_ingredients, []),
     extractedAllergens: safeJsonParse(row.extracted_allergens, []),
     nutritionalEstimate: row.nutritional_estimate

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import {
   Image,
   StyleSheet,
@@ -16,8 +16,7 @@ import { MEAL_LABELS } from '../../constants/mealTypes'
 import { FamilyCompatibilityRow } from '../badges/CompatibilityBadge'
 import { NutriScoreBadge } from '../charts/NutriScoreBadge'
 import { useTranslation } from '../../i18n'
-import { getRecipeById } from '../../modules/recipes/recipeDB'
-import { enrichRecipeDetail, enrichSpoonacularDetail } from '../../modules/recipes/syncRecipes'
+import { useResolvedRecipeImage } from '../../modules/recipes/useResolvedRecipeImage'
 
 interface MealCardProps {
   mealType: MealType
@@ -121,115 +120,6 @@ export function MealCard({
       )}
     </TouchableOpacity>
   )
-}
-
-// Module-level cache of resolved thumbnail URLs, keyed by recipe id.
-// Survives MealCard unmount/remount, so a card that resolved its
-// thumbnail via lazy enrichment in a previous mount renders it instantly
-// the next time it appears — no blank-then-resolve flicker when the user
-// navigates away and comes back.
-//
-// The Recipe.imageUrl on the meal-plan snapshot is NOT updated when
-// lazy enrichment succeeds (the live `recipes` table row IS updated,
-// but the plan's frozen snapshot is not). Without this cache, every
-// remount would have to re-walk the DB and possibly re-enrich.
-const resolvedImageCache = new Map<string, string>()
-
-function rememberResolvedImage(recipeId: string, url: string | undefined): void {
-  if (!url) return
-  resolvedImageCache.set(recipeId, url)
-}
-
-/**
- * Resolves the thumbnail URL for a meal-plan recipe.
- *
- * Resolution paths, tried in order:
- *   1. The snapshot already has `imageUrl` — fast path, no DB roundtrip.
- *      (Common case once `plannerDB.hydratePlanImages` ran against an
- *      enriched catalog row.)
- *   2. The module-level cache has a previously-resolved URL for this
- *      recipe id — instant on remount.
- *   3. The live catalog row has it — happens when the recipe was
- *      enriched after the plan was first generated.
- *   4. Both snapshot and catalog row are stubs — kicks off the same
- *      lazy `enrichRecipeDetail`/`enrichSpoonacularDetail` flow the
- *      detail screen uses, then re-reads.
- */
-function useResolvedRecipeImage(recipe: Recipe | undefined): string | undefined {
-  const [imageUrl, setImageUrl] = useState<string | undefined>(() => {
-    if (!recipe) return undefined
-    return recipe.imageUrl ?? resolvedImageCache.get(recipe.id)
-  })
-
-  // Effect depends ONLY on `recipe?.id`. Ignoring `recipe.imageUrl`
-  // changes here means once we've resolved an image, a later re-render
-  // where the snapshot's `imageUrl` flips back to undefined (e.g. plan
-  // reloaded before the catalog row caught up) cannot flash the image
-  // off.
-  useEffect(() => {
-    if (!recipe) {
-      setImageUrl(undefined)
-      return
-    }
-
-    // 1. Snapshot has it — use directly, and remember for next mount.
-    if (recipe.imageUrl) {
-      setImageUrl(recipe.imageUrl)
-      rememberResolvedImage(recipe.id, recipe.imageUrl)
-      return
-    }
-
-    // 2. Module cache has a previously-resolved URL — show it now so
-    //    the user sees a thumbnail immediately, but still revalidate
-    //    against the DB in case it changed.
-    const cached = resolvedImageCache.get(recipe.id)
-    if (cached) {
-      setImageUrl(cached)
-    } else {
-      // Truly nothing cached — clear any image carried over from a
-      // previous recipe slot before the async resolution lands.
-      setImageUrl(undefined)
-    }
-
-    let cancelled = false
-    void (async () => {
-      // 3. Check the live recipes row — it may have been enriched
-      //    during a previous session.
-      const live = await getRecipeById(recipe.id)
-      if (cancelled) return
-      if (live?.imageUrl) {
-        setImageUrl(live.imageUrl)
-        rememberResolvedImage(recipe.id, live.imageUrl)
-        return
-      }
-
-      // 4. Still a stub — trigger the same lazy enrichment the detail
-      //    screen does, so the thumbnail appears the first time the
-      //    user lands on a freshly-synced plan instead of waiting
-      //    until they open the recipe detail.
-      if (!live?.sourceId) return
-      const ok =
-        live.sourceApi === 'edamam'
-          ? await enrichRecipeDetail(live.id, live.sourceId)
-          : live.sourceApi === 'spoonacular'
-            ? await enrichSpoonacularDetail(live.id, live.sourceId)
-            : false
-      if (cancelled || !ok) return
-      const refreshed = await getRecipeById(recipe.id)
-      if (cancelled) return
-      if (refreshed?.imageUrl) {
-        setImageUrl(refreshed.imageUrl)
-        rememberResolvedImage(recipe.id, refreshed.imageUrl)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipe?.id])
-
-  return imageUrl
 }
 
 function MacroPill({

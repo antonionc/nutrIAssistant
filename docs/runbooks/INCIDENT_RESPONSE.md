@@ -149,7 +149,7 @@ en nuestros servidores. Para enumerar afectados:
 > correctiva debe ejecutarse en tu dispositivo.
 >
 > Hemos notificado al regulador competente (AEPD). Puedes ejercer tus
-> derechos contactando a hola@nutriassistant.ai.
+> derechos contactando a hola@nutriassistant.org.
 >
 > — El equipo de NutrIAssistant
 

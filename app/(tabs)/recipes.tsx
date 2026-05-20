@@ -163,13 +163,17 @@ export default function RecipesScreen() {
           contentContainerStyle={styles.grid}
           columnWrapperStyle={styles.gridRow}
           showsVerticalScrollIndicator={false}
+          // Off → iOS doesn't auto-pad the scroll content to clear the
+          // floating tab bar, so recipe cards scroll all the way through
+          // the bar's vertical area and the Liquid Glass surface has card
+          // content to refract instead of empty page background.
+          contentInsetAdjustmentBehavior="never"
           renderItem={({ item }) => (
             <RecipeCard
               recipe={item}
               onPress={() => router.push(`/recipe/${item.id}`)}
             />
           )}
-          ListFooterComponent={<View style={{ height: 120 }} />}
         />
       )}
     </SafeAreaView>

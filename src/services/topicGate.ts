@@ -103,9 +103,19 @@ const OUT_OF_SCOPE_STEMS_ES = [
   // Finance
   'bolsa', 'invertir', 'cripto', 'bitcoin', 'ether', 'hipoteca', 'préstamo',
   'prestamo', 'nómina', 'declaración de la renta',
-  // Entertainment / media
-  'película', 'pelicula', 'serie de tv', 'netflix', 'spotify', 'cantante',
-  'videojuego', 'playstation', 'nintendo', 'tiktok', 'cuéntame un chiste',
+  // Entertainment / media. Stems (not full phrases) so paraphrases like
+  // "cuéntame un chiste gracioso" / "¿sabes algún chiste?" / "hazme reír"
+  // all match. Each stem is word-anchored where a shorter form would risk
+  // colliding with food/health vocabulary (e.g. ' broma ' avoids matching
+  // 'bromato', a food additive; ' rie' avoids matching 'arries-go').
+  'película', 'pelicula', ' serie ', 'netflix', 'spotify', 'cantante',
+  'cántame', 'cantame', 'cantar', 'canción', 'cancion',
+  'videojuego', 'playstation', 'nintendo', 'tiktok',
+  ' chist', ' chifl', ' broma ', ' bromas ', ' bromea',
+  ' humor', ' gracios', 'divertid', 'entreten',
+  ' rie ', ' ríe ', ' rio ', ' río ', ' risa', 'reír', ' reir ',
+  'hazme reír', 'hazme reir', 'hacerme reír', 'hacerme reir',
+  'cuéntame algo', 'cuentame algo',
   // Maths / homework
   'ecuación', 'ecuacion', 'derivada', 'álgebra', 'algebra', 'trigonometr',
   // Travel
@@ -130,9 +140,14 @@ const OUT_OF_SCOPE_STEMS_EN = [
   // Finance
   'stock market', 'invest', 'crypto', 'bitcoin', 'ethereum', 'mortgage',
   'tax return', 'salary',
-  // Entertainment / media
+  // Entertainment / media. Stems instead of exact phrases so any
+  // paraphrase ("a funny joke", "do you know any jokes", "make me laugh")
+  // still classifies as off-topic. ' joke' is left-anchored to avoid
+  // false hits inside unrelated words.
   'movie', 'tv show', 'netflix', 'spotify', 'singer', 'video game',
-  'playstation', 'nintendo', 'tiktok', 'tell me a joke',
+  'playstation', 'nintendo', 'tiktok',
+  ' joke', ' jokes', 'funny', 'humor', 'humour', 'comedy', 'comedian',
+  'entertain', ' amus', 'make me laugh', 'crack me up', 'tell me something funny',
   // Maths / homework
   'equation', 'derivative', 'algebra', 'trigonometry',
   // Travel
@@ -147,6 +162,11 @@ function normalize(s: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '') // strip diacritics
+    // Replace punctuation with spaces so word-anchored stems (e.g. ' broma ')
+    // still match against "broma?" / "broma," — substring matching alone
+    // would otherwise be defeated by trailing punctuation.
+    .replace(/[?!.,;:¿¡"'`()[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
 }
 
 function stemMatches(haystack: string, stems: string[]): boolean {

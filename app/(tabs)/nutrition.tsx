@@ -189,10 +189,23 @@ export default function NutritionScreen() {
     const file = result.assets[0]
     setUploadPhase('analyzing')
     try {
-      await uploadSchoolMenu(file.uri, targetChildIds)
+      const summary = await uploadSchoolMenu(file.uri, targetChildIds)
       setUploadPhase('generating')
       await handleGeneratePlan()
-      Alert.alert(tr.nutrition.uploadSuccess, tr.nutrition.uploadSuccessDesc)
+      const fmt = (iso: string) => {
+        const d = new Date(iso)
+        return Number.isNaN(d.getTime())
+          ? iso
+          : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+      }
+      const detail = summary.firstDate && summary.lastDate
+        ? tr.nutrition.schoolMenuUploadSummary(
+            summary.entryCount,
+            fmt(summary.firstDate),
+            fmt(summary.lastDate),
+          )
+        : tr.nutrition.uploadSuccessDesc
+      Alert.alert(tr.nutrition.uploadSuccess, detail)
     } catch (error) {
       logger.error('[Nutrition] School menu upload failed:', error)
       const message =
@@ -252,6 +265,29 @@ export default function NutritionScreen() {
       month: 'short',
     })
   }, [])
+
+  // The sheet shows today + the next 4 days, in chronological order. Days
+  // without an entry render as "Sin datos" so the layout stays predictable.
+  // If the entire window is empty but the DB has entries elsewhere (the
+  // PDF covered a different month, for example), `orphanEntries` carries
+  // those forward to the sheet as a fallback view.
+  const { fiveDayWindow, orphanEntries } = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const days: { iso: string; isToday: boolean }[] = []
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(today)
+      d.setDate(d.getDate() + i)
+      days.push({ iso: d.toISOString().split('T')[0], isToday: i === 0 })
+    }
+    const byDate = new Map(menuSheet.entries.map((e) => [e.date, e]))
+    const window = days.map((d) => ({ ...d, entry: byDate.get(d.iso) ?? null }))
+    const anyInWindow = window.some((d) => d.entry !== null)
+    const orphans = anyInWindow || menuSheet.entries.length === 0
+      ? []
+      : menuSheet.entries.slice(0, 5).map((e) => ({ iso: e.date, isToday: false, entry: e }))
+    return { fiveDayWindow: window, orphanEntries: orphans }
+  }, [menuSheet.entries])
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -397,7 +433,6 @@ export default function NutritionScreen() {
           </View>
         )}
 
-        <View style={{ height: 120 }} />
       </ScrollView>
 
       {/* ── Alternative picker bottom sheet ─── */}
@@ -594,38 +629,149 @@ export default function NutritionScreen() {
 
             {menuSheet.loading ? (
               <ActivityIndicator color={Colors.healthGreen} style={{ marginVertical: Spacing.xl }} />
-            ) : menuSheet.entries.length === 0 ? (
-              <Text style={styles.sheetEmpty}>{tr.nutrition.schoolMenuEmpty}</Text>
             ) : (
-              <FlatList
-                data={menuSheet.entries}
-                keyExtractor={(e) => e.id}
-                ItemSeparatorComponent={() => <View style={styles.sheetDivider} />}
-                style={{ maxHeight: 420 }}
-                renderItem={({ item }) => (
-                  <View style={styles.menuEntryRow}>
-                    <Text style={styles.menuEntryDate}>{formatMenuDate(item.date)}</Text>
-                    <Text style={styles.menuEntryDesc}>{item.description}</Text>
-                    {item.extractedAllergens.length > 0 && (
-                      <View style={styles.menuAllergenWrap}>
-                        <Text style={styles.menuAllergenLabel}>
-                          {tr.nutrition.schoolMenuAllergensLabel}:
-                        </Text>
-                        {item.extractedAllergens.map((a) => (
-                          <View key={a} style={styles.menuAllergenChip}>
-                            <Text style={styles.menuAllergenChipText}>{a}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
+              <>
+                {orphanEntries.length > 0 && (
+                  <View style={styles.menuOrphanBanner}>
+                    <Text style={styles.menuOrphanText}>
+                      {tr.nutrition.schoolMenuOrphanBanner(
+                        formatMenuDate(orphanEntries[0].entry.date),
+                        formatMenuDate(orphanEntries[orphanEntries.length - 1].entry.date),
+                      )}
+                    </Text>
                   </View>
                 )}
-              />
+                <FlatList
+                  data={orphanEntries.length > 0 ? orphanEntries : fiveDayWindow}
+                  keyExtractor={(d) => d.iso}
+                  ItemSeparatorComponent={() => <View style={styles.sheetDivider} />}
+                  style={{ maxHeight: 480 }}
+                  renderItem={({ item }) => (
+                  <SchoolMenuDayRow
+                    day={item}
+                    formatDate={formatMenuDate}
+                    styles={styles}
+                    tr={tr}
+                  />
+                  )}
+                />
+              </>
             )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
+  )
+}
+
+// A single day in the "today + next 4 days" school-menu sheet. Renders the
+// weekday header (today flagged), three labelled course rows, and an
+// allergen chip strip. Courses the parser could not isolate render as
+// "Sin datos" to keep the row's vertical rhythm constant.
+function SchoolMenuDayRow({
+  day,
+  formatDate,
+  styles,
+  tr,
+}: {
+  day: {
+    iso: string
+    isToday: boolean
+    entry: {
+      description: string
+      firstCourse?: string
+      secondCourse?: string
+      dessert?: string
+      extractedAllergens: string[]
+    } | null
+  }
+  formatDate: (iso: string) => string
+  styles: ReturnType<typeof makeStyles>
+  tr: ReturnType<typeof useTranslation>
+}) {
+  const { entry } = day
+  // When the structured fields are all missing but a description exists,
+  // surface the raw description on the first-course row so legacy rows
+  // (parsed before migration 017) still show something readable.
+  const fallback = entry && !entry.firstCourse && !entry.secondCourse && !entry.dessert
+    ? entry.description.trim()
+    : null
+  const noData = !entry || (
+    !entry.firstCourse && !entry.secondCourse && !entry.dessert && !fallback
+  )
+
+  return (
+    <View style={styles.menuDayRow}>
+      <View style={styles.menuDayHeader}>
+        <Text style={styles.menuDayDate}>{formatDate(day.iso)}</Text>
+        {day.isToday && (
+          <View style={styles.menuTodayChip}>
+            <Text style={styles.menuTodayChipText}>{tr.nutrition.schoolMenuToday}</Text>
+          </View>
+        )}
+      </View>
+
+      {noData ? (
+        <Text style={styles.menuNoData}>{tr.nutrition.schoolMenuNoData}</Text>
+      ) : fallback ? (
+        <Text style={styles.menuCourseText}>{fallback}</Text>
+      ) : (
+        <View style={styles.menuCourseList}>
+          <CourseLine
+            label={tr.nutrition.schoolMenuFirstCourse}
+            value={entry!.firstCourse}
+            styles={styles}
+            tr={tr}
+          />
+          <CourseLine
+            label={tr.nutrition.schoolMenuSecondCourse}
+            value={entry!.secondCourse}
+            styles={styles}
+            tr={tr}
+          />
+          <CourseLine
+            label={tr.nutrition.schoolMenuDessert}
+            value={entry!.dessert}
+            styles={styles}
+            tr={tr}
+          />
+        </View>
+      )}
+
+      {entry && entry.extractedAllergens.length > 0 && (
+        <View style={styles.menuAllergenWrap}>
+          <Text style={styles.menuAllergenLabel}>
+            {tr.nutrition.schoolMenuAllergensLabel}:
+          </Text>
+          {entry.extractedAllergens.map((a) => (
+            <View key={a} style={styles.menuAllergenChip}>
+              <Text style={styles.menuAllergenChipText}>{a}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  )
+}
+
+function CourseLine({
+  label,
+  value,
+  styles,
+  tr,
+}: {
+  label: string
+  value: string | undefined
+  styles: ReturnType<typeof makeStyles>
+  tr: ReturnType<typeof useTranslation>
+}) {
+  return (
+    <View style={styles.menuCourseLine}>
+      <Text style={styles.menuCourseLabel}>{label}</Text>
+      <Text style={[styles.menuCourseText, !value && styles.menuCourseTextMuted]}>
+        {value ?? tr.nutrition.schoolMenuNoData}
+      </Text>
+    </View>
   )
 }
 
@@ -827,20 +973,75 @@ function makeStyles(colors: ThemeColors) {
     menuChildPillTextActive: {
       color: Colors.white,
     },
-    menuEntryRow: {
-      paddingVertical: Spacing.sm,
+    // ── School-menu day rows (today + 4) ────────────────────────────────────
+    menuDayRow: {
+      paddingVertical: Spacing.md,
     },
-    menuEntryDate: {
-      ...Typography.caption,
+    menuDayHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
+      marginBottom: Spacing.xs,
+    },
+    menuDayDate: {
+      ...Typography.body,
       color: Colors.forestGreen,
       fontFamily: Typography.heading3.fontFamily,
       textTransform: 'capitalize',
     },
-    menuEntryDesc: {
+    menuTodayChip: {
+      backgroundColor: `${Colors.healthGreen}1f`,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.pill,
+    },
+    menuTodayChipText: {
+      ...Typography.overline,
+      color: Colors.forestGreen,
+      fontSize: 10,
+      letterSpacing: 0.4,
+    },
+    menuOrphanBanner: {
+      backgroundColor: `${Colors.goldenAmber}20`,
+      borderRadius: BorderRadius.md,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xs,
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.xs,
+    },
+    menuOrphanText: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
+    menuCourseList: {
+      gap: Spacing.xs,
+    },
+    menuCourseLine: {
+      gap: 1,
+    },
+    menuCourseLabel: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+      fontFamily: Typography.heading3.fontFamily,
+      fontSize: 11,
+      letterSpacing: 0.3,
+      textTransform: 'uppercase',
+    },
+    menuCourseText: {
       ...Typography.body,
       color: colors.text,
-      marginTop: 2,
       lineHeight: 20,
+    },
+    menuCourseTextMuted: {
+      color: colors.textMuted,
+      fontStyle: 'italic',
+    },
+    menuNoData: {
+      ...Typography.body,
+      color: colors.textMuted,
+      fontStyle: 'italic',
+      paddingVertical: Spacing.xs,
     },
     menuAllergenWrap: {
       flexDirection: 'row',

@@ -233,6 +233,7 @@ Evidence: `src/modules/planner/mealPlanGenerator.ts:29-163`, `src/modules/planne
 
 1. **Consolidate master catalogs** in `src/domain/masterData.ts` with coherence tests.
 2. **Add Zod schemas** to runtime-validate external-API payloads.
-3. **Declare FKs** in a new migration 013 + integrity tests.
-4. **Assign formal roles** (Data Owner, external DPO, fractional Security Engineer).
-5. **Publish `docs/governance/GLOSSARY.md`** generated from `src/types/` (TypeDoc or typedoc-markdown).
+3. **Assign formal roles** (Data Owner, external DPO, fractional Security Engineer).
+4. **Publish `docs/governance/GLOSSARY.md`** generated from `src/types/` (TypeDoc or typedoc-markdown).
+
+Note: cascading FKs across `member_memories`, `doc_chunks`, `conversation_summaries` shipped in migration 015 (`src/db/migrations/015_member_index_with_fks.ts`) with a `member_index` mirror so deletes propagate cleanly.

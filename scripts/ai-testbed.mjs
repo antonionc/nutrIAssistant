@@ -30,6 +30,7 @@ const CAPABILITIES = [
   { match: 'recipe-specialization', icon: '🍲', label: 'Recipe & nutrition-plan specialization' },
   { match: 'prompt-assembly', icon: '🧩', label: 'Prompt assembly & preference adherence' },
   { match: 'eval-scorer', icon: '🧪', label: 'On-device eval scorer' },
+  { match: 'school-menu-parser', icon: '🏫', label: 'School-menu PDF parser' },
 ]
 
 const LINE_WIDTH = 66

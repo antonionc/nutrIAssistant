@@ -20,6 +20,7 @@ const SOURCE_LABEL: Partial<Record<string, string>> = {
 }
 import { useTheme, ThemeColors } from '../../theme/ThemeContext'
 import { NutriScoreBadge } from '../charts/NutriScoreBadge'
+import { useResolvedRecipeImage } from '../../modules/recipes/useResolvedRecipeImage'
 
 interface RecipeCardProps {
   recipe: Recipe
@@ -32,6 +33,7 @@ export function RecipeCard({ recipe, onPress, compact = false }: RecipeCardProps
   const styles = useMemo(() => makeStyles(colors), [colors])
   const totalTime = recipe.prepTime + recipe.cookTime
   const dietTag = recipe.tags[0] ?? null
+  const resolvedImageUrl = useResolvedRecipeImage(recipe)
 
   if (compact) {
     // Horizontal carousel card — 160px wide thumbnail
@@ -39,8 +41,8 @@ export function RecipeCard({ recipe, onPress, compact = false }: RecipeCardProps
       <TouchableOpacity style={styles.compactCardShadow} onPress={onPress} activeOpacity={0.8}>
         <View style={styles.compactCard}>
           <View style={styles.compactImageWrapper}>
-            {recipe.imageUrl ? (
-              <Image source={{ uri: recipe.imageUrl }} style={styles.compactImage} />
+            {resolvedImageUrl ? (
+              <Image source={{ uri: resolvedImageUrl }} style={styles.compactImage} />
             ) : (
               <View style={[styles.compactImage, styles.imagePlaceholder]}>
                 <Text style={styles.placeholderEmoji}>🍽️</Text>
@@ -66,8 +68,8 @@ export function RecipeCard({ recipe, onPress, compact = false }: RecipeCardProps
     <TouchableOpacity style={styles.cardShadow} onPress={onPress} activeOpacity={0.85}>
       <View style={styles.card}>
         <View style={styles.imageWrapper}>
-          {recipe.imageUrl ? (
-            <Image source={{ uri: recipe.imageUrl }} style={styles.image} />
+          {resolvedImageUrl ? (
+            <Image source={{ uri: resolvedImageUrl }} style={styles.image} />
           ) : (
             <View style={[styles.image, styles.imagePlaceholder]}>
               <Text style={styles.placeholderEmoji}>🍽️</Text>
@@ -167,6 +169,8 @@ function makeStyles(colors: ThemeColors) {
       fontSize: 14,
       lineHeight: 19,
       color: colors.text,
+      // Reserve two lines so single- and two-line titles share one box height.
+      minHeight: 38,
     },
     meta: {
       ...Typography.caption,
@@ -213,6 +217,8 @@ function makeStyles(colors: ThemeColors) {
       color: colors.text,
       fontFamily: Typography.heading3.fontFamily,
       lineHeight: 18,
+      // Reserve two lines so single- and two-line titles share one box height.
+      minHeight: 36,
     },
     compactMeta: {
       ...Typography.caption,

@@ -65,11 +65,17 @@ export default function GroceriesScreen() {
             <Text style={styles.count}>{tr.groceries.pendingCount(activeItems.length)}</Text>
           )}
         </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.addHeaderBtn} onPress={() => setShowAddModal(true)}>
-            <Ionicons name="add" size={22} color={Colors.healthGreen} />
-          </TouchableOpacity>
+        <View style={styles.headerColumn}>
           <HeaderProfileAvatar />
+          <TouchableOpacity
+            style={styles.addHeaderBtn}
+            onPress={() => setShowAddModal(true)}
+            accessibilityRole="button"
+            accessibilityLabel={tr.empty.groceries.action}
+            hitSlop={8}
+          >
+            <Ionicons name="add" size={26} color={Colors.healthGreen} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -166,13 +172,7 @@ export default function GroceriesScreen() {
           </View>
         )}
 
-        <View style={{ height: 120 }} />
       </ScrollView>
-
-      {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => setShowAddModal(true)}>
-        <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
 
       {/* Add Item Modal */}
       <Modal
@@ -280,11 +280,13 @@ function makeStyles(colors: ThemeColors) {
     },
     title: { ...Typography.displaySerif, color: colors.text },
     count: { ...Typography.caption, color: colors.textSecondary, marginTop: 2 },
-    headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: 4 },
+    headerColumn: { alignItems: 'flex-end', gap: Spacing.sm },
     addHeaderBtn: {
-      width: 36, height: 36, borderRadius: 18,
-      backgroundColor: `${Colors.healthGreen}18`,
+      width: 44, height: 44, borderRadius: 22,
+      backgroundColor: `${Colors.healthGreen}28`,
+      borderWidth: 1, borderColor: `${Colors.healthGreen}33`,
       alignItems: 'center', justifyContent: 'center',
+      marginRight: Spacing.xs,
     },
 
     // Scroll
@@ -340,14 +342,6 @@ function makeStyles(colors: ThemeColors) {
     comingSoonBadge: { backgroundColor: Colors.goldenAmber, paddingHorizontal: 6, paddingVertical: 2, borderRadius: BorderRadius.pill },
     comingSoonText: { ...Typography.overline, color: Colors.white, fontSize: 8 },
     shopBtn: { ...Typography.caption, color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
-
-    // FAB (kept for accessibility, but we also added a header + button)
-    fab: {
-      position: 'absolute', right: Spacing.md, bottom: 90,
-      width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.healthGreen,
-      alignItems: 'center', justifyContent: 'center', ...Shadows.elevated,
-    },
-    fabText: { color: Colors.white, fontSize: 28, lineHeight: 30 },
 
     // Add modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },

@@ -155,8 +155,8 @@ function EvalRunner({ styles, colors }: { styles: EvalStyles; colors: ThemeColor
         {aiReachable && !modelLoaded && (
           <View style={[styles.banner, styles.bannerWarn]}>
             <Text style={styles.bannerText}>
-              On-device model not loaded yet. The first case will trigger loading (and may be
-              slow, or download ~1 GB on a fresh install).
+              On-device model isn&apos;t ready yet — the run button is disabled until it loads
+              (a fresh install downloads ~1 GB).
             </Text>
           </View>
         )}
@@ -175,9 +175,9 @@ function EvalRunner({ styles, colors }: { styles: EvalStyles; colors: ThemeColor
               color={colors.text} styles={styles} />
           </View>
           <TouchableOpacity
-            style={[styles.runBtn, (running || !aiReachable) && styles.runBtnDisabled]}
+            style={[styles.runBtn, (running || !aiReachable || !modelLoaded) && styles.runBtnDisabled]}
             onPress={runAll}
-            disabled={running || !aiReachable}
+            disabled={running || !aiReachable || !modelLoaded}
           >
             {running ? (
               <View style={styles.runningRow}>
@@ -189,7 +189,11 @@ function EvalRunner({ styles, colors }: { styles: EvalStyles; colors: ThemeColor
               </View>
             ) : (
               <Text style={styles.runBtnText}>
-                {results.length > 0 ? 'Run again' : `Run all ${GOLDEN_SET.length} cases`}
+                {!modelLoaded
+                  ? 'Waiting for model…'
+                  : results.length > 0
+                    ? 'Run again'
+                    : `Run all ${GOLDEN_SET.length} cases`}
               </Text>
             )}
           </TouchableOpacity>

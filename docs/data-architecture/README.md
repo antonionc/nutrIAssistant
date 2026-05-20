@@ -41,8 +41,8 @@ flowchart TB
         end
 
         subgraph Store["Storage"]
-            SQL[(SQLite WAL + FK<br/>12 migrations)]:::ok
-            AS[(AsyncStorage<br/>partial encryption)]:::warn
+            SQL[(SQLite WAL + FK<br/>16 migrations)]:::ok
+            AS[(AsyncStorage<br/>field-level encryption on Art. 9)]:::ok
         end
     end
 
@@ -68,7 +68,6 @@ flowchart TB
         Tel[Non-PII telemetry<br/>Aptabase / PostHog EU]:::ext
         Sentry[Sentry self-hosted EU]:::ext
         Pro[Pro tier Mistral EU opt-in]:::ext
-        Audit[Encrypted audit log<br/>migration 013]:::ext
     end
 
     U --> UI

@@ -125,7 +125,7 @@ Unified table by source:
 
 | Type | In use? | Where | Justification |
 |---|---|---|---|
-| Relational (SQL) | ✅ | Local SQLite (`nutriassistant.db`), 15 migrations (001-015) plus a `member_index` mirror added in 015 for cascade FKs | Domain data with relations (recipes ↔ plans, scans ↔ inventory) and range queries (`meal_plans WHERE date BETWEEN`). See `src/db/migrations/001_initial.ts`, `src/db/migrations/014_audit_log.ts` (encrypted audit log), `src/db/migrations/015_member_index_with_fks.ts` (real FK cascades). |
+| Relational (SQL) | ✅ | Local SQLite (`nutriassistant.db`), 16 migrations (001–016). 015 adds a `member_index` mirror so cascade FKs trigger on member delete; 016 adds the nullable `embedding` column on `member_memories` for ranked retrieval. | Domain data with relations (recipes ↔ plans, scans ↔ inventory) and range queries (`meal_plans WHERE date BETWEEN`). See `src/db/migrations/001_initial.ts`, `src/db/migrations/014_audit_log.ts` (encrypted audit log), `src/db/migrations/015_member_index_with_fks.ts` (cascade FKs), `src/db/migrations/016_member_memory_embeddings.ts` (memory ranking). |
 | NoSQL key-value | ✅ | AsyncStorage + Keychain | Flags, tokens, non-relational config, master key. See `src/modules/profiles/profileStorage.ts:5-8` |
 | NoSQL document | 🟡 | Profiles as **serialized JSON** in AsyncStorage under `family_profiles` | It is JSON, but monolithic (not a doc store). Cost: full invalidation on edit; benefit: simple field-level encryption |
 | NoSQL columnar | 🔴 | Not applicable | — |

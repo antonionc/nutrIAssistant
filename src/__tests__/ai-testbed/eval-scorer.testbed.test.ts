@@ -9,6 +9,7 @@
  */
 import { scoreCase, summarize } from '../../services/aiEval/scorer'
 import { GoldenCase, CaseObservation, CaseResult } from '../../services/aiEval/types'
+import { t } from '../../i18n'
 
 const baseCase = (expect: GoldenCase['expect']): GoldenCase => ({
   id: 'c', category: 'scope', title: 'case', prompt: 'p', expect, reviewNote: 'n',
@@ -39,6 +40,31 @@ describe('Eval scorer · baseline checks', () => {
     const r = scoreCase(baseCase({}), obs({ reply: '<think>hmm</think> here you go' }))
     expect(checkFor(r, 'chain-of-thought')?.passed).toBe(false)
     expect(r.passed).toBe(false)
+  })
+})
+
+// ─── Engine-error envelope ───────────────────────────────────────────────────
+// When the in-flight LLM lock or a native runner failure produces a wrapped
+// error string, the scorer must fail the case instead of scoring the envelope
+// as a real answer.
+
+describe('Eval scorer · engine-error envelope', () => {
+  it('fails when the reply is the localized error prefix (model-busy wrap)', () => {
+    const busy = `${t.ai.errorPrefix}: The model is currently generating. Please wait until previous model run is complete.`
+    const r = scoreCase(baseCase({ verdict: 'in', isRefusal: false }), obs({ reply: busy }))
+    expect(checkFor(r, 'engine error')?.passed).toBe(false)
+    expect(r.passed).toBe(false)
+  })
+
+  it('fails when the reply is the modelPreparingMessage', () => {
+    const r = scoreCase(baseCase({ verdict: 'in', isRefusal: false }), obs({ reply: t.ai.modelPreparingMessage }))
+    expect(checkFor(r, 'engine error')?.passed).toBe(false)
+    expect(r.passed).toBe(false)
+  })
+
+  it('passes the envelope check for a normal reply', () => {
+    const r = scoreCase(baseCase({ verdict: 'in', isRefusal: false }), obs())
+    expect(checkFor(r, 'engine error')?.passed).toBe(true)
   })
 })
 

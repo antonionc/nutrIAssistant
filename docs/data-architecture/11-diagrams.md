@@ -108,7 +108,7 @@ flowchart TB
         end
 
         subgraph Storage["Storage"]
-            SQL[(SQLite · nutriassistant.db<br/>12 migrations)]:::store
+            SQL[(SQLite · nutriassistant.db<br/>16 migrations)]:::store
             AS[(AsyncStorage<br/>profiles + flags + tokens)]:::store
             FSys[(FileSystem<br/>PDFs · avatars · .pte model)]:::store
             KCS[(Keychain / Keystore<br/>nutri_master_key_v1)]:::store
@@ -207,9 +207,10 @@ flowchart LR
 **Reading keys:**
 
 - **Triple age defense**: `Hidden` (FAB), host-level sheet close, refusal in `sendMessage` — defense-in-depth (ADR-004).
-- The **Topic Gate** saves ~2-5s of inference on off-topic questions (ADR-005).
+- The **Topic Gate** saves ~2-5s of inference on off-topic questions (ADR-005). Corpus widened 2026-05 after an on-device eval false-pass on *"Can you tell me a funny joke?"*: `normalize()` now also strips `[?!.,;:¿¡"'`()[\]{}]` so word-anchored stems are punctuation-robust, and the OUT_OF_SCOPE corpora gained ~20 entertainment stems per language (jokes, humor, comedy, songs, series, laughter verbs). Backed by the new `ENTERTAINMENT_REQUESTS` corpus (16 ES + 17 EN) in `src/__tests__/ai-testbed/security-harness.testbed.test.ts`. Details in [§4.5](./04-ai-architecture.md#45-rag-architecture).
 - The **5 parallel reads** avoid a waterfall — explicitly designed via `Promise.all` in `AIContext.tsx:220-234`.
 - The **fact extractor** runs debounced and never persists without human acceptance (ADR-006).
+- The `Busy → Wait` arrow (in-flight LLM lock returning `modelPreparingMessage`) is the same path that previously produced false 5/5 eval passes; mitigated by the 2026-05 eval-gating + scorer "Reply is not an engine error" check (§4.3, [ADR-011](./10-appendices.md#adr-011)).
 - References: [§4.2](./04-ai-architecture.md#42-ai-pipeline-as-is-and-to-be) AS-IS pipeline, [§4.5](./04-ai-architecture.md#45-rag-architecture) RAG, [§4.6](./04-ai-architecture.md#46-ai-governance) AI governance.
 
 ### 11.1.4. C4 Level 3 — Encryption + Profile Storage component
@@ -283,7 +284,7 @@ flowchart TB
 - **A single master key** (`nutri_master_key_v1`) encrypts everything. Manual rotation now available from Settings → Security (Sprint 5.2, `src/services/keyRotation.ts`). Scheduled / time-based rotation still pending [§3.2](./03-security-encryption.md#32-key-storage-policy).
 - **Embeddings are encrypted as bytes** (`encryptBytes`) because they are `Float32Array`; everything else as UTF-8 (`encrypt`).
 - The `enc:v1:` prefix lets us detect legacy plaintext during migrations (ADR-002).
-- ⚠️ The scheme covers 4 PII fields but leaves `weight`, `height`, `dateOfBirth`, `allergies`, `bloodPressure`, `hrv`, `spO2`, `avatarUrl`, and the PDFs in `FileSystem` exposed ([§3.1](./03-security-encryption.md#31-data-encryption-policy) coverage).
+- Field-level coverage on `family_profiles` extends to all Art. 9-strict members: `weight`, `height`, `dateOfBirth`, `allergies`, `conditions`, `aboutMeNotes` (see `src/modules/profiles/profileStorage.ts:143-151`). Plus `member_memories.encrypted_text` + nullable `embedding`, `doc_chunks.encrypted_text` + `embedding`, the encrypted `audit_log` payload, and `.pdf.enc` files on disk. Remaining plaintext is intentional: `name`, `role`, `avatarUrl`, `dietPreference` are needed for cheap profile-picker rendering before the key is unlocked.
 
 ### 11.1.5. C4 Level 3 — RAG Pipeline component (PDF → response)
 
@@ -826,11 +827,11 @@ mindmap
     In-house native
       expo-pdf-text Swift+Kotlin
       liquid-glass Swift iOS 26
-    External APIs
+    External APIs (all via BFF api.nutriassistant.org)
       OpenFoodFacts FR
-      Edamam (via BFF)
-      Spoonacular US API key
-      TheMealDB legacy
+      Edamam Recipe Search
+      Spoonacular
+      Cloudflare R2 mirror of HuggingFace .pte
     Internationalization
       expo-localization
       Own i18n en/es
@@ -840,7 +841,7 @@ mindmap
     Testing
       Jest 29.7
       jest-expo 55
-      9 existing tests
+      AI testbed 230 / 5 suites
 ```
 
 ## 11.5. User journeys — typical paths
@@ -944,39 +945,29 @@ quadrantChart
 
 ```mermaid
 quadrantChart
-    title Improvement plan · impact vs effort
+    title Improvement plan · remaining work (impact vs effort)
     x-axis "Low effort" --> "High effort"
     y-axis "Low impact" --> "Critical"
     quadrant-1 "Quick wins"
     quadrant-2 "Strategic"
     quadrant-3 "Skip"
     quadrant-4 "Only if it comes up"
-    "GDPR full erasure": [0.2, 0.95]
-    "Published privacy policy": [0.25, 0.9]
-    "Sentry SDK + scrubbing": [0.35, 0.85]
-    "Medical disclaimer in chat": [0.1, 0.75]
-    "DPO appointment": [0.2, 0.7]
-    "Cloudflare BFF secrets migration": [0.7, 0.85]
-    "Encrypt PDFs at rest": [0.5, 0.85]
-    "Granular consent UI": [0.4, 0.8]
-    "Encrypt remaining Art. 9 PII fields": [0.5, 0.75]
+    "Sentry SDK + EU self-hosted": [0.5, 0.85]
     "External DPIA": [0.6, 0.85]
-    "Privacy Nutrition Labels": [0.2, 0.7]
-    "Dependabot + CI secret scan": [0.15, 0.5]
-    "Encrypted local audit log": [0.4, 0.7]
-    "Non-PII telemetry": [0.45, 0.65]
-    "Zod runtime validation": [0.4, 0.55]
-    "Retention sweeper": [0.4, 0.6]
-    "Master-key rotation": [0.55, 0.45]
-    ".pte SHA verification": [0.2, 0.45]
-    "Remove unused fields": [0.15, 0.3]
-    "CycloneDX SBOM": [0.2, 0.35]
+    "DPO appointment": [0.2, 0.7]
+    "Privacy Nutrition Labels (App/Play)": [0.2, 0.7]
+    "Encrypt remaining plaintext fields (name/role/avatar)": [0.4, 0.5]
+    ".pte SHA256 pin values": [0.15, 0.6]
+    "Zod runtime validation at boundaries": [0.4, 0.55]
+    "Non-PII remote telemetry": [0.45, 0.65]
+    "Scheduled key rotation (versioned enc:v2:)": [0.55, 0.45]
+    "TLS certificate pinning": [0.4, 0.5]
 ```
 
 **Reading keys:**
 
-- **Quick wins ordered**: medical disclaimer → remove unused fields → model SHA verification → SBOM → privacy labels → Dependabot.
-- The **high strategic** items (BFF, DPIA, encrypt PDFs) are large but necessary for a responsible launch.
+- The chart was trimmed after the GDPR sprints (commits `aaa3179`, `f204015`, `81f59d0`) shipped most of the launch-blockers. **Already done — removed from the chart:** GDPR full erasure (`src/services/dataErasure.ts`), encrypted local audit log (migration 014, ADR-010), granular consent UI (ADR-011), encrypted PDFs at rest (`.pdf.enc`, Sprint 2.1), manual master-key rotation (`src/services/keyRotation.ts`, ADR-012), retention sweeper (`src/services/dataRetention.ts`), privacy policy drafted (`assets/legal/privacy-policy-v1.{en,es}.md`), ROPA published, Dependabot + gitleaks + CycloneDX SBOM in CI (`.github/workflows/`), structured logger with PII scrubbing (`src/utils/logger.ts`), `verifyArtifactSha256()` hook (pin values still pending — kept in chart).
+- **Top-right remainders** (Sentry, DPIA) are now the two largest live gates for a responsible launch.
 
 ## 11.7. Distributions — pie charts
 
@@ -986,35 +977,18 @@ quadrantChart
 
 ```mermaid
 pie title At-rest encryption by PII / Art. 9 field category
-    "Encrypted (conditions, aboutMeNotes, memories, doc_chunks text+embedding)" : 5
-    "Unencrypted but sensitive (weight, height, dateOfBirth, allergies, bloodPressure, hrv, spO2, avatarUrl)" : 8
-    "PDFs in FileSystem - .pdf.enc (Sprint 2.1)" : 1
+    "Encrypted Art. 9 (weight, height, dob, allergies, conditions, aboutMeNotes, memories text+embedding, doc_chunks text+embedding, audit_log payload)" : 10
+    "Encrypted PDFs at rest (.pdf.enc, Sprint 2.1)" : 1
+    "Plaintext by design (name, role, avatarUrl, dietPreference — needed pre-key-unlock)" : 4
     "Non-PII data (recipes, grocery_items, scan_history)" : 6
 ```
 
 **Reading keys:**
 
-- Roughly **5 of 13 critical PII fields** are encrypted — ~38% coverage.
-- The physical PDFs in `FileSystem.documentDirectory` are the **most severe gap** ([§3.5](./03-security-encryption.md#35-threat-model-simplified-stride) STRIDE).
+- Every Art. 9-strict field is now ciphertext at rest (commit `aaa3179` + Sprint 5.6 removed `bloodPressure`, `hrv`, `spO2`, `restingHeartRate` outright — no engine consumed them).
+- The 4 plaintext members (`name`, `role`, `avatarUrl`, `dietPreference`) are kept readable on purpose so the profile picker can render before `ensureKey()` resolves; they are intentionally low-sensitivity.
 
-### 11.7.2. `console.*` log distribution by domain
-
-**Intent:** *if we migrate to a structured logger, where do the logs live today?*
-
-```mermaid
-pie title 44 console.* calls across 22 files
-    "ai-engine (LLM, memory, retrieval, embeddings, planner)" : 16
-    "ui (sheets, AIAssistant)" : 5
-    "recipes (sync, seed)" : 4
-    "profiles (context, storage)" : 4
-    "db (database, dbUtils)" : 4
-    "network-catalog (edamam, spoonacular, bff client)" : 4
-    "health (apple, connect)" : 3
-    "pdf (profileDocuments)" : 2
-    "planner (context)" : 2
-```
-
-### 11.7.3. Origin of recipes in the DB
+### 11.7.2. Origin of recipes in the DB
 
 **Intent:** *how is the catalog distributed across sources after sync?*
 
@@ -1069,35 +1043,30 @@ timeline
 
 ```mermaid
 timeline
-    title Compliance milestones · roadmap to launch
-    Week 1
-        : GDPR full erasure implemented
-        : In-app medical disclaimer
-        : Privacy policy drafted
-    Week 2
-        : Sentry SDK deployed
-        : App Store Privacy Nutrition Labels
-        : Play Store Data Safety Section
-    Week 3-4
-        : DPO contracted and public email
-        : Granular consent UI 5 toggles
-        : DPIA draft outsourced
-    Week 5-6
-        : SCC signed with Edamam + Spoonacular
-        : Encrypt PDFs at rest
-        : Encrypt remaining Art. 9 fields
-    Week 7-8
-        : Cloudflare BFF deployed
-        : Local audit log migration 013
-        : Non-PII telemetry active
-    Week 9-10
-        : ROPA published
-        : Final DPIA + legal review
-        : Internal store pre-review
-    Week 11-12
+    title Compliance milestones · status as of 2026-05
+    Done (GDPR sprints 1–5, commits aaa3179 → 81f59d0)
+        : GDPR full erasure (src/services/dataErasure.ts)
+        : Granular consent UI · 3 toggles + info disclosure (ADR-011)
+        : Encrypted local audit log · migration 014 (ADR-010)
+        : Encrypted PDFs at rest · .pdf.enc (Sprint 2.1)
+        : Manual master-key rotation (ADR-012)
+        : Retention sweeper (src/services/dataRetention.ts)
+        : Cloudflare BFF deployed at api.nutriassistant.org
+        : Privacy policy v1 drafted (assets/legal/privacy-policy-v1.{en,es}.md)
+        : ROPA published (docs/legal/ROPA.md)
+        : Structured logger with PII scrubbing
+        : Dependabot + gitleaks + SBOM in CI
+    Remaining for launch
+        : Sentry RN self-hosted EU + scrubbing
+        : External DPIA + legal review
+        : DPO appointment and public dpo@nutriassistant.org
+        : Privacy Nutrition Labels (App Store) + Data Safety (Play Store)
+        : .pte SHA256 pin values populated
+        : SCC signed with Edamam + Spoonacular catalog providers
+    Pre-release
         : TestFlight + Internal Track
         : Closed beta 200 users
-    Week 13+
+    Launch
         : Open beta 14d
         : GDPR-compliant Spain launch
 ```

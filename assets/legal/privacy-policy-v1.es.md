@@ -11,7 +11,7 @@
 ## 1. Responsable del tratamiento
 
 NutrIAssistant ("nosotros", "la app"). Contacto para asuntos de
-privacidad: hola@nutriassistant.ai. Se nombrará un Delegado de
+privacidad: hola@nutriassistant.org. Se nombrará un Delegado de
 Protección de Datos antes del lanzamiento en producción; el
 nombramiento se reflejará aquí.
 
@@ -86,4 +86,4 @@ pedir tu consentimiento en el siguiente arranque. Cambios menores
 
 ## 10. Contacto
 
-hola@nutriassistant.ai
+hola@nutriassistant.org

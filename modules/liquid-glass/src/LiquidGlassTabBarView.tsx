@@ -9,6 +9,9 @@ export interface TabItem {
 export interface LiquidGlassTabBarViewProps extends ViewProps {
   tabs: TabItem[]
   selectedIndex: number
+  // Forces the native SwiftUI to match the app's theme even when the user
+  // has overridden the system appearance. 'auto' = follow system.
+  colorScheme?: 'light' | 'dark' | 'auto'
   onTabPress?: (event: { nativeEvent: { index: number } }) => void
 }
 

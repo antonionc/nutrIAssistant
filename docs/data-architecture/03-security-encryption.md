@@ -15,7 +15,7 @@
 | Ciphertext blob format | `base64(nonce ‖ ciphertext ‖ tag)` | `src/services/encryption.ts:54-64` |
 | Tamper detection | Decrypt throws on invalid tag → `tryDecrypt` returns the original | `src/services/encryption.ts:79-85` |
 | Legacy-plaintext migration | Sentinel prefix `enc:v1:` to detect already-encrypted payloads | `src/modules/profiles/profileStorage.ts:13,27-36` |
-| Coverage | Selective at field level: only `aboutMeNotes`, `conditions[]`, `member_memories.encrypted_text`, `doc_chunks.encrypted_text`, and `doc_chunks.embedding` | `src/modules/profiles/profileStorage.ts:68-72`, `src/services/memoryStore.ts:41-43,127-131` |
+| Coverage | Full Art. 9 field-level coverage on profiles (`weight`, `height`, `dateOfBirth`, `allergies`, `conditions`, `aboutMeNotes`) plus `member_memories.encrypted_text` + nullable `embedding`, `doc_chunks.encrypted_text` + `embedding`, the encrypted `audit_log` payload, and `.pdf.enc` files at rest. Plaintext remainders (`name`, `role`, `avatarUrl`, `dietPreference`) are needed for pre-key-unlock profile-picker rendering and are intentionally low-sensitivity. | `src/modules/profiles/profileStorage.ts:143-151`, `src/services/memoryStore.ts:41-43,127-131`, `src/services/profileDocuments.ts`, `src/services/auditLog.ts` |
 | Page-level SQLite encryption | ⚠️ GAP — standard SQLite, **no SQLCipher** | `src/db/database.ts:53` (`openDatabaseAsync('nutriassistant.db')` with no crypto options) |
 | OS backups | Field-level encryption neutralizes the risk of automatic iCloud / Google Drive backup for covered fields. ⚠️ The rest of the JSON remains in plaintext in the backup | — |
 
@@ -138,4 +138,4 @@ Active and well-designed (see table above). **It is the primary protection mecha
 2. Generate a **CycloneDX SBOM** on every release and publish to GitHub Releases.
 3. Implement an **integrity check** for the `.pte` model on load (expected SHA256 in code).
 4. Block non-deterministic `npm install` with exact `engines.npm` and `engines.node` in `package.json`.
-5. Add **CONTRIBUTING.md** + **SECURITY.md** with a disclosure policy (`security@nutriassistant.ai`).
+5. Add **CONTRIBUTING.md** + **SECURITY.md** with a disclosure policy (`security@nutriassistant.org`).

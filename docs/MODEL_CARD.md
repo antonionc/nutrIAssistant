@@ -2,7 +2,7 @@
 
 **Card version:** 1.0
 **Card date:** 2026-05-13
-**Model owner:** NutrIAssistant (hola@nutriassistant.ai)
+**Model owner:** NutrIAssistant (hola@nutriassistant.org)
 
 This card follows the Google Model Card template. It documents how Qwen 3
 1.7B Quantized is *configured and used inside NutrIAssistant*, not the
@@ -89,4 +89,4 @@ repository for training-data provenance and licensing.
 ## Reporting issues
 
 Open an issue at https://github.com/cspitzer/nutriassistant/issues or
-email hola@nutriassistant.ai.
+email hola@nutriassistant.org.
