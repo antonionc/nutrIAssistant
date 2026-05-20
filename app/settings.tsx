@@ -692,6 +692,17 @@ export default function SettingsScreen() {
           <ContactRow label="🌐 Web" value="nutriassistant.ai" onPress={() => Linking.openURL('https://www.nutriassistant.ai')} colors={colors} />
           <View style={styles.divider} />
           <Text style={styles.version}>{tr.settings.version(appVersion)}</Text>
+          {/* Dev-only entry to the AI behavioural eval. Gated by __DEV__ so it
+              never renders in a release build; label intentionally not i18n'd. */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={styles.linkBtn}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              onPress={() => router.push('/dev/ai-eval' as any)}
+            >
+              <Text style={styles.linkBtnText}>🧪 AI behavioural eval (dev)</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={{ height: 120 }} />

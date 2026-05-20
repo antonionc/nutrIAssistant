@@ -14,8 +14,8 @@ import {
   subscribeLLMLoad,
 } from '../../services/onDeviceLlm'
 import { embedTextOrNull } from '../../services/embeddings'
-import { retrievePdfChunks, rankByKeywordOverlap } from '../../services/retrieval'
-import { getTopMemoriesForMember, addMemberMemory } from '../../services/memoryStore'
+import { retrievePdfChunks, rankByKeywordOverlap, rankMemoriesByRelevance } from '../../services/retrieval'
+import { listMemberMemories, addMemberMemory } from '../../services/memoryStore'
 import { extractFactsFromTurn, CandidateFact } from '../../services/factExtractor'
 import { classify, getRefusalMessage } from '../../services/topicGate'
 import { isAIAccessibleForMember } from './aiAccess'
@@ -251,7 +251,7 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
         // run in parallel so the prompt build doesn't add waterfall latency.
         const schoolAgeIds = profiles.filter((p) => p.isSchoolAge).map((p) => p.id)
 
-        const [schoolMenuEntriesRaw, available, favoriteRecipes, memberMemories, queryEmbedding] =
+        const [schoolMenuEntriesRaw, available, favoriteRecipes, allMemberMemories, queryEmbedding] =
           await Promise.all([
             Promise.all(schoolAgeIds.map((id) => getSchoolMenuEntries(id))).then((arr) =>
               arr.flat().map((e) => ({ ...e, meal: 'lunch' as const }))
@@ -261,11 +261,19 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
               const ids = activeMember?.favoriteRecipeIds ?? []
               return ids.length > 0 ? await getRecipesByIds(ids) : []
             })(),
-            activeMember
-              ? getTopMemoriesForMember(activeMember.id, MEMORY_TOP_K)
-              : Promise.resolve([]),
+            activeMember ? listMemberMemories(activeMember.id) : Promise.resolve([]),
             embedTextOrNull(content),
           ])
+
+        // Relevance-rank the member's durable facts against THIS query rather
+        // than injecting the most-recent 5. Reuses the query embedding already
+        // computed above — semantic ranking adds no extra inference latency.
+        const memberMemories = rankMemoriesByRelevance(
+          allMemberMemories,
+          queryEmbedding,
+          content,
+          MEMORY_TOP_K
+        )
 
         const recipeIndex = new Map<string, string>()
         for (const r of favoriteRecipes) recipeIndex.set(r.id, r.name)
@@ -379,7 +387,12 @@ export function AIEngineProvider({ children }: { children: React.ReactNode }) {
 
   const acceptPendingFact = useCallback(async (fact: PendingFact) => {
     try {
-      await addMemberMemory(fact.memberId, fact.text, fact.category)
+      // Embed the fact at save time so it can later be relevance-ranked
+      // against live queries. Best-effort: a null embedding (model not
+      // loaded) is stored as NULL and retrieval falls back to keyword
+      // overlap for that row — never block the user's confirmation on it.
+      const embedding = await embedTextOrNull(fact.text)
+      await addMemberMemory(fact.memberId, fact.text, fact.category, embedding)
     } catch (e) {
       logger.warn('[AIEngine] failed to persist fact:', e)
     }

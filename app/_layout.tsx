@@ -86,6 +86,17 @@ function AppShell() {
               headerTintColor: colors.text,
             }}
           />
+          {/* Dev-only AI behavioural eval. The screen guards itself with
+              `__DEV__`; the route is inert in a release build. */}
+          <Stack.Screen
+            name="dev/ai-eval"
+            options={{
+              title: 'AI Eval (dev)',
+              headerBackTitle: t.app.backTitle,
+              headerStyle: { backgroundColor: colors.surface },
+              headerTintColor: colors.text,
+            }}
+          />
           <Stack.Screen
             name="legal/privacy"
             options={{

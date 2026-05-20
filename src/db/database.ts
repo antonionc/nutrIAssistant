@@ -14,6 +14,7 @@ import { migration012 } from './migrations/012_drop_app_metadata'
 import { migration013 } from './migrations/013_purge_fatsecret'
 import { migration014 } from './migrations/014_audit_log'
 import { migration015 } from './migrations/015_member_index_with_fks'
+import { migration016 } from './migrations/016_member_memory_embeddings'
 import { logger } from '../utils/logger'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -85,6 +86,9 @@ const MIGRATIONS: Migration[] = [
   // 015 is a fn migration because it toggles PRAGMA foreign_keys
   // (illegal inside a transaction). Same pattern as 008.
   { name: '015_member_index_with_fks', fn: migration015 },
+  // 016 ADDs a nullable column — tolerateDuplicate so the fresh-install
+  // path (where 011 may already include it on a future schema) is a no-op.
+  { name: '016_member_memory_embeddings', sql: migration016, tolerateDuplicate: true },
 ]
 
 // SQLite reports duplicate-column ALTERs as "duplicate column name: <name>".

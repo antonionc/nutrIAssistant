@@ -17,6 +17,12 @@ export interface MemberMemory {
   text: string
   category: MemoryCategory
   createdAt: string
+  // 384-dim MiniLM embedding of `text`, used by `rankMemoriesByRelevance`
+  // to rank facts semantically against the live query. `undefined` for rows
+  // saved before the embeddings model was available (migration 016) or when
+  // the model was not loaded at save time — retrieval falls back to keyword
+  // overlap for those.
+  embedding?: Float32Array
 }
 
 export interface DocChunkRow {
@@ -34,16 +40,22 @@ export interface DocChunkRow {
 export async function addMemberMemory(
   memberId: string,
   text: string,
-  category: MemoryCategory
+  category: MemoryCategory,
+  embedding?: Float32Array | null
 ): Promise<MemberMemory> {
   const db = await getDatabase()
   const id = generateId('mem')
   const createdAt = new Date().toISOString()
+  // The embedding is encrypted exactly like free text — an embedding leaks
+  // its source via inversion. Stored base64 in the TEXT column added by
+  // migration 016. NULL when the embeddings model was not loaded at save
+  // time; retrieval degrades to keyword overlap for those rows.
+  const encryptedEmbedding = embedding ? encryptBytes(float32ToUint8(embedding)) : null
   await db.runAsync(
-    'INSERT INTO member_memories (id, member_id, encrypted_text, category, created_at) VALUES (?, ?, ?, ?, ?)',
-    [id, memberId, encrypt(text), category, createdAt]
+    'INSERT INTO member_memories (id, member_id, encrypted_text, category, created_at, embedding) VALUES (?, ?, ?, ?, ?, ?)',
+    [id, memberId, encrypt(text), category, createdAt, encryptedEmbedding]
   )
-  return { id, memberId, text, category, createdAt }
+  return { id, memberId, text, category, createdAt, embedding: embedding ?? undefined }
 }
 
 export async function listMemberMemories(memberId: string): Promise<MemberMemory[]> {
@@ -54,8 +66,9 @@ export async function listMemberMemories(memberId: string): Promise<MemberMemory
     encrypted_text: string
     category: string
     created_at: string
+    embedding: string | null
   }>(
-    'SELECT id, member_id, encrypted_text, category, created_at FROM member_memories WHERE member_id = ? ORDER BY created_at DESC',
+    'SELECT id, member_id, encrypted_text, category, created_at, embedding FROM member_memories WHERE member_id = ? ORDER BY created_at DESC',
     [memberId]
   )
   return rows.map((r) => ({
@@ -64,17 +77,8 @@ export async function listMemberMemories(memberId: string): Promise<MemberMemory
     text: safeDecrypt(r.encrypted_text),
     category: r.category as MemoryCategory,
     createdAt: r.created_at,
+    embedding: safeDecryptEmbedding(r.embedding),
   })).filter((m) => m.text.length > 0)
-}
-
-// Most-recent-first, capped to k. Used by the prompt builder to inject ≤5
-// memories without blowing the context budget.
-export async function getTopMemoriesForMember(
-  memberId: string,
-  k: number
-): Promise<MemberMemory[]> {
-  const all = await listMemberMemories(memberId)
-  return all.slice(0, k)
 }
 
 // Cheap COUNT(*) for UI badges/tiles. Avoids decrypting every row just to
@@ -183,5 +187,19 @@ function safeDecrypt(blob: string): string {
   } catch (e) {
     logger.warn('[memoryStore] decrypt failed (corrupt or wrong key)', e)
     return ''
+  }
+}
+
+// Decrypts a member-memory embedding column. Returns undefined for a NULL
+// column (pre-migration-016 row, or saved without the embeddings model) and
+// for a corrupt/wrong-key blob — retrieval falls back to keyword overlap, so
+// a missing embedding degrades gracefully rather than dropping the memory.
+function safeDecryptEmbedding(blob: string | null): Float32Array | undefined {
+  if (!blob) return undefined
+  try {
+    return uint8ToFloat32(decryptBytes(blob))
+  } catch (e) {
+    logger.warn('[memoryStore] embedding decrypt failed (corrupt or wrong key)', e)
+    return undefined
   }
 }

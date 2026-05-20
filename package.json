@@ -11,7 +11,8 @@
     "lint": "expo lint",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "testbed": "node scripts/ai-testbed.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",

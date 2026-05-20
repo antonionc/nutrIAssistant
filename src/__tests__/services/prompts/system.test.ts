@@ -54,16 +54,19 @@ describe('buildSystemPrompt — no hardcoded Potter family', () => {
 // ─── Dynamic profile directives ───────────────────────────────────────────────
 
 describe('buildSystemPrompt — topic guardrail and scoping', () => {
-  it('always includes the strict-scope topic directive', () => {
+  it('always includes the scope topic directive', () => {
     const prompt = buildSystemPrompt([makeMember()], [])
-    expect(prompt).toMatch(/ÁMBITO ESTRICTO/)
+    expect(prompt).toMatch(/ÁMBITO:/)
     expect(prompt).toMatch(/nutrición.*alimentación.*salud.*comidas.*compras/)
   })
 
-  it('includes a few-shot example of refusing an off-topic question', () => {
+  it('instructs the model to decline clearly off-topic questions', () => {
+    // The literal few-shot example was removed (2026-05): Qwen 3 1.7B
+    // over-applied it and refused on-topic queries. The guardrail is now a
+    // short directive — it must still tell the model to decline + redirect.
     const prompt = buildSystemPrompt([makeMember()], [])
-    expect(prompt).toMatch(/Ejemplo:/)
-    expect(prompt).toMatch(/Soy NutriBot, así que solo puedo ayudarte/)
+    expect(prompt).toMatch(/declina/i)
+    expect(prompt).toMatch(/redirige/i)
   })
 
   it('with activeMemberId, scopes the PERFIL section to that member only', () => {

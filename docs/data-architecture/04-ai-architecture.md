@@ -48,7 +48,7 @@ flowchart LR
         WB --> R0[Parallel reads]
         R0 --> R1[getAllRecipes 40]
         R0 --> R2[getRecipesByIds favorites]
-        R0 --> R3[getTopMemoriesForMember K=5]
+        R0 --> R3[listMemberMemories<br/>rankMemoriesByRelevance K=5]
         R0 --> R4[embedTextOrNull query]
         R0 --> R5[getSchoolMenuEntries]
         R4 --> Ret[retrievePdfChunks<br/>cosine top-K=2 threshold=0.4]
@@ -116,7 +116,7 @@ flowchart LR
 | Concept-drift monitoring | 🔴 GAP | — | Validation against a gold nutrition Q&A set |
 | Retraining | 🔴 Not applicable — Qwen is a frozen model | — | — |
 | Prompt A/B testing | 🔴 GAP | — | Feature flag `PROMPT_VERSION = 'v1'|'v2'` with experiment ID |
-| Pre-release evaluation | 🔴 GAP — no golden set, no RAGAS | `src/__tests__/services/prompts/system.test.ts` tests the prompt's structure, not its responses | 50-100 validated medical-nutrition Q&A + human evaluation on every prompt release |
+| Pre-release evaluation | 🟢 Two-layer eval. **(1) AI testbed** (`src/__tests__/ai-testbed/`, `npm run testbed`) — model-free Jest suite over the deterministic harness (topic gate ES+EN, age gate, memory & RAG ranking, recipe-prompt steering, prompt assembly, eval scorer). **(2) On-device behavioural eval** (`src/services/aiEval/` + dev screen `app/dev/ai-eval.tsx`, reachable from Settings) — runs a ~18-case golden set through the **real** `AIContext.sendMessage` pipeline on Qwen 3, scores each reply (verdict, refusal vs. answer, no-CoT, content assertions, latency) and shows the full reply for human review. No RAGAS yet. | `src/__tests__/ai-testbed/`, `scripts/ai-testbed.mjs`, `src/services/aiEval/`, `app/dev/ai-eval.tsx` | Grow the golden set toward 50–100 validated medical-nutrition Q&A; add RAGAS-style automated answer scoring |
 | Latency / tokens / cost | 🔴 GAP — not measured | — | Telemetry in the BFF; on-device timer + structured log |
 
 ## 4.4. Edge vs Cloud inference
@@ -134,15 +134,15 @@ flowchart LR
 
 | Component | Implementation | Evidence |
 |---|---|---|
-| Knowledge sources | (i) Text of user-uploaded PDFs (medical recipe books, clinical reports) (ii) Auto-extracted durable memories (iii) `aboutMeNotes` of the active profile (iv) Recipe + pantry + plan + school menu (context without semantic RAG, injected directly into the prompt) | `src/modules/ai-engine/AIContext.tsx:218-278` |
-| Vector store | SQLite table `doc_chunks` with an encrypted `embedding BLOB` | `src/db/migrations/011_memory_layer.ts:16-26`, `src/services/memoryStore.ts:114-167` |
+| Knowledge sources | (i) Text of user-uploaded PDFs (medical recipe books, clinical reports) (ii) Auto-extracted durable memories, **ranked per query by semantic relevance** (iii) `aboutMeNotes` of the active profile (iv) Recipe + pantry + plan + school menu (context without semantic RAG, injected directly into the prompt) | `src/modules/ai-engine/AIContext.tsx` |
+| Vector store | SQLite `doc_chunks` (encrypted `embedding` BLOB) for PDF chunks; `member_memories` carries an encrypted nullable `embedding` column for durable facts (migration 016) | `src/db/migrations/{011_memory_layer,016_member_memory_embeddings}.ts`, `src/services/memoryStore.ts` |
 | Embedding model | ALL_MINILM_L6_V2 (384-dim) | `src/services/embeddings.ts:19-22,33` |
 | Chunking strategy | Sentence-aware splitter, target 450 chars, minimum 80 | `src/services/profileDocuments.ts:92-118` |
 | Overlap | ❌ No overlap between consecutive chunks | `src/services/profileDocuments.ts:100-117` |
 | Retrieval | Full-scan cosine; top-K=2; threshold 0.4 | `src/services/retrieval.ts:31-55`, `src/modules/ai-engine/AIContext.tsx:47,256-263` |
-| Re-ranking | ❌ No dedicated re-ranker (cross-encoder). There is a `rankByKeywordOverlap` for pantry/recipes | `src/services/retrieval.ts:60-96` |
-| Source citation | ✅ PDF filename injected into the context: `- [filename.pdf] <text>` | `src/services/prompts/system.ts:230-235` |
-| Pantry / recipes / memories top-K | 10/8/5 respectively | `src/modules/ai-engine/AIContext.tsx:44-46` |
+| Re-ranking | 🟡 Durable memories are relevance-ranked per query by `rankMemoriesByRelevance` (cosine when the memory is embedded, normalised keyword overlap otherwise, recency as tie-break); `rankByKeywordOverlap` ranks pantry/recipes. No cross-encoder re-ranker for PDF chunks. | `src/services/retrieval.ts` |
+| Source citation | ✅ PDF filename injected into the context: `- [filename.pdf] <text>` | `src/services/prompts/system.ts` |
+| Pantry / recipes / memories top-K | 10/8/5 respectively. Memories are selected by **relevance to the live query** (semantic when embedded, else keyword) rather than by recency — a relevant older fact is no longer buried by newer trivial ones. | `src/modules/ai-engine/AIContext.tsx`, `src/services/retrieval.ts` |
 
 ### Example of a complete prompt (extract, Spanish, ES_LOCALE)
 

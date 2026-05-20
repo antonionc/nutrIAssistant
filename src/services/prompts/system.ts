@@ -111,6 +111,8 @@ const PROMPT_LABELS = {
     dirMediterranean: '- Base mediterránea; varía proteínas a lo largo de la semana.',
     dirConcrete: '- Respuestas concretas, basadas en la despensa disponible.',
     dirShopping: '- Si faltan ingredientes, sugiere qué comprar.',
+    dirRecipeFormat:
+      '- Para recetas o planes nutricionales: indica los ingredientes con cantidades por ración, pasos breves y numerados, y una estimación de calorías y macros (proteína/carbohidratos/grasa) por ración. Confirma siempre que la propuesta respeta las alergias y condiciones del usuario activo.',
     actionsBlock: 'ACCIONES: Cuando el usuario te pida explícitamente añadir o quitar una receta de favoritos, termina tu respuesta con UN bloque <actions>JSON</actions> donde JSON es un array. Formato: [{"type":"add_favorite","memberId":"<id>","recipeId":"<id>"}] o [{"type":"remove_favorite","memberId":"<id>","recipeId":"<id>"}]. Usa SOLO los IDs de PERFIL y RECETAS DISPONIBLES. Nunca inventes IDs. No emitas el bloque si el usuario no pidió la acción.',
   },
   en: {
@@ -131,6 +133,8 @@ const PROMPT_LABELS = {
     dirMediterranean: '- Mediterranean baseline; vary proteins throughout the week.',
     dirConcrete: '- Concrete answers, grounded in available pantry items.',
     dirShopping: '- If ingredients are missing, suggest what to buy.',
+    dirRecipeFormat:
+      "- For recipes or nutrition plans: list ingredients with per-serving quantities, brief numbered steps, and an estimated calories + macros (protein/carbs/fat) per serving. Always confirm the suggestion respects the active user's allergies and conditions.",
     actionsBlock: 'ACTIONS: When the user explicitly asks to add or remove a recipe from favorites, end your reply with ONE <actions>JSON</actions> block where JSON is an array. Format: [{"type":"add_favorite","memberId":"<id>","recipeId":"<id>"}] or [{"type":"remove_favorite","memberId":"<id>","recipeId":"<id>"}]. Use ONLY the IDs from PROFILE and AVAILABLE RECIPES. Never invent IDs. Do not emit the block if the user did not ask for the action.',
   },
 } as const
@@ -250,6 +254,7 @@ ${labels.dirAllergens}
 ${conditionDirectives ? conditionDirectives + '\n' : ''}${labels.dirMediterranean}
 ${labels.dirConcrete}
 ${labels.dirShopping}
+${labels.dirRecipeFormat}
 
 ${labels.actionsBlock}`
 

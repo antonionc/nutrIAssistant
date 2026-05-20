@@ -20,7 +20,7 @@ const IN_SCOPE_STEMS_ES = [
   'plato', 'menu', 'menú', 'receta', 'ingredient', 'cocin', 'cociné', 'hornea',
   // Nutrition
   'nutri', 'calor', 'kcal', 'proteín', 'protein', 'carbohidr', 'grasa', 'fibra',
-  'azúcar', 'azucar', 'sodio', 'sal ', 'colesterol', 'vitamin', 'mineral',
+  'azúcar', 'azucar', 'sodio', ' sal ', 'colesterol', 'vitamin', 'mineral',
   'hidrat', 'hierr', 'calci', 'omega', 'antioxid',
   // Diet patterns
   'dieta', 'diet', 'mediterrane', 'mediterráne', 'vegan', 'vegetarian',
@@ -36,12 +36,15 @@ const IN_SCOPE_STEMS_ES = [
   'compra', 'comprar', 'lista', 'supermerc', 'mercad', 'despens', 'nevera',
   'frigorífic', 'frigorific', 'caduc',
   // Beverages
-  'agua', 'beber', 'bebida', 'café', 'cafe', 'té ', ' te ', 'infusión',
+  // Short beverage stems are word-boundary-anchored on BOTH sides: a bare
+  // 'te ' would match "wri-te ", "chis-te ", "depor-te " and wrongly admit
+  // off-topic queries. ' te ' (spaces both sides) only matches the word.
+  'agua', 'beber', 'bebida', 'café', 'cafe', ' te ', 'infusión',
   'infusion', 'zumo', 'jugo', 'leche', 'alcohol', 'cerveza', 'vino',
   // Family-meal context (the assistant is family-aware)
   'familia', 'niño', 'niña', 'hij', 'famil', 'colegio', 'escuel',
   // Common foods (broad enough to catch "¿es bueno el aguacate?")
-  'verdur', 'frut', 'carne', 'pescado', 'huevo', 'arroz', 'pasta', 'pan ',
+  'verdur', 'frut', 'carne', 'pescado', 'huevo', 'arroz', 'pasta', ' pan ',
   'queso', 'yogur', 'aceite', 'oliva', 'legumbr', 'lenteja', 'garbanz',
   'aguacat', 'tomate', 'plátano', 'manzana', 'pollo', 'ternera',
   // Cooking & exercise (adjacent enough — the assistant covers basic activity context)
@@ -49,8 +52,10 @@ const IN_SCOPE_STEMS_ES = [
 ]
 
 const IN_SCOPE_STEMS_EN = [
-  // Food / meals
-  'food', 'meal', 'eat', 'breakfast', 'lunch', 'dinner', 'snack', 'dish',
+  // Food / meals. ' eat' is anchored at the word start: a bare 'eat' would
+  // match "w-eat-her", "gr-eat", "cr-eat-e" and wrongly admit off-topic
+  // queries. The leading space still catches "eat / eating / eats / eaten".
+  'food', 'meal', ' eat', 'breakfast', 'lunch', 'dinner', 'snack', 'dish',
   'menu', 'recipe', 'ingredient', 'cook', 'bake', 'roast', 'fry', 'grill',
   // Nutrition
   'nutri', 'calor', 'kcal', 'protein', 'carb', 'fat ', 'fiber', 'sugar',
@@ -83,28 +88,57 @@ const IN_SCOPE_STEMS_EN = [
 ]
 
 const OUT_OF_SCOPE_STEMS_ES = [
+  // Software / IT
   'javascript', 'typescript', 'python', 'java ', 'c++', 'react', 'componente',
   'función ', 'function ', 'código', 'codigo', 'programa', 'programar',
   'compilar', 'debuger', 'algoritmo', 'sql ', 'http', 'api ', 'json',
+  'docker', 'kubernet', 'github', 'linux', 'navegador web', 'wifi',
+  'bluetooth', 'contraseñ',
+  // Politics / current affairs
   'político', 'politico', 'elecci', 'gobierno', 'presidente del gob',
   'partido políti', 'votar', 'trump', 'biden', 'putin', 'guerra en',
+  // Sport
   'fútbol', 'futbol', 'champions', 'mundial', 'liga', 'tenis', 'fórmula 1',
   'formula 1', 'baloncesto', 'nba', 'la liga',
-  'bolsa', 'invertir', 'cripto', 'bitcoin', 'ether',
+  // Finance
+  'bolsa', 'invertir', 'cripto', 'bitcoin', 'ether', 'hipoteca', 'préstamo',
+  'prestamo', 'nómina', 'declaración de la renta',
+  // Entertainment / media
   'película', 'pelicula', 'serie de tv', 'netflix', 'spotify', 'cantante',
+  'videojuego', 'playstation', 'nintendo', 'tiktok', 'cuéntame un chiste',
+  // Maths / homework
+  'ecuación', 'ecuacion', 'derivada', 'álgebra', 'algebra', 'trigonometr',
+  // Travel
+  'vuelo a', 'reserva de hotel', 'vacacion', 'aeropuerto',
+  // Misc off-topic
+  'horóscopo', 'horoscopo', 'zodiac', 'tarot', 'mi coche', 'escribe un poema',
   'qué tiempo', 'qué hora', 'pronóstic', 'meteor',
 ]
 
 const OUT_OF_SCOPE_STEMS_EN = [
+  // Software / IT
   'javascript', 'typescript', 'python', ' java ', 'c++', 'react ',
   'component', 'function ', ' code ', 'algorithm', 'sql ', 'http', ' api ',
-  'json', 'compile', 'debug',
+  'json', 'compile', 'debug', 'docker', 'kubernetes', 'github', 'linux',
+  'wifi', 'bluetooth', 'password',
+  // Politics / current affairs
   'politic', 'election', 'government', 'president', 'vote', 'trump',
   'biden', 'putin',
+  // Sport
   'football', 'soccer', 'champions league', 'world cup', 'tennis',
   'formula 1', 'basketball', 'nba',
-  'stock market', 'invest', 'crypto', 'bitcoin', 'ethereum',
-  'movie', 'tv show', 'netflix', 'spotify', 'singer',
+  // Finance
+  'stock market', 'invest', 'crypto', 'bitcoin', 'ethereum', 'mortgage',
+  'tax return', 'salary',
+  // Entertainment / media
+  'movie', 'tv show', 'netflix', 'spotify', 'singer', 'video game',
+  'playstation', 'nintendo', 'tiktok', 'tell me a joke',
+  // Maths / homework
+  'equation', 'derivative', 'algebra', 'trigonometry',
+  // Travel
+  'flight to', 'hotel booking', 'vacation', 'airport',
+  // Misc off-topic
+  'horoscope', 'zodiac', 'tarot', 'my car', 'write a poem',
   "what's the weather", 'weather forecast', 'what time is',
 ]
 
@@ -148,6 +182,18 @@ const REFUSAL_EN =
 
 export function getRefusalMessage(): string {
   return currentLang() === 'en' ? REFUSAL_EN : REFUSAL_ES
+}
+
+// Stems every canned refusal (and the model parroting one) begins with.
+// Locale-independent: a refusal may have been issued in either language.
+const REFUSAL_PREFIXES = ['Soy NutriBot', "I'm NutriBot", 'Im NutriBot']
+
+// True when `text` is one of NutriBot's canned topic-gate refusals. Used by
+// the on-device AI eval harness to tell a hard refusal apart from a real
+// generated answer.
+export function isCannedRefusal(text: string): boolean {
+  const trimmed = text.trim()
+  return REFUSAL_PREFIXES.some((p) => trimmed.startsWith(p))
 }
 
 // Backwards-compat alias for callers that imported the constant before the
