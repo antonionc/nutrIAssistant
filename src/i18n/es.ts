@@ -113,6 +113,10 @@ export const ES = {
     // sandwiched between adjacent markers without its own body. Shown in the
     // review modal so the user can confirm, edit, or remove the day.
     schoolMenuReviewNoDataPlaceholder: 'No hay datos / Festivo',
+    // Badge rendered under the lunch card when some (but not all) family
+    // members eat at school that day — clarifies that the generated lunch
+    // is meant for the rest of the family.
+    eatsAtSchool: 'Come en el cole',
   },
 
   // Recipes

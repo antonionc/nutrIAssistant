@@ -72,6 +72,7 @@ export default function NutritionScreen() {
     setMealForDate,
     schoolMenuChildIds,
     getSchoolMenuEntries,
+    getMembersAtSchoolOn,
   } = usePlanner()
   const { colors } = useTheme()
   const tr = useTranslation()
@@ -529,6 +530,25 @@ export default function NutritionScreen() {
                   onLock={() => lockDay(selectedDay)}
                   onSuggestAlternative={() => handleSuggestAlternative(mealType)}
                 />
+
+                {/* "Eats at school" chips — only on the lunch slot, only for
+                    minors whose school menu covers the selected day. The
+                    generated lunch recipe is for the rest of the family. */}
+                {mealType === 'lunch' && (() => {
+                  const eatingAtSchool = getMembersAtSchoolOn(selectedDay)
+                    .map((id) => profiles.find((p) => p.id === id))
+                    .filter((p): p is NonNullable<typeof p> => p !== undefined)
+                  if (eatingAtSchool.length === 0) return null
+                  return (
+                    <View style={styles.supplementRow}>
+                      {eatingAtSchool.map((p) => (
+                        <View key={`school-${p.id}`} style={styles.schoolMealChip}>
+                          <Text style={styles.supplementText}>🏫 {p.name}: {tr.nutrition.eatsAtSchool}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )
+                })()}
 
                 {/* Supplement reminders */}
                 {profiles.some((p) => (p.supplements ?? []).some((s) => s.meal === mealType)) && (
@@ -1116,6 +1136,7 @@ function makeStyles(colors: ThemeColors) {
     mealsContainer: { gap: Spacing.md },
     supplementRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs, marginTop: Spacing.xs, paddingHorizontal: Spacing.xs },
     supplementChip: { backgroundColor: `${Colors.goldenAmber}20`, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.pill },
+    schoolMealChip: { backgroundColor: `${Colors.healthGreen}20`, paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.pill },
     supplementText: { ...Typography.caption, color: colors.text },
 
     // Alternative picker sheet

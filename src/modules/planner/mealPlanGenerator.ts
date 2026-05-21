@@ -6,6 +6,21 @@ import {
   getLLMStatus,
 } from '../../services/onDeviceLlm'
 import { logger } from '../../utils/logger'
+import {
+  computeDayDecisions,
+  normalizeForMatch,
+  recipeConflictsWith,
+  type DayDecisions,
+  type SchoolMenuCoverage,
+} from './mealPlanRules'
+
+// Re-export the pure helpers + their types so existing callers keep working.
+export {
+  computeDayDecisions,
+  normalizeForMatch,
+  recipeConflictsWith,
+}
+export type { DayDecisions, SchoolMenuCoverage }
 
 const POOL_SIZE = 50
 const LLM_CANDIDATES = 14
@@ -17,6 +32,16 @@ export interface WeekRecipes {
   breakfasts: Recipe[]
   lunches: Recipe[]
   dinners: Recipe[]
+}
+
+export interface SelectWeekRecipesOpts {
+  /**
+   * For each of the 7 generated days, an optional list of keywords the dinner
+   * should NOT contain. Used to prevent dinner from repeating what minors ate
+   * at school for lunch (cross-meal repetition is the worst form of "menu
+   * boredom" parents complain about). Index 0 = first day in the week, etc.
+   */
+  dinnerAvoidByDay?: (string[] | undefined)[]
 }
 
 interface CandidatePools {
@@ -63,8 +88,14 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 // Picks 7 recipes from pool with no repeats and cuisine rotation:
-// no two consecutive days share the same cuisine when possible.
-function pickAlgorithmic(pool: Recipe[]): Recipe[] {
+// no two consecutive days share the same cuisine when possible. When
+// `avoidByDay` is provided, recipes that conflict with the keywords for a
+// given day are filtered out first; if all conflict, the rotation falls
+// through to the unfiltered selection rather than picking nothing.
+function pickAlgorithmic(
+  pool: Recipe[],
+  avoidByDay?: (string[] | undefined)[]
+): Recipe[] {
   if (pool.length === 0) return []
   const shuffled = shuffle(pool)
   const picked: Recipe[] = []
@@ -72,9 +103,14 @@ function pickAlgorithmic(pool: Recipe[]): Recipe[] {
   const recentCuisines: string[] = []
 
   for (let day = 0; day < WEEK_DAYS; day++) {
+    const avoid = avoidByDay?.[day]
+    const isAvailable = (r: Recipe) =>
+      !usedIds.has(r.id) && !recipeConflictsWith(r, avoid)
     let next = shuffled.find(
-      (r) => !usedIds.has(r.id) && !recentCuisines.slice(-2).includes(r.cuisine)
+      (r) => isAvailable(r) && !recentCuisines.slice(-2).includes(r.cuisine)
     )
+    if (!next) next = shuffled.find(isAvailable)
+    // Last resort: ignore the avoid list so the day isn't left empty.
     if (!next) next = shuffled.find((r) => !usedIds.has(r.id))
     if (!next) next = shuffled[day % shuffled.length]
     picked.push(next)
@@ -82,6 +118,33 @@ function pickAlgorithmic(pool: Recipe[]): Recipe[] {
     recentCuisines.push(next.cuisine)
   }
   return picked
+}
+
+// Post-processes an LLM-picked weekly selection so that days with school-menu
+// keywords don't reuse a dish already eaten at school. Swaps offending
+// recipes with the first non-conflicting recipe in the pool that isn't
+// already used. Falls through (leaves the original) when no swap is possible.
+function applyDinnerAvoidance(
+  picked: Recipe[],
+  pool: Recipe[],
+  avoidByDay: (string[] | undefined)[]
+): Recipe[] {
+  const result = [...picked]
+  const usedIds = new Set(result.map((r) => r.id))
+  for (let day = 0; day < result.length; day++) {
+    const avoid = avoidByDay[day]
+    if (!avoid || avoid.length === 0) continue
+    if (!recipeConflictsWith(result[day], avoid)) continue
+    const replacement = pool.find(
+      (r) => !usedIds.has(r.id) && !recipeConflictsWith(r, avoid)
+    )
+    if (replacement) {
+      usedIds.delete(result[day].id)
+      usedIds.add(replacement.id)
+      result[day] = replacement
+    }
+  }
+  return result
 }
 
 // ─── LLM picker ───────────────────────────────────────────────────────────────
@@ -138,8 +201,12 @@ async function pickWithLlm(
 
 // ─── Public entry point ──────────────────────────────────────────────────────
 
-export async function selectWeekRecipes(profiles: FamilyMember[]): Promise<WeekRecipes> {
+export async function selectWeekRecipes(
+  profiles: FamilyMember[],
+  opts: SelectWeekRecipesOpts = {}
+): Promise<WeekRecipes> {
   const pools = await buildSafeCandidatePools(profiles)
+  const dinnerAvoid = opts.dinnerAvoidByDay
 
   const status = await getLLMStatus()
   const useLlm = status.isLoaded
@@ -153,11 +220,18 @@ export async function selectWeekRecipes(profiles: FamilyMember[]): Promise<WeekR
   if (useLlm) {
     breakfasts = (await pickWithLlm('breakfast', pools.breakfast)) ?? pickAlgorithmic(pools.breakfast)
     lunches    = (await pickWithLlm('lunch',     pools.lunch))     ?? pickAlgorithmic(pools.lunch)
-    dinners    = (await pickWithLlm('dinner',    pools.dinner))    ?? pickAlgorithmic(pools.dinner)
+    // Dinner avoidance is applied per-day. The LLM picks a whole week without
+    // day-keyword context, so we post-process; the algorithmic fallback
+    // filters per day directly.
+    const llmDinners = await pickWithLlm('dinner', pools.dinner)
+    dinners = llmDinners ?? pickAlgorithmic(pools.dinner, dinnerAvoid)
+    if (llmDinners && dinnerAvoid && dinnerAvoid.some((a) => a && a.length > 0)) {
+      dinners = applyDinnerAvoidance(dinners, pools.dinner, dinnerAvoid)
+    }
   } else {
     breakfasts = pickAlgorithmic(pools.breakfast)
     lunches    = pickAlgorithmic(pools.lunch)
-    dinners    = pickAlgorithmic(pools.dinner)
+    dinners    = pickAlgorithmic(pools.dinner, dinnerAvoid)
   }
 
   return { breakfasts, lunches, dinners }

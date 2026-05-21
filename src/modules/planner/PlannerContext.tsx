@@ -36,7 +36,7 @@ import {
 } from '../../services/schoolMenuParser'
 import { t } from '../../i18n'
 import { useProfiles } from '../profiles/ProfilesContext'
-import { selectWeekRecipes } from './mealPlanGenerator'
+import { selectWeekRecipes, computeDayDecisions } from './mealPlanGenerator'
 import { logger } from '../../utils/logger'
 
 function getWeekDates(startDate?: string): string[] {
@@ -94,6 +94,14 @@ interface PlannerContextValue {
   isLoading: boolean
   isGenerating: boolean
   schoolMenuChildIds: string[]
+  /**
+   * Cache of school-menu entries grouped by child, keyed by date for
+   * O(1) lookups from the Nutrition screen. Refreshed alongside
+   * `schoolMenuChildIds` whenever the menu state changes.
+   */
+  schoolMenuByMember: Record<string, Record<string, Omit<SchoolMenuEntry, 'meal'>>>
+  /** Returns the IDs of members whose school menu covers the given date. */
+  getMembersAtSchoolOn: (date: string) => string[]
   loadWeek: (startDate?: string) => Promise<void>
   generateWeekPlan: (
     inventory: InventoryLite[],
@@ -129,6 +137,9 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [schoolMenuChildIds, setSchoolMenuChildIds] = useState<string[]>([])
+  const [schoolMenuByMember, setSchoolMenuByMember] = useState<
+    Record<string, Record<string, Omit<SchoolMenuEntry, 'meal'>>>
+  >({})
 
   const loadWeek = useCallback(async (startDate?: string) => {
     setIsLoading(true)
@@ -141,7 +152,21 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
   const refreshSchoolMenuState = useCallback(async () => {
     const ids = await getSchoolMenuChildIds()
     setSchoolMenuChildIds(ids)
+    const perMember: Record<string, Record<string, Omit<SchoolMenuEntry, 'meal'>>> = {}
+    for (const id of ids) {
+      const entries = await getSchoolMenuEntries(id)
+      perMember[id] = Object.fromEntries(entries.map((e) => [e.date, e]))
+    }
+    setSchoolMenuByMember(perMember)
   }, [])
+
+  const getMembersAtSchoolOn = useCallback(
+    (date: string): string[] =>
+      Object.entries(schoolMenuByMember)
+        .filter(([, byDate]) => byDate[date] !== undefined)
+        .map(([memberId]) => memberId),
+    [schoolMenuByMember]
+  )
 
   useEffect(() => {
     loadWeek()
@@ -152,8 +177,19 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
    * Generates a 7-day meal plan from locally-stored recipes. Uses the
    * on-device LLM when available to curate cuisine/variety; otherwise falls
    * back to a deterministic algorithmic picker that guarantees no
-   * within-week repeats and rotates cuisines. School-menu lunch entries are
-   * respected for school-age kids. No cloud AI calls.
+   * within-week repeats and rotates cuisines.
+   *
+   * School-menu handling:
+   *  - Lunch is left undefined only when EVERY family member has a school
+   *    menu entry that day (e.g., single-minor families, or all-minor
+   *    families). When the family has at least one adult, lunch is always
+   *    generated; the Nutrition screen labels which minors are eating at
+   *    school so the user understands the recipe is for the rest.
+   *  - Dinner avoids dishes/ingredients minors already had at school the
+   *    same day, since cross-meal repetition is the most visible kind of
+   *    "menu boredom".
+   *
+   * No cloud AI calls.
    */
   const generateWeekPlan = useCallback(
     async (_inventory: InventoryLite[], startDate?: string) => {
@@ -161,14 +197,22 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       try {
         const dates = getWeekDates(startDate)
 
-        // Collect school menu dates so we can skip lunches for those days
         const schoolAgeIds = profiles.filter((p) => p.isSchoolAge).map((p) => p.id)
-        const schoolMenuEntries = (
-          await Promise.all(schoolAgeIds.map((id) => getSchoolMenuEntries(id)))
-        ).flat()
-        const schoolMenuDates = new Set(schoolMenuEntries.map((e) => e.date))
+        const coverage = await Promise.all(
+          schoolAgeIds.map(async (memberId) => ({
+            memberId,
+            entries: await getSchoolMenuEntries(memberId),
+          }))
+        )
+        const { lunchSkipByDay, dinnerAvoidByDay } = computeDayDecisions(
+          profiles,
+          coverage,
+          dates
+        )
 
-        const { breakfasts, lunches, dinners } = await selectWeekRecipes(profiles)
+        const { breakfasts, lunches, dinners } = await selectWeekRecipes(profiles, {
+          dinnerAvoidByDay,
+        })
 
         const now = new Date().toISOString()
         const newPlans: MealPlan[] = []
@@ -185,9 +229,10 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
             date,
             meals: {
               breakfast: breakfasts[i],
-              // If there is a school menu for this day, leave lunch undefined
-              // so it doesn't compete with what the child eats at school
-              lunch: schoolMenuDates.has(date) ? undefined : lunches[i],
+              // Only blank the family lunch when every member has school
+              // food that day — otherwise adults (and any uncovered minor)
+              // still need a meal.
+              lunch: lunchSkipByDay[i] ? undefined : lunches[i],
               dinner: dinners[i],
             },
             memberTargets: {},
@@ -488,6 +533,8 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       isGenerating,
       schoolMenuChildIds,
+      schoolMenuByMember,
+      getMembersAtSchoolOn,
       loadWeek,
       generateWeekPlan,
       setMealForDate,
