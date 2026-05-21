@@ -7,8 +7,6 @@ import {
 } from '../../services/onDeviceLlm'
 import { logger } from '../../utils/logger'
 import {
-  computeDayDecisions,
-  normalizeForMatch,
   recipeConflictsWith,
   type DayDecisions,
   type SchoolMenuCoverage,
@@ -19,7 +17,7 @@ export {
   computeDayDecisions,
   normalizeForMatch,
   recipeConflictsWith,
-}
+} from './mealPlanRules'
 export type { DayDecisions, SchoolMenuCoverage }
 
 const POOL_SIZE = 50
