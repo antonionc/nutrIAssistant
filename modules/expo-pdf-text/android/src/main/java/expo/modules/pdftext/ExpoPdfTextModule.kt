@@ -30,6 +30,15 @@ class ExpoPdfTextModule : Module() {
         }
       }
     }
+
+    // Per-line geometric extraction. PdfBox-Android can produce positional
+    // text via a custom PDFTextStripper, but doing it well (matching
+    // PDFKit's selectionsByLine behaviour) is non-trivial. Until the
+    // Android equivalent is implemented, return an empty list so the
+    // school-menu parser falls back cleanly to the page.string path.
+    AsyncFunction("extractTextLines") { _: String ->
+      emptyList<Map<String, Any>>()
+    }
   }
 
   private fun openStream(uri: String, context: android.content.Context): InputStream {

@@ -11,6 +11,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native'
@@ -18,6 +19,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import * as DocumentPicker from 'expo-document-picker'
 import { router } from 'expo-router'
 import { usePlanner, SchoolMenuUploadError } from '../../src/modules/planner/PlannerContext'
+import type { MenuMonthAnchor } from '../../src/services/schoolMenuParser'
+import type { SchoolMenuEntry } from '../../src/types/profiles'
 import { useInventory } from '../../src/modules/inventory/InventoryContext'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
 import { useSelectedProfile } from '../../src/modules/profiles/SelectedProfileContext'
@@ -64,7 +67,8 @@ export default function NutritionScreen() {
     isGenerating,
     generateWeekPlan,
     lockDay,
-    uploadSchoolMenu,
+    parseSchoolMenuForReview,
+    commitSchoolMenuEntries,
     setMealForDate,
     schoolMenuChildIds,
     getSchoolMenuEntries,
@@ -101,6 +105,9 @@ export default function NutritionScreen() {
     date: string
     childId: string
     description: string
+    firstCourse?: string
+    secondCourse?: string
+    dessert?: string
     extractedIngredients: string[]
     extractedAllergens: string[]
     nutritionalEstimate?: { calories: number; protein: number; carbs: number; fat: number }
@@ -111,6 +118,19 @@ export default function NutritionScreen() {
     entries: SchoolEntry[]
     loading: boolean
   }>({ visible: false, activeChildId: null, entries: [], loading: false })
+
+  // Review modal — opens after the PDF is parsed but BEFORE entries are
+  // persisted. The user can edit each course or remove rows; tapping
+  // Save commits to the DB and kicks off plan generation. Tapping Cancel
+  // discards the drafts entirely (no DB writes have happened yet).
+  type ReviewDraft = Omit<SchoolMenuEntry, 'id' | 'childId'>
+  const [reviewSheet, setReviewSheet] = useState<{
+    visible: boolean
+    entries: ReviewDraft[]
+    childIds: string[]
+    anchor: MenuMonthAnchor | null
+    saving: boolean
+  }>({ visible: false, entries: [], childIds: [], anchor: null, saving: false })
 
   const selectedPlan = weekPlans.find((p) => p.date === selectedDay)
 
@@ -189,25 +209,20 @@ export default function NutritionScreen() {
     const file = result.assets[0]
     setUploadPhase('analyzing')
     try {
-      const summary = await uploadSchoolMenu(file.uri, targetChildIds)
-      setUploadPhase('generating')
-      await handleGeneratePlan()
-      const fmt = (iso: string) => {
-        const d = new Date(iso)
-        return Number.isNaN(d.getTime())
-          ? iso
-          : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-      }
-      const detail = summary.firstDate && summary.lastDate
-        ? tr.nutrition.schoolMenuUploadSummary(
-            summary.entryCount,
-            fmt(summary.firstDate),
-            fmt(summary.lastDate),
-          )
-        : tr.nutrition.uploadSuccessDesc
-      Alert.alert(tr.nutrition.uploadSuccess, detail)
+      const parsed = await parseSchoolMenuForReview(file.uri)
+      // Open the review modal. NOTHING has been written to the DB yet —
+      // commit happens inside the modal's Save handler. We deliberately do
+      // not call handleGeneratePlan here; that runs after Save so the plan
+      // reflects whatever the user committed.
+      setReviewSheet({
+        visible: true,
+        entries: parsed.entries,
+        childIds: targetChildIds,
+        anchor: parsed.anchor,
+        saving: false,
+      })
     } catch (error) {
-      logger.error('[Nutrition] School menu upload failed:', error)
+      logger.error('[Nutrition] School menu parse failed:', error)
       const message =
         error instanceof SchoolMenuUploadError
           ? tr.nutrition[
@@ -226,7 +241,105 @@ export default function NutritionScreen() {
     } finally {
       setUploadPhase('idle')
     }
-  }, [profiles, uploadSchoolMenu, handleGeneratePlan, openChildTargetPicker, tr])
+  }, [profiles, parseSchoolMenuForReview, openChildTargetPicker, tr])
+
+  // Helpers for the review modal: edit, remove, add days. Each edit returns
+  // a fresh entries array so React re-renders the affected row immediately.
+  const updateReviewEntry = useCallback(
+    (index: number, patch: Partial<ReviewDraft>) => {
+      setReviewSheet((prev) => ({
+        ...prev,
+        entries: prev.entries.map((e, i) => (i === index ? { ...e, ...patch } : e)),
+      }))
+    },
+    []
+  )
+
+  const removeReviewEntry = useCallback((index: number) => {
+    setReviewSheet((prev) => ({
+      ...prev,
+      entries: prev.entries.filter((_, i) => i !== index),
+    }))
+  }, [])
+
+  const addReviewEntry = useCallback(() => {
+    setReviewSheet((prev) => {
+      // Pick the day after the last existing entry; if there are none, use
+      // the anchor's first weekday of the month so the new row sits where
+      // the user expects.
+      let nextDate: string
+      if (prev.entries.length > 0) {
+        const last = prev.entries[prev.entries.length - 1].date
+        const d = new Date(last)
+        d.setDate(d.getDate() + 1)
+        nextDate = d.toISOString().split('T')[0]
+      } else if (prev.anchor) {
+        const d = new Date(prev.anchor.year, prev.anchor.month - 1, 1)
+        nextDate = d.toISOString().split('T')[0]
+      } else {
+        nextDate = new Date().toISOString().split('T')[0]
+      }
+      const draft: ReviewDraft = {
+        date: nextDate,
+        meal: 'lunch',
+        description: '',
+        firstCourse: undefined,
+        secondCourse: undefined,
+        dessert: undefined,
+        extractedIngredients: [],
+        extractedAllergens: [],
+      }
+      return { ...prev, entries: [...prev.entries, draft] }
+    })
+  }, [])
+
+  const cancelReview = useCallback(() => {
+    setReviewSheet({
+      visible: false,
+      entries: [],
+      childIds: [],
+      anchor: null,
+      saving: false,
+    })
+  }, [])
+
+  const saveReview = useCallback(async () => {
+    setReviewSheet((prev) => ({ ...prev, saving: true }))
+    try {
+      const { entries, childIds } = reviewSheet
+      const summary = await commitSchoolMenuEntries(entries, childIds)
+      setUploadPhase('generating')
+      await handleGeneratePlan()
+      const fmt = (iso: string) => {
+        const d = new Date(iso)
+        return Number.isNaN(d.getTime())
+          ? iso
+          : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+      }
+      const detail = summary.firstDate && summary.lastDate
+        ? tr.nutrition.schoolMenuUploadSummary(
+            summary.entryCount,
+            fmt(summary.firstDate),
+            fmt(summary.lastDate),
+          )
+        : tr.nutrition.uploadSuccessDesc
+      setReviewSheet({
+        visible: false,
+        entries: [],
+        childIds: [],
+        anchor: null,
+        saving: false,
+      })
+      Alert.alert(tr.nutrition.uploadSuccess, detail)
+    } catch (error) {
+      logger.error('[Nutrition] School menu commit failed:', error)
+      const message = error instanceof Error ? error.message : tr.app.error
+      Alert.alert(tr.nutrition.uploadFailed, message)
+      setReviewSheet((prev) => ({ ...prev, saving: false }))
+    } finally {
+      setUploadPhase('idle')
+    }
+  }, [reviewSheet, commitSchoolMenuEntries, handleGeneratePlan, tr])
 
   const hasSchoolAgeMembers = profiles.some((p) => p.isSchoolAge)
 
@@ -266,28 +379,39 @@ export default function NutritionScreen() {
     })
   }, [])
 
-  // The sheet shows today + the next 4 days, in chronological order. Days
-  // without an entry render as "Sin datos" so the layout stays predictable.
-  // If the entire window is empty but the DB has entries elsewhere (the
-  // PDF covered a different month, for example), `orphanEntries` carries
-  // those forward to the sheet as a fallback view.
-  const { fiveDayWindow, orphanEntries } = useMemo(() => {
+  // The sheet shows today + the next 4 calendar days, in chronological
+  // order. Days without an entry render as "Sin datos" so the layout
+  // stays predictable. When no entry falls inside the window we DON'T
+  // surface older orphaned uploads (would mislead the user); instead the
+  // sheet shows an explicit empty-state banner with an "upload this
+  // month's menu" CTA, handled in the render path below.
+  const fiveDayWindow = useMemo(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const days: { iso: string; isToday: boolean }[] = []
-    for (let i = 0; i < 5; i++) {
+    const byDate = new Map(menuSheet.entries.map((e) => [e.date, e]))
+    return Array.from({ length: 5 }, (_, i) => {
       const d = new Date(today)
       d.setDate(d.getDate() + i)
-      days.push({ iso: d.toISOString().split('T')[0], isToday: i === 0 })
-    }
-    const byDate = new Map(menuSheet.entries.map((e) => [e.date, e]))
-    const window = days.map((d) => ({ ...d, entry: byDate.get(d.iso) ?? null }))
-    const anyInWindow = window.some((d) => d.entry !== null)
-    const orphans = anyInWindow || menuSheet.entries.length === 0
-      ? []
-      : menuSheet.entries.slice(0, 5).map((e) => ({ iso: e.date, isToday: false, entry: e }))
-    return { fiveDayWindow: window, orphanEntries: orphans }
+      const iso = d.toISOString().split('T')[0]
+      return { iso, isToday: i === 0, entry: byDate.get(iso) ?? null }
+    })
   }, [menuSheet.entries])
+
+  const windowIsEmpty = useMemo(
+    () => fiveDayWindow.every((d) => d.entry === null),
+    [fiveDayWindow]
+  )
+
+  // Triggered by the empty-window CTA: close the menu sheet first so the
+  // upload's child-picker / document-picker / review modals are visible.
+  const openUploadFromEmptyWindow = useCallback(() => {
+    setMenuSheet((prev) => ({ ...prev, visible: false }))
+    // Defer so the sheet's exit animation can finish before the upload
+    // flow opens its own modal — looks abrupt otherwise.
+    setTimeout(() => {
+      handleUploadSchoolMenu()
+    }, 200)
+  }, [handleUploadSchoolMenu])
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -631,28 +755,37 @@ export default function NutritionScreen() {
               <ActivityIndicator color={Colors.healthGreen} style={{ marginVertical: Spacing.xl }} />
             ) : (
               <>
-                {orphanEntries.length > 0 && (
-                  <View style={styles.menuOrphanBanner}>
-                    <Text style={styles.menuOrphanText}>
-                      {tr.nutrition.schoolMenuOrphanBanner(
-                        formatMenuDate(orphanEntries[0].entry.date),
-                        formatMenuDate(orphanEntries[orphanEntries.length - 1].entry.date),
-                      )}
+                {windowIsEmpty && (
+                  <View style={styles.menuEmptyBanner}>
+                    <Text style={styles.menuEmptyTitle}>
+                      {tr.nutrition.schoolMenuEmptyWindowTitle}
                     </Text>
+                    <Text style={styles.menuEmptyMessage}>
+                      {tr.nutrition.schoolMenuEmptyWindowMessage}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.menuEmptyCta}
+                      onPress={openUploadFromEmptyWindow}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.menuEmptyCtaText}>
+                        {tr.nutrition.schoolMenuEmptyWindowCta}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 )}
                 <FlatList
-                  data={orphanEntries.length > 0 ? orphanEntries : fiveDayWindow}
+                  data={fiveDayWindow}
                   keyExtractor={(d) => d.iso}
                   ItemSeparatorComponent={() => <View style={styles.sheetDivider} />}
                   style={{ maxHeight: 480 }}
                   renderItem={({ item }) => (
-                  <SchoolMenuDayRow
-                    day={item}
-                    formatDate={formatMenuDate}
-                    styles={styles}
-                    tr={tr}
-                  />
+                    <SchoolMenuDayRow
+                      day={item}
+                      formatDate={formatMenuDate}
+                      styles={styles}
+                      tr={tr}
+                    />
                   )}
                 />
               </>
@@ -660,7 +793,155 @@ export default function NutritionScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ── Review parsed school-menu entries (post-parse, pre-commit) ─── */}
+      <Modal
+        visible={reviewSheet.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={cancelReview}
+      >
+        <KeyboardAvoidingView
+          style={styles.sheetOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={cancelReview}
+            disabled={reviewSheet.saving}
+          />
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>{tr.nutrition.schoolMenuReviewTitle}</Text>
+            <Text style={styles.sheetSubtitle}>{tr.nutrition.schoolMenuReviewSubtitle}</Text>
+
+            <FlatList
+              data={reviewSheet.entries}
+              keyExtractor={(_, i) => `review-${i}`}
+              ItemSeparatorComponent={() => <View style={styles.sheetDivider} />}
+              style={{ maxHeight: 460 }}
+              ListEmptyComponent={
+                <Text style={styles.menuNoData}>{tr.nutrition.schoolMenuReviewEmpty}</Text>
+              }
+              renderItem={({ item, index }) => (
+                <SchoolMenuReviewRow
+                  draft={item}
+                  index={index}
+                  onChange={updateReviewEntry}
+                  onRemove={removeReviewEntry}
+                  styles={styles}
+                  tr={tr}
+                  formatDate={formatMenuDate}
+                  disabled={reviewSheet.saving}
+                />
+              )}
+            />
+
+            <TouchableOpacity
+              style={styles.menuReviewAddRow}
+              onPress={addReviewEntry}
+              disabled={reviewSheet.saving}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.menuReviewAddText}>＋ {tr.nutrition.schoolMenuReviewAddDay}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.menuReviewActions}>
+              <TouchableOpacity
+                style={[styles.menuReviewBtn, styles.menuReviewBtnSecondary]}
+                onPress={cancelReview}
+                disabled={reviewSheet.saving}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.menuReviewBtnSecondaryText}>
+                  {tr.nutrition.schoolMenuReviewCancel}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.menuReviewBtn,
+                  styles.menuReviewBtnPrimary,
+                  (reviewSheet.saving || reviewSheet.entries.length === 0) && styles.menuReviewBtnDisabled,
+                ]}
+                onPress={saveReview}
+                disabled={reviewSheet.saving || reviewSheet.entries.length === 0}
+                activeOpacity={0.85}
+              >
+                {reviewSheet.saving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.menuReviewBtnPrimaryText}>
+                    {tr.nutrition.schoolMenuReviewSave}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
+  )
+}
+
+// One row in the review modal: weekday header + three TextInputs + remove
+// button. Editing flows back to the parent through `onChange(index, patch)`.
+function SchoolMenuReviewRow({
+  draft,
+  index,
+  onChange,
+  onRemove,
+  styles,
+  tr,
+  formatDate,
+  disabled,
+}: {
+  draft: Omit<SchoolMenuEntry, 'id' | 'childId'>
+  index: number
+  onChange: (index: number, patch: Partial<Omit<SchoolMenuEntry, 'id' | 'childId'>>) => void
+  onRemove: (index: number) => void
+  styles: ReturnType<typeof makeStyles>
+  tr: ReturnType<typeof useTranslation>
+  formatDate: (iso: string) => string
+  disabled: boolean
+}) {
+  return (
+    <View style={styles.menuReviewRow}>
+      <View style={styles.menuReviewRowHeader}>
+        <Text style={styles.menuDayDate}>{formatDate(draft.date)}</Text>
+        <TouchableOpacity
+          onPress={() => onRemove(index)}
+          disabled={disabled}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.menuReviewRemove}>{tr.nutrition.schoolMenuReviewRemoveDay}</Text>
+        </TouchableOpacity>
+      </View>
+      <TextInput
+        style={styles.menuReviewInput}
+        value={draft.firstCourse ?? ''}
+        onChangeText={(v) => onChange(index, { firstCourse: v.trim() ? v : undefined })}
+        placeholder={tr.nutrition.schoolMenuReviewFirstCoursePlaceholder}
+        placeholderTextColor={styles.menuReviewInputPlaceholder.color}
+        editable={!disabled}
+      />
+      <TextInput
+        style={styles.menuReviewInput}
+        value={draft.secondCourse ?? ''}
+        onChangeText={(v) => onChange(index, { secondCourse: v.trim() ? v : undefined })}
+        placeholder={tr.nutrition.schoolMenuReviewSecondCoursePlaceholder}
+        placeholderTextColor={styles.menuReviewInputPlaceholder.color}
+        editable={!disabled}
+      />
+      <TextInput
+        style={styles.menuReviewInput}
+        value={draft.dessert ?? ''}
+        onChangeText={(v) => onChange(index, { dessert: v.trim() ? v : undefined })}
+        placeholder={tr.nutrition.schoolMenuReviewDessertPlaceholder}
+        placeholderTextColor={styles.menuReviewInputPlaceholder.color}
+        editable={!disabled}
+      />
+    </View>
   )
 }
 
@@ -1062,6 +1343,108 @@ function makeStyles(colors: ThemeColors) {
     },
     menuAllergenChipText: {
       ...Typography.caption,
+      color: colors.text,
+    },
+    // ── Empty-window banner (sheet shows when no entry falls in today+4)
+    menuEmptyBanner: {
+      backgroundColor: `${Colors.healthGreen}12`,
+      borderRadius: BorderRadius.lg,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      marginTop: Spacing.sm,
+      marginBottom: Spacing.sm,
+      gap: Spacing.xs,
+    },
+    menuEmptyTitle: {
+      ...Typography.heading3,
+      color: colors.text,
+    },
+    menuEmptyMessage: {
+      ...Typography.body,
+      color: colors.textSecondary,
+      lineHeight: 20,
+    },
+    menuEmptyCta: {
+      alignSelf: 'flex-start',
+      backgroundColor: Colors.healthGreen,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.pill,
+      marginTop: Spacing.xs,
+    },
+    menuEmptyCtaText: {
+      ...Typography.body,
+      color: '#fff',
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    // ── Review modal (edit parsed entries before commit) ────────────────
+    menuReviewRow: {
+      paddingVertical: Spacing.sm,
+      gap: Spacing.xs,
+    },
+    menuReviewRowHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: Spacing.xs,
+    },
+    menuReviewRemove: {
+      ...Typography.caption,
+      color: Colors.errorRed,
+    },
+    menuReviewInput: {
+      ...Typography.body,
+      color: colors.text,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: BorderRadius.md,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xs,
+    },
+    menuReviewInputPlaceholder: {
+      color: colors.textMuted,
+    },
+    menuReviewAddRow: {
+      paddingVertical: Spacing.sm,
+      alignItems: 'center',
+    },
+    menuReviewAddText: {
+      ...Typography.body,
+      color: Colors.healthGreen,
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    menuReviewActions: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      marginTop: Spacing.sm,
+    },
+    menuReviewBtn: {
+      flex: 1,
+      paddingVertical: Spacing.sm,
+      borderRadius: BorderRadius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 44,
+    },
+    menuReviewBtnPrimary: {
+      backgroundColor: Colors.healthGreen,
+    },
+    menuReviewBtnSecondary: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    menuReviewBtnDisabled: {
+      opacity: 0.5,
+    },
+    menuReviewBtnPrimaryText: {
+      ...Typography.body,
+      color: '#fff',
+      fontFamily: Typography.heading3.fontFamily,
+    },
+    menuReviewBtnSecondaryText: {
+      ...Typography.body,
       color: colors.text,
     },
   })

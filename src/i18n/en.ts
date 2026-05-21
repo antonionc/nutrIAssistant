@@ -88,6 +88,28 @@ export const EN = {
       `Your uploaded menu covers ${first} – ${last}, which is outside the next 5 days. Showing the entries on file:`,
     schoolMenuUploadSummary: (count: number, first: string, last: string) =>
       `Saved ${count} school-menu entries from ${first} to ${last}.`,
+    // Empty-window state — shown when none of today+4 calendar days has an entry.
+    schoolMenuEmptyWindowTitle: 'No menu for this week',
+    schoolMenuEmptyWindowMessage:
+      "You haven't uploaded this month's school menu yet. Upload it to see today and the next 4 days.",
+    schoolMenuEmptyWindowCta: "Upload this month's menu",
+    // Post-parse review modal — opens after a PDF is parsed but BEFORE the
+    // entries are written to the DB, so misalignments can be corrected.
+    schoolMenuReviewTitle: 'Review the analyzed menu',
+    schoolMenuReviewSubtitle: 'Correct any course before saving. Previous entries will be replaced.',
+    schoolMenuReviewSave: 'Save',
+    schoolMenuReviewCancel: 'Cancel',
+    schoolMenuReviewAddDay: 'Add day',
+    schoolMenuReviewRemoveDay: 'Remove',
+    schoolMenuReviewFirstCoursePlaceholder: 'First course',
+    schoolMenuReviewSecondCoursePlaceholder: 'Second course',
+    schoolMenuReviewDessertPlaceholder: 'Dessert',
+    schoolMenuReviewEmpty: 'No entries detected. Add days manually or cancel.',
+    // Placeholder for days where the parser found a date marker but no usable
+    // dish text — either an explicit holiday cell or a cell sandwiched
+    // between adjacent markers without its own body. Shown in the review
+    // modal so the user can confirm, edit, or remove the day.
+    schoolMenuReviewNoDataPlaceholder: 'No data / Holiday',
   },
 
   recipes: {
@@ -400,7 +422,7 @@ export const EN = {
       },
       documents: {
         label: '📄 Document analysis',
-        desc: 'Lab reports, prescriptions and school menus parsed via on-device AI for retrieval and suggestions.',
+        desc: 'Lab reports, prescriptions and school menus analyzed via on-device AI for retrieval and suggestions.',
       },
     },
   },

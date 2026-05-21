@@ -91,6 +91,28 @@ export const ES = {
       `El menú subido cubre del ${first} al ${last}, fuera de los próximos 5 días. Mostrando las entradas que tenemos:`,
     schoolMenuUploadSummary: (count: number, first: string, last: string) =>
       `Guardadas ${count} entradas del menú escolar (del ${first} al ${last}).`,
+    // Estado vacío — se muestra cuando ninguno de los 5 próximos días tiene entrada.
+    schoolMenuEmptyWindowTitle: 'Sin menú para esta semana',
+    schoolMenuEmptyWindowMessage:
+      'Aún no has subido el menú de este mes. Súbelo para ver hoy y los próximos 4 días.',
+    schoolMenuEmptyWindowCta: 'Subir menú de este mes',
+    // Modal de revisión post-parseo — se abre tras parsear el PDF y ANTES de
+    // escribir en la BD, para que el usuario pueda corregir errores de columnas.
+    schoolMenuReviewTitle: 'Revisa el menú analizado',
+    schoolMenuReviewSubtitle: 'Corrige cualquier plato antes de guardar. Las entradas anteriores serán reemplazadas.',
+    schoolMenuReviewSave: 'Guardar',
+    schoolMenuReviewCancel: 'Cancelar',
+    schoolMenuReviewAddDay: 'Añadir día',
+    schoolMenuReviewRemoveDay: 'Eliminar',
+    schoolMenuReviewFirstCoursePlaceholder: 'Primer plato',
+    schoolMenuReviewSecondCoursePlaceholder: 'Segundo plato',
+    schoolMenuReviewDessertPlaceholder: 'Postre',
+    schoolMenuReviewEmpty: 'No se ha podido analizar ninguna entrada. Añade días manualmente o cancela.',
+    // Placeholder for days where the parser found a date marker but no usable
+    // dish text — either an explicit "FESTIVO" / "NO LECTIVO" cell or a cell
+    // sandwiched between adjacent markers without its own body. Shown in the
+    // review modal so the user can confirm, edit, or remove the day.
+    schoolMenuReviewNoDataPlaceholder: 'No hay datos / Festivo',
   },
 
   // Recipes

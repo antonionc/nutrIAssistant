@@ -17,18 +17,24 @@ import {
   deleteSchoolMenuEntriesForChild,
   getSchoolMenuChildIds,
 } from './plannerDB'
-import { extractPdfText } from '../../../modules/expo-pdf-text'
+import { extractPdfText, extractPdfTextLines } from '../../../modules/expo-pdf-text'
 import { generateOnDevice, getLLMStatus } from '../../services/onDeviceLlm'
 import { InventoryLite } from '../../services/prompts/system'
 import {
-  SCHOOL_MENU_EXTRACTION_PROMPT,
-  SCHOOL_MENU_EXTRACTION_PROMPT_SIMPLE,
+  buildSchoolMenuExtractionPrompt,
+  buildSchoolMenuExtractionPromptSimple,
 } from '../../services/prompts/schoolMenuExtraction'
 import {
   parseSchoolMenuResponse,
   normalizeSchoolMenuEntry,
   deterministicSchoolMenuParse,
+  parseSchoolMenuViaGeometry,
+  extractDocumentMonthAnchor,
+  validateParsedEntries,
+  SCHOOL_MENU_NO_DATA_SENTINEL,
+  type MenuMonthAnchor,
 } from '../../services/schoolMenuParser'
+import { t } from '../../i18n'
 import { useProfiles } from '../profiles/ProfilesContext'
 import { selectWeekRecipes } from './mealPlanGenerator'
 import { logger } from '../../utils/logger'
@@ -60,6 +66,18 @@ export interface SchoolMenuUploadResult {
   deterministic: boolean
 }
 
+/**
+ * Output of `parseSchoolMenuForReview`: parsed entries + the month/year
+ * anchor we resolved from the PDF, ready for the review UI to display and
+ * edit. NOTHING has been written to the DB yet.
+ */
+export interface SchoolMenuParseResult {
+  entries: Array<Omit<SchoolMenuEntry, 'id' | 'childId'>>
+  anchor: MenuMonthAnchor
+  /** True when the deterministic regex parser produced the result. */
+  deterministic: boolean
+}
+
 export class SchoolMenuUploadError extends Error {
   stage: SchoolMenuUploadStage
   cause?: unknown
@@ -85,6 +103,20 @@ interface PlannerContextValue {
   removeMealFromDate: (date: string, mealType: MealSlot) => Promise<void>
   lockDay: (date: string) => Promise<void>
   uploadSchoolMenu: (pdfUri: string, childIds: string[]) => Promise<SchoolMenuUploadResult>
+  /**
+   * Parse a PDF into reviewable entries WITHOUT writing to the DB. The
+   * caller (the review modal in `nutrition.tsx`) shows the entries for
+   * editing, then calls `commitSchoolMenuEntries` to persist.
+   */
+  parseSchoolMenuForReview: (pdfUri: string) => Promise<SchoolMenuParseResult>
+  /**
+   * Write reviewed entries to the DB for the given child IDs. Wipes each
+   * child's existing menu first (true replace semantics).
+   */
+  commitSchoolMenuEntries: (
+    entries: Array<Omit<SchoolMenuEntry, 'id' | 'childId'>>,
+    childIds: string[]
+  ) => Promise<SchoolMenuUploadResult>
   refreshSchoolMenuState: () => Promise<void>
   getSchoolMenuEntries: typeof getSchoolMenuEntries
 }
@@ -224,13 +256,20 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
     await loadWeek()
   }, [loadWeek])
 
-  // School menu upload runs entirely on-device: PDF text is extracted via the
-  // expo-pdf-text native module (PDFKit on iOS, PdfBox on Android), then the
-  // local LLM parses it into structured entries. The PDF is parsed and the LLM
-  // is invoked ONCE per upload; results are written per target child after
-  // wiping that child's previous entries (true replace semantics).
-  const uploadSchoolMenu = useCallback(
-    async (pdfUri: string, childIds: string[]): Promise<void> => {
+  // School menu upload is a two-phase flow:
+  //
+  //   1. `parseSchoolMenuForReview(pdfUri)` extracts PDF text and runs the
+  //      deterministic + LLM parse. NOTHING is written to the DB. The
+  //      caller (the review modal in nutrition.tsx) shows the entries for
+  //      manual correction.
+  //   2. `commitSchoolMenuEntries(entries, childIds)` writes the reviewed
+  //      entries per child, wiping previous menus first.
+  //
+  // `uploadSchoolMenu(pdfUri, childIds)` remains as a thin wrapper that
+  // does both back-to-back, for callers that don't need the review step
+  // (legacy paths + tests).
+  const parseSchoolMenuForReview = useCallback(
+    async (pdfUri: string): Promise<SchoolMenuParseResult> => {
       const status = await getLLMStatus()
       if (!status.isLoaded) {
         throw new SchoolMenuUploadError('llm_not_ready')
@@ -244,19 +283,68 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       }
       if (!pdfText.trim()) throw new SchoolMenuUploadError('pdf_empty')
 
-      // 1. Deterministic pass — most Spanish/English school menus follow a
-      //    "LUNES 6 DE ABRIL / Primer plato: … / Segundo plato: … / Postre: …"
-      //    shape that regex can extract reliably. Skips the LLM entirely
-      //    when ≥3 days come back with at least one identified course.
-      const deterministic = deterministicSchoolMenuParse(pdfText)
+      const refDate = new Date()
+      const anchor = extractDocumentMonthAnchor(pdfText, refDate)
       let entries: Array<Omit<SchoolMenuEntry, 'id' | 'childId'>> = []
-      if (deterministic.length >= 3) {
-        entries = deterministic
-        logger.info('[Planner] School-menu parsed deterministically', { entryCount: entries.length })
-      } else {
-        // 2. LLM pass. Try the SIMPLE schema first (date + 3 courses) —
-        //    smaller schemas are far more reliable on a 1.7B model. Fall
-        //    back to the full schema only if the simple one fails.
+      let usedDeterministic = false
+
+      // Layer 0 — geometric. iOS PDFKit can return per-line bounds via
+      // `extractPdfTextLines`; when available, reconstruct the table by
+      // column geometry. This is the only way to recover days whose markers
+      // share a line with another column's content in PDFKit's flattened
+      // reading order (real example: Balder May 2026 days 5 and 7).
+      // Returns `[]` on Android (PdfBox positional extraction not yet wired)
+      // — the next layers cover that case.
+      let pdfLines: Awaited<ReturnType<typeof extractPdfTextLines>> = []
+      try {
+        pdfLines = await extractPdfTextLines(pdfUri)
+      } catch {
+        pdfLines = []
+      }
+      if (pdfLines.length > 0) {
+        const geo = parseSchoolMenuViaGeometry(pdfLines, refDate)
+        if (geo.entries.length >= 3) {
+          const validation = validateParsedEntries(geo.entries, geo.anchor)
+          const candidate = validation.ok ? validation.entries : geo.entries
+          entries = candidate
+          usedDeterministic = true
+          logger.info('[Planner] School-menu parsed via geometry', {
+            entryCount: entries.length,
+            anchor: geo.anchor,
+            validated: validation.ok,
+          })
+        }
+      }
+
+      // Layer 1 — text-based deterministic. Handles linear "LUNES 6 DE ABRIL
+      // / Primer plato: …" PDFs AND tabular weekly grids parsed from page.string.
+      // Kept declared at outer scope so the LLM fallback below can salvage from
+      // it when the LLM parse normalises to zero entries.
+      let deterministic: Array<Omit<SchoolMenuEntry, 'id' | 'childId'>> = []
+      if (entries.length === 0) {
+        deterministic = deterministicSchoolMenuParse(pdfText, refDate)
+        if (deterministic.length >= 3) {
+          const validation = validateParsedEntries(deterministic, anchor)
+          if (validation.ok) {
+            entries = validation.entries
+            usedDeterministic = true
+            logger.info('[Planner] School-menu parsed deterministically (text)', {
+              entryCount: entries.length,
+              anchor,
+            })
+          } else {
+            logger.warn('[Planner] Deterministic text parse failed validation; falling back to LLM', {
+              reason: validation.reason,
+              entryCount: deterministic.length,
+            })
+          }
+        }
+      }
+
+      // Layer 2 — LLM. Try the simple schema first; it's far more reliable
+      // on Qwen 3 1.7B. Both prompts are pinned to the document anchor so
+      // the model cannot drift across months.
+      if (entries.length === 0) {
         const runLLM = async (prompt: string): Promise<string> => {
           try {
             return await generateOnDevice(
@@ -268,7 +356,7 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        let response = await runLLM(SCHOOL_MENU_EXTRACTION_PROMPT_SIMPLE)
+        let response = await runLLM(buildSchoolMenuExtractionPromptSimple(anchor))
         let parsed = parseSchoolMenuResponse(response)
 
         if (!parsed) {
@@ -276,12 +364,10 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
             '[Planner] Simple-schema school-menu parse failed; retrying with full schema',
             {
               responseLength: response.length,
-              // In dev, surface the first 300 chars of the response so we
-              // can iterate. PII risk is local-only; redacted in release.
               ...(__DEV__ ? { responseHead: response.slice(0, 300) } : {}),
             }
           )
-          response = await runLLM(SCHOOL_MENU_EXTRACTION_PROMPT)
+          response = await runLLM(buildSchoolMenuExtractionPrompt(anchor))
           parsed = parseSchoolMenuResponse(response)
         }
 
@@ -296,24 +382,62 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
           throw new SchoolMenuUploadError('llm_parse')
         }
 
-        entries = parsed
+        const llmEntries = parsed
           .map(normalizeSchoolMenuEntry)
           .filter((e): e is NonNullable<typeof e> => e !== null)
 
-        if (entries.length === 0) {
-          // Last resort: if the LLM produced something but normalisation
-          // rejected every entry (e.g. bad dates), see if the deterministic
-          // pass salvaged anything we previously rejected for being <3 days.
-          if (deterministic.length > 0) {
-            entries = deterministic
-            logger.info('[Planner] Falling back to deterministic parse after LLM normalisation produced 0 entries')
-          } else {
-            logger.warn('[Planner] School-menu parse produced 0 valid entries after normalisation')
-            throw new SchoolMenuUploadError('llm_parse')
+        if (llmEntries.length === 0 && deterministic.length > 0) {
+          // The LLM normalised down to nothing but the deterministic pass
+          // had partial output. Surface that to the review UI — the user
+          // can still edit/save it.
+          entries = deterministic
+          logger.info('[Planner] Falling back to deterministic parse after LLM normalisation produced 0 entries')
+        } else if (llmEntries.length === 0) {
+          logger.warn('[Planner] School-menu parse produced 0 valid entries after normalisation')
+          throw new SchoolMenuUploadError('llm_parse')
+        } else {
+          // Best-effort validation. If validation fails we still surface
+          // the entries to the review UI — the user can correct them.
+          const validation = validateParsedEntries(llmEntries, anchor)
+          entries = validation.ok ? validation.entries : llmEntries
+          if (!validation.ok) {
+            logger.warn('[Planner] LLM parse failed validation; sending raw entries to review', {
+              reason: validation.reason,
+              entryCount: llmEntries.length,
+            })
           }
         }
       }
 
+      // Translate the parser's no-data sentinel into a localized placeholder
+      // for the review modal. Keeps the parser i18n-agnostic while giving
+      // the user a clear label they can confirm, edit, or remove.
+      const noDataLabel = t.nutrition.schoolMenuReviewNoDataPlaceholder
+      entries = entries.map((e) =>
+        e.description === SCHOOL_MENU_NO_DATA_SENTINEL
+          ? { ...e, description: '', firstCourse: noDataLabel }
+          : e
+      )
+
+      const sortedDates = entries.map((e) => e.date).sort()
+      logger.info('[Planner] School-menu parse complete (review pending)', {
+        entryCount: entries.length,
+        firstDate: sortedDates[0] ?? null,
+        lastDate: sortedDates[sortedDates.length - 1] ?? null,
+        deterministic: usedDeterministic,
+        anchor,
+      })
+
+      return { entries, anchor, deterministic: usedDeterministic }
+    },
+    []
+  )
+
+  const commitSchoolMenuEntries = useCallback(
+    async (
+      entries: Array<Omit<SchoolMenuEntry, 'id' | 'childId'>>,
+      childIds: string[]
+    ): Promise<SchoolMenuUploadResult> => {
       for (const childId of childIds) {
         await deleteSchoolMenuEntriesForChild(childId)
         for (const entry of entries) {
@@ -339,12 +463,23 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
         entryCount: entries.length,
         firstDate: sortedDates[0] ?? null,
         lastDate: sortedDates[sortedDates.length - 1] ?? null,
-        deterministic: entries === deterministic,
+        // Set by the caller when relevant; default false. The review flow
+        // overwrites this if it tracked the parse origin.
+        deterministic: false,
       }
-      logger.info('[Planner] School-menu upload finished', result)
+      logger.info('[Planner] School-menu commit finished', result)
       return result
     },
     [refreshSchoolMenuState]
+  )
+
+  const uploadSchoolMenu = useCallback(
+    async (pdfUri: string, childIds: string[]): Promise<SchoolMenuUploadResult> => {
+      const parsed = await parseSchoolMenuForReview(pdfUri)
+      const result = await commitSchoolMenuEntries(parsed.entries, childIds)
+      return { ...result, deterministic: parsed.deterministic }
+    },
+    [parseSchoolMenuForReview, commitSchoolMenuEntries]
   )
 
   return (
@@ -359,6 +494,8 @@ export function PlannerProvider({ children }: { children: React.ReactNode }) {
       removeMealFromDate,
       lockDay,
       uploadSchoolMenu,
+      parseSchoolMenuForReview,
+      commitSchoolMenuEntries,
       refreshSchoolMenuState,
       getSchoolMenuEntries,
     }}>
